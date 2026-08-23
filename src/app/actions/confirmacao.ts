@@ -3,6 +3,8 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { enviarEmail } from '@/lib/resend/enviar'
+import { templatePedidoConfirmado } from '@/lib/resend/templates/pedido-confirmado'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
@@ -13,16 +15,68 @@ function revalidar() {
 }
 
 /** Equipe confirma o pedido e libera a produção */
-export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
-  const parsed = z.string().uuid().safeParse(pedidoId)
-  if (!parsed.success) return { ok: false, erro: 'Pedido inválido.' }
+export async function confirmarPedido(
+  pedidoId: string,
+  parcelamento?: { quantidade: number; primeiroVencimento: string }
+): Promise<Resultado> {
+  const parsedId = z.string().uuid().safeParse(pedidoId)
+  if (!parsedId.success) return { ok: false, erro: 'Pedido inválido.' }
 
   const supabase = await createClient()
+
+  if (parcelamento) {
+    const parsedParc = z.object({
+      quantidade: z.number().int().min(2).max(12),
+      primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida'),
+    }).safeParse(parcelamento)
+
+    if (!parsedParc.success) {
+      return { ok: false, erro: parsedParc.error.issues[0].message }
+    }
+
+    const { error: erroParc } = await supabase.rpc('parcelar_pedido', {
+      p_pedido_id: parsedId.data,
+      p_quantidade_parcelas: parsedParc.data.quantidade,
+      p_primeiro_vencimento: parsedParc.data.primeiroVencimento,
+    })
+
+    if (erroParc) return { ok: false, erro: erroParc.message }
+  }
+
   const { error } = await supabase.rpc('confirmar_pedido', {
-    p_pedido_id: parsed.data,
+    p_pedido_id: parsedId.data,
   })
 
   if (error) return { ok: false, erro: error.message }
+
+  // E-mail ao cliente — não bloqueia a confirmação se falhar
+  const { data: pedido } = await supabase
+    .from('pedidos')
+    .select('numero, total, clientes(email, razao_social)')
+    .eq('id', parsedId.data)
+    .single()
+
+  if (pedido) {
+    const cliente = pedido.clientes as unknown as {
+      email: string
+      razao_social: string
+    } | null
+
+    if (cliente?.email) {
+      await enviarEmail({
+        tipo: 'pedido_recebido',
+        pedidoId: parsedId.data,
+        destinatario: cliente.email,
+        assunto: `Pedido #${pedido.numero} confirmado`,
+        html: templatePedidoConfirmado({
+          clienteNome: cliente.razao_social,
+          numero: Number(pedido.numero),
+          total: Number(pedido.total),
+          urlPedido: `${process.env.NEXT_PUBLIC_SITE_URL}/pedidos/${parsedId.data}`,
+        }),
+      })
+    }
+  }
 
   revalidar()
   return { ok: true }

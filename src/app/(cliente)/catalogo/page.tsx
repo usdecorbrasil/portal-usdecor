@@ -14,11 +14,10 @@ export default async function CatalogoPage() {
 
   const { data: produtos } = await supabase
     .from('produtos')
-    .select('id, catalogo_id, sku, nome, tecido, preco, metros_por_unidade, imagem_path')
+    .select('id, catalogo_id, sku, nome, preco, metros_por_unidade, imagem_path')
     .order('ordem')
     .order('sku')
 
-  // Envios de arte deste cliente — a política do banco filtra
   const { data: envios } = await supabase
     .from('envios_arte')
     .select('id, link, observacoes, situacao, resposta_admin, created_at')
@@ -51,10 +50,10 @@ export default async function CatalogoPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
+      <h1 className="text-3xl font-bold tracking-tight text-[#131A2E]">
         Seu catálogo
       </h1>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-6">
+      <p className="text-sm text-[#6E6E68] mt-1.5 mb-8">
         {total} {total === 1 ? 'arte liberada' : 'artes liberadas'}
         {comArtes.length > 1 && ` em ${comArtes.length} coleções`}
       </p>
@@ -69,13 +68,22 @@ export default async function CatalogoPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-12">
           {comArtes.map((k) => (
             <section key={k.id}>
               {comArtes.length > 1 && (
-                <div className="border-b-2 border-[#131A2E] pb-2 mb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <h2 className="font-semibold tracking-tight">{k.nome}</h2>
+                <div className="flex items-start justify-between gap-3 pb-3 mb-5 border-b-2 border-[#131A2E]">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight text-[#131A2E]">
+                      {k.nome}
+                    </h2>
+                    {k.descricao && (
+                      <p className="text-sm text-[#6E6E68] mt-1">
+                        {k.descricao}
+                      </p>
+                    )}
+                  </div>
+                  <div className="pt-1.5 shrink-0">
                     <EditarColecao
                       catalogoId={k.id}
                       nomeAtual={k.nome}
@@ -83,23 +91,18 @@ export default async function CatalogoPage() {
                       compacto
                     />
                   </div>
-                  {k.descricao && (
-                    <p className="text-xs text-[#6E6E68] mt-0.5">
-                      {k.descricao}
-                    </p>
-                  )}
                 </div>
               )}
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {k.artes.map((p) => (
+                {k.artes.map((p, idx) => (
                   <CardProduto
                     key={p.id}
+                    prioridade={idx < 6}
                     produto={{
                       id: p.id,
                       sku: p.sku,
                       nome: p.nome,
-                      tecido: p.tecido,
                       precoMetro: Number(p.preco),
                       metrosPorUnidade: Number(p.metros_por_unidade),
                       catalogoId: p.catalogo_id,

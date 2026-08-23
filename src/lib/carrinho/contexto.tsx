@@ -12,9 +12,9 @@ export type ItemCarrinho = {
   produtoId: string
   sku: string
   nome: string
-  tecido: string
   precoMetro: number
   metrosPorUnidade: number
+  imagemUrl: string | null
   quantidade: number
 }
 
@@ -77,7 +77,9 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
       const existe = atual.find((i) => i.produtoId === item.produtoId)
       if (existe) {
         return atual.map((i) =>
-          i.produtoId === item.produtoId ? { ...i, quantidade: qtd } : i
+          i.produtoId === item.produtoId
+            ? { ...i, quantidade: qtd, imagemUrl: item.imagemUrl }
+            : i
         )
       }
       return [...atual, { ...item, quantidade: qtd }]

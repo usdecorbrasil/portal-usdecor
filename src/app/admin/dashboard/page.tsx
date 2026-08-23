@@ -23,7 +23,7 @@ type ResumoCliente = {
 export default async function DashboardPage() {
   const perfil = await lerPerfil()
 
-  if (!perfil || perfil.papel !== 'admin') redirect('/admin/pedidos')
+  if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) redirect('/admin/pedidos')
 
   const supabase = await createClient()
 

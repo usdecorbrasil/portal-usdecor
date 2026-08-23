@@ -1,14 +1,14 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
 
-export type Papel = 'admin' | 'funcionario' | 'cliente'
+export type Papel = 'admin' | 'funcionario' | 'cliente' | 'financeiro'
 
 export type Perfil = {
   id: string
   papel: Papel
   clienteId: string | null
   nome: string | null
-  /** Só o dono enxerga preços, totais e faturamento */
+  /** Admin e financeiro enxergam preços, totais e faturamento */
   veValores: boolean
 }
 
@@ -40,6 +40,6 @@ export async function lerPerfil(): Promise<Perfil | null> {
     papel,
     clienteId: data.cliente_id,
     nome: data.nome,
-    veValores: papel === 'admin',
+    veValores: papel === 'admin' || papel === 'financeiro',
   }
 }

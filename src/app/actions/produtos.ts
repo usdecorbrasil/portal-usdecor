@@ -13,8 +13,6 @@ const camposBase = {
   sku: z.string().trim().toUpperCase()
         .regex(/^[A-Z0-9._-]{1,60}$/, 'SKU aceita letras, números, ponto, hífen e sublinhado'),
   nome: z.string().trim().min(1).max(200),
-  tecido: z.string().trim().min(1).max(120),
-  preco: numeroBr('Preço por metro'),
   metros_por_unidade: numeroBr('Metros por unidade')
         .refine((v) => v <= 1000, 'Metros por unidade acima do limite'),
 }
@@ -43,15 +41,13 @@ async function exigirAdmin() {
   const { data: perfil } = await supabase
     .from('profiles').select('role, ativo').eq('id', user.id).single()
 
-  return !!perfil && perfil.ativo && perfil.role === 'admin'
+  return !!perfil && perfil.ativo && (perfil.role === 'admin' || perfil.role === 'financeiro')
 }
 
 function lerCampos(formData: FormData) {
   return {
     sku: formData.get('sku'),
     nome: formData.get('nome'),
-    tecido: formData.get('tecido'),
-    preco: formData.get('preco'),
     metros_por_unidade: formData.get('metros_por_unidade'),
   }
 }
@@ -102,7 +98,7 @@ export async function criarProduto(
 
   const { data: produto, error } = await admin
     .from('produtos')
-    .insert({ ...dados, ativo: false })
+    .insert({ ...dados, preco: 0, ativo: false })
     .select('id')
     .single()
 
@@ -164,7 +160,6 @@ export async function editarProduto(
 
   if (!atual) return { ok: false, erro: 'Arte não encontrada.' }
 
-  // A coleção de destino precisa ser do mesmo cliente
   const { data: catalogo } = await admin
     .from('catalogos').select('cliente_id').eq('id', dados.catalogo_id).single()
 

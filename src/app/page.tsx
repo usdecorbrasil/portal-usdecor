@@ -12,7 +12,6 @@ export default async function Home() {
     redirect('/login')
   }
 
-  // Descobre o papel do usuário para direcionar
   const { data: perfil } = await supabase
     .from('profiles')
     .select('role, ativo')
@@ -20,11 +19,12 @@ export default async function Home() {
     .single()
 
   if (!perfil || !perfil.ativo) {
-    // Usuário sem perfil ou desativado: encerra a sessão
     redirect('/sem-acesso')
   }
-  
-  if (perfil.role === 'admin') {
+
+  // Admin, funcionário e financeiro vão para o painel;
+  // dentro dele, o layout decide o que cada um vê.
+  if (perfil.role === 'admin' || perfil.role === 'funcionario' || perfil.role === 'financeiro') {
     redirect('/admin')
   }
 

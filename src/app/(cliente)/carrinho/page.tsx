@@ -1,13 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useCarrinho, subtotalItem, precoUnidade } from '@/lib/carrinho/contexto'
-import { criarPedido } from '@/app/actions/pedidos'
+import { useCarrinho, subtotalItem } from '@/lib/carrinho/contexto'
+import { criarPedido, verificarPodeParcelar } from '@/app/actions/pedidos'
+import { buscarMaxParcelas } from '@/app/actions/configuracoes'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+const CATEGORIAS = [
+  { value: 'boleto', label: 'Boleto' },
+  { value: 'cartao_credito', label: 'Cartão de crédito' },
+  { value: 'cartao_debito', label: 'Cartão de débito' },
+] as const
+
+type Categoria = (typeof CATEGORIAS)[number]['value']
 
 export default function CarrinhoPage() {
   const {
@@ -25,11 +34,27 @@ export default function CarrinhoPage() {
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState<{ numero: number } | null>(null)
   const [removendo, setRemovendo] = useState<string | null>(null)
+  const [categoria, setCategoria] = useState<Categoria>('boleto')
+  const [parcelasBoleto, setParcelasBoleto] = useState(1)
+  const [podeParcelar, setPodeParcelar] = useState(true)
+  const [maxParcelas, setMaxParcelas] = useState(3)
   const router = useRouter()
+
+  useEffect(() => {
+    verificarPodeParcelar().then(setPodeParcelar)
+    buscarMaxParcelas().then(setMaxParcelas)
+  }, [])
 
   async function enviar() {
     setErro('')
     setEnviando(true)
+
+    const formaPagamento =
+      categoria === 'boleto'
+        ? parcelasBoleto === 1
+          ? 'boleto_avista'
+          : 'boleto_parcelado'
+        : categoria
 
     const r = await criarPedido({
       itens: itens.map((i) => ({
@@ -37,6 +62,9 @@ export default function CarrinhoPage() {
         quantidade: i.quantidade,
       })),
       notas: notas.trim() || undefined,
+      forma_pagamento: formaPagamento,
+      parcelas:
+        categoria === 'boleto' && parcelasBoleto > 1 ? parcelasBoleto : undefined,
     })
 
     if (!r.ok) {
@@ -83,14 +111,14 @@ export default function CarrinhoPage() {
   if (itens.length === 0) {
     return (
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
+        <h1 className="text-3xl font-bold tracking-tight text-[#131A2E]">
           Carrinho
         </h1>
         <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center mt-6">
           <p className="text-sm text-[#6E6E68]">Carrinho vazio.</p>
           <Link
             href="/catalogo"
-            className="inline-block mt-4 text-sm text-[#B00063] hover:underline"
+            className="inline-block mt-4 text-sm text-[#D8007A] hover:underline"
           >
             Ir para o catálogo
           </Link>
@@ -99,12 +127,14 @@ export default function CarrinhoPage() {
     )
   }
 
+  const opcoesParcelamento = Array.from({ length: maxParcelas }, (_, i) => i + 1)
+
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
+      <h1 className="text-3xl font-bold tracking-tight text-[#131A2E]">
         Carrinho
       </h1>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-6">
+      <p className="text-sm text-[#6E6E68] mt-1.5 mb-7">
         Confira antes de enviar
       </p>
 
@@ -112,21 +142,30 @@ export default function CarrinhoPage() {
         {itens.map((i) => (
           <div
             key={i.produtoId}
-            className="bg-white border border-[#DDDCD5] rounded-sm p-4"
+            className="bg-white border border-[#DDDCD5] rounded-sm p-3"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+            <div className="flex items-start gap-3">
+              {i.imagemUrl ? (
+                <img
+                  src={i.imagemUrl}
+                  alt={i.nome}
+                  className="w-14 h-14 object-cover rounded-sm shrink-0"
+                />
+              ) : (
+                <div className="w-14 h-14 bg-[#EEEDE7] rounded-sm shrink-0" />
+              )}
+
+              <div className="min-w-0 flex-1">
                 <div className="text-xs font-mono text-[#131A2E]">{i.sku}</div>
-                <h2 className="font-semibold tracking-tight mt-0.5">{i.nome}</h2>
-                <p className="text-xs text-[#6E6E68] mt-0.5">
-                  {i.tecido} · R${' '}
-                  {brl(precoUnidade(i.precoMetro, i.metrosPorUnidade))}/un
-                </p>
+                <h2 className="font-semibold tracking-tight mt-0.5 truncate">
+                  {i.nome}
+                </h2>
               </div>
+
               <button
                 onClick={() => setRemovendo(i.produtoId)}
                 aria-label={`Remover ${i.nome}`}
-                className="w-7 h-7 shrink-0 border border-[#DDDCD5] rounded-sm text-[#6E6E68] text-xs hover:border-[#B00063] hover:text-[#B00063]"
+                className="w-7 h-7 shrink-0 border border-[#DDDCD5] rounded-sm text-[#6E6E68] text-xs hover:border-[#D8007A] hover:text-[#D8007A]"
               >
                 ✕
               </button>
@@ -184,13 +223,8 @@ export default function CarrinhoPage() {
                   </button>
                 </div>
 
-                <div className="text-right">
-                  <div className="font-mono font-semibold">
-                    R$ {brl(subtotalItem(i))}
-                  </div>
-                  <div className="text-xs text-[#6E6E68] font-mono">
-                    {brl(i.quantidade * i.metrosPorUnidade)} m
-                  </div>
+                <div className="text-xs text-[#6E6E68] font-mono">
+                  {brl(i.quantidade * i.metrosPorUnidade)} m
                 </div>
               </div>
             )}
@@ -216,19 +250,99 @@ export default function CarrinhoPage() {
         />
       </div>
 
-      <div className="mt-6 border-t-2 border-[#131A2E] pt-4">
+      <div className="mt-6">
+        <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
+          FORMA DE PAGAMENTO
+        </label>
+        <div className="grid gap-2">
+          {CATEGORIAS.map((c) => (
+            <label
+              key={c.value}
+              className={`flex items-center gap-2 border rounded-sm px-3 py-2.5 text-sm cursor-pointer border-[#DDDCD5] hover:border-[#131A2E] ${
+                categoria === c.value ? 'border-[#131A2E] bg-[#FAFAF7]' : ''
+              }`}
+            >
+              <input
+                type="radio"
+                name="categoria_pagamento"
+                value={c.value}
+                checked={categoria === c.value}
+                onChange={() => {
+                  setCategoria(c.value)
+                  if (c.value !== 'boleto') setParcelasBoleto(1)
+                }}
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+
+        {categoria === 'boleto' && (
+          <div className="mt-3 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-3">
+            <label className="block text-xs tracking-widest text-[#6E6E68] mb-2">
+              COMO PREFERE PAGAR
+            </label>
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: `repeat(${opcoesParcelamento.length}, 1fr)` }}
+            >
+              {opcoesParcelamento.map((n) => {
+                const bloqueado = n > 1 && !podeParcelar
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    disabled={bloqueado}
+                    onClick={() => setParcelasBoleto(n)}
+                    className={`border rounded-sm py-3.5 text-base font-bold ${
+                      bloqueado
+                        ? 'opacity-40 cursor-not-allowed border-[#DDDCD5] text-[#6E6E68]'
+                        : parcelasBoleto === n
+                        ? 'border-[#131A2E] bg-[#131A2E] text-white'
+                        : 'border-[#DDDCD5] text-[#6E6E68] hover:border-[#131A2E]'
+                    }`}
+                  >
+                    {n === 1 ? (
+                      'À vista'
+                    ) : (
+                      <>
+                        {n}x
+                        <span className="block text-sm font-semibold mt-1">
+                          R$ {brl(totalValor / n)}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            {!podeParcelar && (
+              <p className="text-xs text-[#D8007A] mt-2">
+                Limite de crédito atingido — parcelamento indisponível.
+              </p>
+            )}
+            {parcelasBoleto > 1 && (
+              <p className="text-xs text-[#6E6E68] mt-2">
+                A equipe confirma os vencimentos ao processar seu pedido.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 border-t-2 border-[#131A2E] pt-4 space-y-2">
+        <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
+          <span>Total do pedido</span>
+          <span className="font-mono">R$ {brl(totalValor)}</span>
+        </div>
         <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
           <span>Metragem total</span>
           <span className="font-mono">{brl(totalMetros)} m</span>
         </div>
-        <div className="flex justify-between items-baseline mt-2">
-          <span className="font-semibold tracking-tight">TOTAL DO PEDIDO</span>
-          <strong className="font-mono text-2xl">R$ {brl(totalValor)}</strong>
-        </div>
       </div>
 
       {erro && (
-        <p className="text-sm text-[#B00063] mt-4 bg-white border border-[#B00063] rounded-sm p-3">
+        <p className="text-sm text-[#D8007A] mt-4 bg-white border border-[#D8007A] rounded-sm p-3">
           {erro}
         </p>
       )}
@@ -236,7 +350,7 @@ export default function CarrinhoPage() {
       <button
         onClick={enviar}
         disabled={enviando}
-        className="w-full mt-5 mb-4 bg-[#B00063] text-white rounded-sm py-4 text-sm font-bold tracking-wider disabled:opacity-50"
+        className="w-full mt-5 mb-4 bg-[#D8007A] text-white rounded-sm py-4 text-sm font-bold tracking-wider disabled:opacity-50"
       >
         {enviando ? 'ENVIANDO...' : 'ENVIAR PEDIDO'}
       </button>

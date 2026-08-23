@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import NovoPedido from './novo-pedido'
+import FiltroCliente from './filtro-cliente'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -55,21 +56,21 @@ const CORES: Record<string, { borda: string; tarja: string }> = {
 export default async function PedidosAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ etapa?: string }>
+  searchParams: Promise<{ etapa?: string; cliente?: string }>
 }) {
-  const { etapa: filtro } = await searchParams
+  const { etapa: filtro, cliente: clienteFiltro } = await searchParams
   const perfil = await lerPerfil()
   const supabase = await createClient()
 
   const dono = !!perfil?.veValores
 
   const campos = dono
-    ? `id, numero, total, created_at, cancelado_em,
+    ? `id, numero, total, cliente_id, created_at, cancelado_em,
        clientes(razao_social),
        pedido_status_historico(status, created_at),
        pedido_itens(metros_total),
        pedido_solicitacoes(id, status)`
-    : `id, numero, created_at, cancelado_em,
+    : `id, numero, cliente_id, created_at, cancelado_em,
        clientes(razao_social),
        pedido_status_historico(status, created_at),
        pedido_itens(metros_total),
@@ -91,7 +92,7 @@ export default async function PedidosAdminPage({
 
   const agora = Date.now()
 
-  const lista = ((pedidos ?? []) as any[])
+  const listaCompleta = ((pedidos ?? []) as any[])
     .map((p) => {
       const hist = (p.pedido_status_historico ?? [])
         .slice()
@@ -104,6 +105,7 @@ export default async function PedidosAdminPage({
       return {
         id: p.id,
         numero: p.numero,
+        clienteId: p.cliente_id as string,
         total: p.total !== undefined ? Number(p.total) : null,
         metros: (p.pedido_itens ?? []).reduce(
           (a: number, i: any) => a + Number(i.metros_total),
@@ -123,9 +125,22 @@ export default async function PedidosAdminPage({
     })
     .filter((p) => ATIVOS.includes(p.status))
 
+  // Escopo: todos os pedidos, ou só do cliente selecionado no filtro
+  const lista = clienteFiltro
+    ? listaCompleta.filter((p) => p.clienteId === clienteFiltro)
+    : listaCompleta
+
   const etapas = [...new Set(lista.map((p) => p.status))].sort(
     (a, b) => ATIVOS.indexOf(a) - ATIVOS.indexOf(b)
   )
+
+  function hrefEtapa(etapa?: string) {
+    const params = new URLSearchParams()
+    if (etapa) params.set('etapa', etapa)
+    if (clienteFiltro) params.set('cliente', clienteFiltro)
+    const qs = params.toString()
+    return `/admin/pedidos${qs ? `?${qs}` : ''}`
+  }
 
   const visiveis = (filtro ? lista.filter((p) => p.status === filtro) : lista)
     .sort((a, b) => {
@@ -140,26 +155,49 @@ export default async function PedidosAdminPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Pedidos
-      </h1>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-4">
-        {lista.length} {lista.length === 1 ? 'pedido ativo' : 'pedidos ativos'}
-        {criticos > 0 && (
-          <>
-            {' · '}
-            <strong className="text-[#B00063]">
-              {criticos} parado{criticos > 1 ? 's' : ''} há dias
-            </strong>
-          </>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
+            Pedidos
+          </h1>
+          <p className="text-sm text-[#6E6E68] mt-1 mb-4">
+            {lista.length} {lista.length === 1 ? 'pedido ativo' : 'pedidos ativos'}
+            {criticos > 0 && (
+              <>
+                {' · '}
+                <strong className="text-[#B00063]">
+                  {criticos} parado{criticos > 1 ? 's' : ''} há dias
+                </strong>
+              </>
+            )}
+          </p>
+        </div>
+
+        {dono && (
+          <Link
+            href="/admin/arquivados"
+            className="text-xs tracking-widest text-[#6E6E68] hover:text-[#131A2E] whitespace-nowrap pt-1"
+          >
+            ARQUIVADOS →
+          </Link>
         )}
-      </p>
+      </div>
+
+      {dono && clientes && clientes.length > 0 && (
+        <div className="mb-4">
+          <FiltroCliente
+            clientes={clientes}
+            clienteAtual={clienteFiltro}
+            etapaAtual={filtro}
+          />
+        </div>
+      )}
 
       {(aguardando > 0 || solicitacoes > 0) && (
         <div className="space-y-2 mb-5">
           {aguardando > 0 && (
             <Link
-              href="/admin/pedidos?etapa=aguardando"
+              href={hrefEtapa('aguardando')}
               className="flex items-center gap-3 bg-[#F4FAFD] border border-[#0090D8] rounded-sm px-4 py-3"
             >
               <span className="w-2 h-2 rounded-full bg-[#0090D8] shrink-0" />
@@ -192,7 +230,7 @@ export default async function PedidosAdminPage({
       {lista.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-4 -mx-5 px-5">
           <Chip
-            href="/admin/pedidos"
+            href={hrefEtapa(undefined)}
             ativo={!filtro}
             rotulo="Todos"
             n={lista.length}
@@ -200,7 +238,7 @@ export default async function PedidosAdminPage({
           {etapas.map((e) => (
             <Chip
               key={e}
-              href={`/admin/pedidos?etapa=${e}`}
+              href={hrefEtapa(e)}
               ativo={filtro === e}
               rotulo={ROTULOS[e]}
               n={lista.filter((p) => p.status === e).length}

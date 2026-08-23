@@ -19,6 +19,13 @@ const ROTULOS: Record<string, string> = {
   fechado: 'Pedido fechado',
 }
 
+const ROTULOS_PAGAMENTO: Record<string, string> = {
+  boleto_avista: 'Boleto à vista',
+  boleto_parcelado: 'Boleto parcelado',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+}
+
 function dataHora(iso: string) {
   const d = new Date(iso)
   return (
@@ -26,6 +33,10 @@ function dataHora(iso: string) {
     ' · ' +
     d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   )
+}
+
+function dataBr(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
 export default async function DetalhePedidoPage({
@@ -36,25 +47,34 @@ export default async function DetalhePedidoPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: pedido } = await supabase
+    const { data: pedido, error: erroQuery } = await supabase
     .from('pedidos')
     .select(`
       id, numero, total, notas, created_at, cancelado_em, cancelado_motivo,
+      forma_pagamento, parcelas_solicitadas,
       pedido_itens(
-        id, produto_id, sku, nome, tecido, preco_unitario, metros_por_unidade,
+        id, produto_id, sku, nome, preco_unitario, metros_por_unidade,
         quantidade_pedida, quantidade_faturada, metros_total, subtotal
       ),
       pedido_status_historico(status, created_at),
       pedido_ajustes(motivo, created_at),
-      pedido_solicitacoes(id, texto, status, resposta, created_at)
+      pedido_solicitacoes(id, texto, status, resposta, created_at),
+      pedido_parcelas(numero, valor, vencimento, pago_em)
     `)
     .eq('id', id)
     .single()
+
+  if (erroQuery) {
+    console.error('ERRO AO BUSCAR PEDIDO:', erroQuery)
+  }
 
   if (!pedido) notFound()
 
   const p = pedido as any
   const itens = (p.pedido_itens ?? []) as any[]
+  const parcelas = ((p.pedido_parcelas ?? []) as any[]).sort(
+    (a, b) => a.numero - b.numero
+  )
 
   // Miniaturas
   const urls = new Map<string, string>()
@@ -175,6 +195,54 @@ export default async function DetalhePedidoPage({
       )}
 
       <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-7 mb-3 flex items-center gap-2">
+        FORMA DE PAGAMENTO
+        <span className="flex-1 h-px bg-[#DDDCD5]" />
+      </h2>
+
+      <div className="bg-white border border-[#DDDCD5] rounded-sm p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="font-semibold tracking-tight text-sm">
+            {ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento}
+          </span>
+          {p.forma_pagamento === 'boleto_parcelado' && (
+            <span className="text-xs font-mono text-[#6E6E68]">
+              {parcelas.length > 0
+                ? `${parcelas.length}x`
+                : p.parcelas_solicitadas
+                ? `${p.parcelas_solicitadas}x sugerido`
+                : ''}
+            </span>
+          )}
+        </div>
+
+        {p.forma_pagamento === 'boleto_parcelado' && parcelas.length === 0 && (
+          <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
+            As parcelas serão definidas quando a equipe confirmar o pedido.
+          </p>
+        )}
+
+        {parcelas.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-[#DDDCD5] space-y-1.5">
+            {parcelas.map((pc) => (
+              <div
+                key={pc.numero}
+                className="flex items-center justify-between gap-2 text-xs bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-2.5 py-1.5"
+              >
+                <span className="font-mono text-[#6E6E68]">
+                  {pc.numero}/{parcelas.length}
+                </span>
+                <span className="font-mono">{brl(Number(pc.valor))}</span>
+                <span className="text-[#6E6E68]">
+                  venc. {dataBr(pc.vencimento)}
+                </span>
+                <ParcelaBadge vencimento={pc.vencimento} pagoEm={pc.pago_em} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-7 mb-3 flex items-center gap-2">
         ANDAMENTO
         <span className="flex-1 h-px bg-[#DDDCD5]" />
       </h2>
@@ -262,7 +330,7 @@ export default async function DetalhePedidoPage({
                   <span className={mudou ? 'text-[#B00063] font-semibold' : ''}>
                     {i.quantidade_faturada} un
                   </span>{' '}
-                  × R$ {brl(unitario)} · {i.tecido}
+                  × R$ {brl(unitario)}
                 </div>
               </div>
 
@@ -315,4 +383,28 @@ export default async function DetalhePedidoPage({
       )}
     </div>
   )
+}
+
+function ParcelaBadge({
+  vencimento,
+  pagoEm,
+}: {
+  vencimento: string
+  pagoEm: string | null
+}) {
+  if (pagoEm) {
+    const atrasou = new Date(pagoEm) > new Date(vencimento + 'T23:59:59')
+    return (
+      <span className={atrasou ? 'text-[#C79600]' : 'text-[#2E7D4F]'}>
+        pago
+      </span>
+    )
+  }
+
+  const venceu = new Date(vencimento) < new Date(new Date().toDateString())
+  if (venceu) {
+    return <span className="text-[#B00063] font-semibold">vencido</span>
+  }
+
+  return <span className="text-[#6E6E68]">aguardando</span>
 }

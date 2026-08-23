@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import {
   lancarStatus,
   reimprimir,
   cancelarPedido,
   ajustarItem,
+  alterarPrecoPedido,
+  alterarFormaPagamento,
 } from '@/app/actions/producao'
 import {
   confirmarPedido,
@@ -14,8 +16,6 @@ import {
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-const teto = (pedida: number) => Math.ceil(pedida * 1.5)
 
 const MANUAIS = [
   { chave: 'impressao', rotulo: 'Impressão', email: true },
@@ -28,6 +28,26 @@ const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
   'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
+
+const ROTULOS_STATUS: Record<string, string> = {
+  aguardando: 'Aguardando confirmação',
+  recebido: 'Pedido confirmado',
+  impressao: 'Impressão',
+  estampando: 'Estampando',
+  corte_costura: 'Em corte / costura',
+  pronto: 'Pedido pronto',
+  nf_emitida: 'Nota fiscal emitida',
+  expedido: 'Expedido',
+  entregue: 'Entregue',
+  fechado: 'Pedido fechado',
+}
+
+const ROTULOS_PAGAMENTO: Record<string, string> = {
+  boleto_avista: 'Boleto à vista',
+  boleto_parcelado: 'Boleto parcelado',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+}
 
 type Item = {
   id: string
@@ -46,7 +66,13 @@ type Solicitacao = {
   criadoEm: string
 }
 
-type Tela = null | 'ajustar' | 'reimprimir' | 'cancelar'
+type Tela = null | 'ajustar' | 'preco' | 'forma' | 'reimprimir' | 'cancelar'
+
+function dataPadrao(diasAFrente: number) {
+  const d = new Date()
+  d.setDate(d.getDate() + diasAFrente)
+  return d.toISOString().slice(0, 10)
+}
 
 export default function PainelAcoes({
   pedidoId,
@@ -57,7 +83,11 @@ export default function PainelAcoes({
   total,
   reimpressoes,
   podeCancelarOuAjustar,
+  formaPagamento,
+  parcelasSolicitadas,
+  maxParcelas,
   solicitacao,
+  precoCliente,
   itens,
 }: {
   pedidoId: string
@@ -68,12 +98,22 @@ export default function PainelAcoes({
   total: number
   reimpressoes: number
   podeCancelarOuAjustar: boolean
+  formaPagamento: string
+  parcelasSolicitadas: number | null
+  maxParcelas: number
   solicitacao: Solicitacao | null
+  precoCliente: number
   itens: Item[]
 }) {
   const [tela, setTela] = useState<Tela>(null)
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
+
+  const [qtdParcelas, setQtdParcelas] = useState(
+    Math.min(parcelasSolicitadas ?? 3, maxParcelas)
+  )
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(30))
+  const [statusPendente, setStatusPendente] = useState<string | null>(null)
 
   const idx = ORDEM.indexOf(statusAtual)
   const aguardando = statusAtual === 'aguardando'
@@ -81,6 +121,9 @@ export default function PainelAcoes({
   const passouNF = usados.some((s) =>
     ['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(s)
   )
+  const ehParcelado = formaPagamento === 'boleto_parcelado'
+
+  const precoAtual = itens[0]?.precoMetro ?? 0
 
   const disponiveis = aguardando
     ? []
@@ -93,13 +136,25 @@ export default function PainelAcoes({
     iniciar(async () => {
       const r = await lancarStatus(pedidoId, chave)
       if (!r.ok) setErro(r.erro)
+      setStatusPendente(null)
     })
   }
 
   function confirmar() {
     setErro('')
+
+    if (ehParcelado && (qtdParcelas < 2 || qtdParcelas > maxParcelas)) {
+      setErro(`Quantidade de parcelas deve ser entre 2 e ${maxParcelas}`)
+      return
+    }
+
     iniciar(async () => {
-      const r = await confirmarPedido(pedidoId)
+      const r = await confirmarPedido(
+        pedidoId,
+        ehParcelado
+          ? { quantidade: qtdParcelas, primeiroVencimento }
+          : undefined
+      )
       if (!r.ok) setErro(r.erro)
     })
   }
@@ -111,6 +166,66 @@ export default function PainelAcoes({
       const r = await responderSolicitacao(solicitacao.id, aceitar)
       if (!r.ok) setErro(r.erro)
     })
+  }
+
+  if (tela === 'preco') {
+    return (
+      <TelaPreco
+        precoAtual={precoAtual}
+        precoCliente={precoCliente}
+        itens={itens}
+        pendente={pendente}
+        erro={erro}
+        onVoltar={() => {
+          setErro('')
+          setTela(null)
+        }}
+        onSalvar={(preco, motivo) =>
+          iniciar(async () => {
+            const r = await alterarPrecoPedido(pedidoId, preco, motivo)
+            if (!r.ok) {
+              setErro(r.erro)
+              return
+            }
+            setErro('')
+            setTela(null)
+          })
+        }
+      />
+    )
+  }
+
+  if (tela === 'forma') {
+    return (
+      <TelaFormaPagamento
+        formaAtual={formaPagamento}
+        total={total}
+        maxParcelas={maxParcelas}
+        pendente={pendente}
+        erro={erro}
+        onVoltar={() => {
+          setErro('')
+          setTela(null)
+        }}
+        onSalvar={(formaNova, motivo, parcelas, primeiroVenc) =>
+          iniciar(async () => {
+            const r = await alterarFormaPagamento(
+              pedidoId,
+              formaNova,
+              motivo,
+              parcelas,
+              primeiroVenc
+            )
+            if (!r.ok) {
+              setErro(r.erro)
+              return
+            }
+            setErro('')
+            setTela(null)
+          })
+        }
+      />
+    )
   }
 
   if (tela === 'ajustar') {
@@ -202,7 +317,6 @@ export default function PainelAcoes({
         </p>
       )}
 
-      {/* ---- solicitação de cancelamento pendente ---- */}
       {solicitacao && podeCancelarOuAjustar && (
         <div className="bg-[#F4FAFD] border border-[#0090D8] rounded-sm p-4 mb-4">
           <div className="flex items-baseline justify-between gap-3">
@@ -238,7 +352,6 @@ export default function PainelAcoes({
         </div>
       )}
 
-      {/* ---- confirmação ---- */}
       {aguardando ? (
         <div className="bg-white border-2 border-[#B00063] rounded-sm p-5">
           <h2 className="font-semibold tracking-tight">
@@ -248,11 +361,63 @@ export default function PainelAcoes({
             Confira as artes e quantidades antes de confirmar. Enquanto não
             confirmado, o cliente ainda pode cancelar por conta própria.
           </p>
-          {podeCancelarOuAjustar && (
-            <p className="text-xs text-[#6E6E68] mt-2">
-              Precisa mudar alguma quantidade? Ajuste antes de confirmar.
-            </p>
+
+          {ehParcelado && (
+            <div className="mt-4 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-4">
+              <h3 className="text-xs tracking-widest text-[#6E6E68] mb-3">
+                CLIENTE PEDIU BOLETO PARCELADO
+                {parcelasSolicitadas && ` · ${parcelasSolicitadas}x sugerido`}
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="qtd-parcelas"
+                    className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+                  >
+                    QUANTIDADE (máx. {maxParcelas})
+                  </label>
+                  <input
+                    id="qtd-parcelas"
+                    type="number"
+                    min={2}
+                    max={maxParcelas}
+                    value={qtdParcelas}
+                    onChange={(e) =>
+                      setQtdParcelas(
+                        Math.min(
+                          maxParcelas,
+                          Math.max(2, parseInt(e.target.value) || 2)
+                        )
+                      )
+                    }
+                    className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm outline-none focus:border-[#131A2E]"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="primeiro-venc"
+                    className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+                  >
+                    1º VENCIMENTO
+                  </label>
+                  <input
+                    id="primeiro-venc"
+                    type="date"
+                    value={primeiroVencimento}
+                    onChange={(e) => setPrimeiroVencimento(e.target.value)}
+                    className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E]"
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-[#6E6E68] mt-2.5">
+                {qtdParcelas}x de R$ {brl(total / qtdParcelas)} · vencimentos a
+                cada 30 dias a partir da data escolhida
+              </p>
+            </div>
           )}
+
           <button
             onClick={confirmar}
             disabled={pendente}
@@ -273,7 +438,7 @@ export default function PainelAcoes({
               {disponiveis.map((m) => (
                 <button
                   key={m.chave}
-                  onClick={() => avancar(m.chave)}
+                  onClick={() => setStatusPendente(m.chave)}
                   disabled={pendente}
                   className="text-left bg-white border border-[#DDDCD5] rounded-sm px-3 py-2.5 hover:border-[#131A2E] disabled:opacity-50"
                 >
@@ -294,6 +459,20 @@ export default function PainelAcoes({
         <>
           <Titulo>AÇÕES</Titulo>
           <div className="space-y-2">
+            {podeCancelarOuAjustar && !passouNF && (
+              <BotaoAcao
+                titulo="Alterar preço deste pedido"
+                legenda={`hoje R$ ${brl(precoAtual)}/m · padrão do cliente R$ ${brl(precoCliente)}/m`}
+                onClick={() => setTela('preco')}
+              />
+            )}
+            {podeCancelarOuAjustar && !passouNF && (
+              <BotaoAcao
+                titulo="Alterar forma de pagamento"
+                legenda={`hoje: ${ROTULOS_PAGAMENTO[formaPagamento] ?? formaPagamento}`}
+                onClick={() => setTela('forma')}
+              />
+            )}
             {podeCancelarOuAjustar && !passouNF && (
               <BotaoAcao
                 titulo="Ajustar quantidades"
@@ -324,11 +503,454 @@ export default function PainelAcoes({
         <>
           <Titulo>AÇÕES</Titulo>
           <div className="bg-[#EEEDE7] border-l-4 border-[#6E6E68] rounded-r-sm p-3 text-xs text-[#6E6E68] leading-relaxed">
-            Quantidades travadas — a nota fiscal já foi emitida. Alterações a
-            partir daqui exigem devolução ou carta de correção no Bling.
+            Pedido travado — a nota fiscal já foi emitida. Alterações a partir
+            daqui exigem devolução ou carta de correção no Bling.
           </div>
         </>
       )}
+
+      {statusPendente && (
+        <ModalConfirmarStatus
+          de={statusAtual}
+          para={statusPendente}
+          pendente={pendente}
+          erro={erro}
+          onCancelar={() => {
+            setErro('')
+            setStatusPendente(null)
+          }}
+          onConfirmar={() => avancar(statusPendente)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ---------------- modal de confirmação de status ---------------- */
+
+function ModalConfirmarStatus({
+  de,
+  para,
+  pendente,
+  erro,
+  onCancelar,
+  onConfirmar,
+}: {
+  de: string
+  para: string
+  pendente: boolean
+  erro: string
+  onCancelar: () => void
+  onConfirmar: () => void
+}) {
+  useEffect(() => {
+    function tecla(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !pendente) onCancelar()
+    }
+    document.addEventListener('keydown', tecla)
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', tecla)
+      document.body.style.overflow = overflow
+    }
+  }, [onCancelar, pendente])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-[#131A2E]/70"
+        onClick={() => !pendente && onCancelar()}
+      />
+
+      <div className="relative bg-white rounded-sm w-full max-w-sm p-5">
+        <h2 className="font-semibold tracking-tight text-lg">
+          Confirmar mudança de status?
+        </h2>
+
+        <p className="text-sm text-[#6E6E68] mt-3 leading-relaxed">
+          De{' '}
+          <strong className="text-[#131A2E]">
+            {ROTULOS_STATUS[de] ?? de}
+          </strong>{' '}
+          para{' '}
+          <strong className="text-[#131A2E]">
+            {ROTULOS_STATUS[para] ?? para}
+          </strong>
+          .
+        </p>
+
+        {erro && <p className="text-sm text-[#B00063] mt-3">{erro}</p>}
+
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <button
+            onClick={onCancelar}
+            disabled={pendente}
+            className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+          >
+            CANCELAR
+          </button>
+          <button
+            onClick={onConfirmar}
+            disabled={pendente}
+            className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+          >
+            {pendente ? '...' : 'CONFIRMAR'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- forma de pagamento ---------------- */
+
+function TelaFormaPagamento({
+  formaAtual,
+  total,
+  maxParcelas,
+  pendente,
+  erro,
+  onVoltar,
+  onSalvar,
+}: {
+  formaAtual: string
+  total: number
+  maxParcelas: number
+  pendente: boolean
+  erro: string
+  onVoltar: () => void
+  onSalvar: (
+    formaNova: string,
+    motivo: string,
+    parcelas?: number,
+    primeiroVencimento?: string
+  ) => void
+}) {
+  const [formaNova, setFormaNova] = useState(formaAtual)
+  const [parcelas, setParcelas] = useState(Math.min(3, maxParcelas))
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(30))
+  const [motivo, setMotivo] = useState('')
+  const [aviso, setAviso] = useState('')
+
+  const ehParcelado = formaNova === 'boleto_parcelado'
+  const mudouAlgo = formaNova !== formaAtual
+
+  function salvar() {
+    if (!mudouAlgo) {
+      return setAviso('Escolha uma forma de pagamento diferente da atual.')
+    }
+    if (ehParcelado && (parcelas < 2 || parcelas > maxParcelas)) {
+      return setAviso(`Escolha entre 2 e ${maxParcelas} parcelas.`)
+    }
+    if (motivo.trim().length < 10) {
+      return setAviso('Descreva o motivo com pelo menos 10 caracteres.')
+    }
+    setAviso('')
+    onSalvar(
+      formaNova,
+      motivo.trim(),
+      ehParcelado ? parcelas : undefined,
+      ehParcelado ? primeiroVencimento : undefined
+    )
+  }
+
+  return (
+    <div className="mt-5 bg-white border border-[#131A2E] rounded-sm p-5">
+      <h2 className="font-semibold tracking-tight">
+        Alterar forma de pagamento
+      </h2>
+
+      <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
+        <strong className="block text-[10px] tracking-widest mb-1">
+          ATENÇÃO
+        </strong>
+        Só é possível alterar antes de qualquer boleto/parcela ter sido
+        emitido ou pago. Trocando para parcelado, novas parcelas são geradas
+        automaticamente.
+      </div>
+
+      <div className="mt-4">
+        <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">
+          ATUAL
+        </label>
+        <div className="font-mono text-[#6E6E68] py-1">
+          {ROTULOS_PAGAMENTO[formaAtual] ?? formaAtual}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
+          NOVA FORMA
+        </label>
+        <select
+          value={formaNova}
+          onChange={(e) => {
+            setFormaNova(e.target.value)
+            setAviso('')
+          }}
+          className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white text-sm outline-none focus:border-[#131A2E]"
+        >
+          <option value="boleto_avista">Boleto à vista</option>
+          <option value="boleto_parcelado">Boleto parcelado</option>
+          <option value="cartao_credito">Cartão de crédito</option>
+          <option value="cartao_debito">Cartão de débito</option>
+        </select>
+      </div>
+
+      {ehParcelado && (
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div>
+            <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">
+              QUANTIDADE (máx. {maxParcelas})
+            </label>
+            <input
+              type="number"
+              min={2}
+              max={maxParcelas}
+              value={parcelas}
+              onChange={(e) => {
+                setParcelas(
+                  Math.min(maxParcelas, Math.max(2, parseInt(e.target.value) || 2))
+                )
+                setAviso('')
+              }}
+              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm outline-none focus:border-[#131A2E]"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">
+              1º VENCIMENTO
+            </label>
+            <input
+              type="date"
+              value={primeiroVencimento}
+              onChange={(e) => {
+                setPrimeiroVencimento(e.target.value)
+                setAviso('')
+              }}
+              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E]"
+            />
+          </div>
+          <p className="text-xs text-[#6E6E68] col-span-2">
+            {parcelas}x de R$ {brl(total / parcelas)}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <label
+          htmlFor="motivo-forma"
+          className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+        >
+          MOTIVO<span className="text-[#B00063] ml-1">*</span>
+        </label>
+        <textarea
+          id="motivo-forma"
+          rows={3}
+          value={motivo}
+          onChange={(e) => {
+            setMotivo(e.target.value)
+            setAviso('')
+          }}
+          placeholder="Ex.: cliente solicitou trocar boleto à vista por parcelado em 3x"
+          className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 text-sm outline-none focus:border-[#131A2E] resize-y"
+        />
+        <p className="text-xs text-[#6E6E68] mt-1.5">
+          Fica registrado no histórico do pedido.
+        </p>
+      </div>
+
+      {(aviso || erro) && (
+        <p className="text-sm text-[#B00063] mt-3">{aviso || erro}</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 mt-4">
+        <button
+          onClick={onVoltar}
+          className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide"
+        >
+          CANCELAR
+        </button>
+        <button
+          onClick={salvar}
+          disabled={pendente}
+          className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+        >
+          {pendente ? 'SALVANDO...' : 'SALVAR'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- preço do pedido ---------------- */
+
+function TelaPreco({
+  precoAtual,
+  precoCliente,
+  itens,
+  pendente,
+  erro,
+  onVoltar,
+  onSalvar,
+}: {
+  precoAtual: number
+  precoCliente: number
+  itens: Item[]
+  pendente: boolean
+  erro: string
+  onVoltar: () => void
+  onSalvar: (preco: number, motivo: string) => void
+}) {
+  const [valor, setValor] = useState(
+    precoAtual.toFixed(2).replace('.', ',')
+  )
+  const [motivo, setMotivo] = useState('')
+  const [aviso, setAviso] = useState('')
+
+  const novo = Number(valor.replace(',', '.'))
+  const valido = !isNaN(novo) && novo > 0
+
+  const metrosTotal = itens.reduce(
+    (a, i) => a + i.faturada * i.metrosPorUnidade,
+    0
+  )
+  const totalAtual = metrosTotal * precoAtual
+  const totalNovo = valido ? metrosTotal * novo : 0
+  const diferenca = totalNovo - totalAtual
+
+  function salvar() {
+    if (!valido) return setAviso('Informe um preço válido.')
+    if (novo === precoAtual) return setAviso('O preço informado é igual ao atual.')
+    if (motivo.trim().length < 10) {
+      return setAviso('Descreva o motivo com pelo menos 10 caracteres.')
+    }
+    setAviso('')
+    onSalvar(novo, motivo.trim())
+  }
+
+  return (
+    <div className="mt-5 bg-white border border-[#131A2E] rounded-sm p-5">
+      <h2 className="font-semibold tracking-tight">
+        Alterar preço deste pedido
+      </h2>
+
+      <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
+        <strong className="block text-[10px] tracking-widest mb-1">
+          VALE SÓ PARA ESTE PEDIDO
+        </strong>
+        O preço padrão do cliente (R$ {brl(precoCliente)}/m) não muda. Pedidos
+        anteriores e futuros continuam com o valor de tabela.
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4 mt-4">
+        <div>
+          <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">
+            PREÇO ATUAL DO PEDIDO
+          </label>
+          <div className="font-mono text-[#6E6E68] py-2">
+            R$ {brl(precoAtual)} /m
+          </div>
+        </div>
+        <div>
+          <label
+            htmlFor="novo-preco"
+            className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+          >
+            NOVO PREÇO POR METRO
+          </label>
+          <input
+            id="novo-preco"
+            inputMode="decimal"
+            value={valor}
+            onChange={(e) => {
+              setValor(e.target.value)
+              setAviso('')
+            }}
+            className="w-full border border-[#131A2E] rounded-sm px-3 py-2 font-mono font-semibold outline-none"
+          />
+        </div>
+      </div>
+
+      {precoAtual !== precoCliente && (
+        <button
+          onClick={() => {
+            setValor(precoCliente.toFixed(2).replace('.', ','))
+            setAviso('')
+          }}
+          className="text-xs text-[#B00063] mt-2"
+        >
+          Voltar ao preço de tabela (R$ {brl(precoCliente)}/m)
+        </button>
+      )}
+
+      <div className="mt-4">
+        <label
+          htmlFor="motivo-preco"
+          className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+        >
+          MOTIVO<span className="text-[#B00063] ml-1">*</span>
+        </label>
+        <textarea
+          id="motivo-preco"
+          rows={3}
+          value={motivo}
+          onChange={(e) => {
+            setMotivo(e.target.value)
+            setAviso('')
+          }}
+          placeholder="Ex.: desconto por volume acima de 500 m, negociado por telefone"
+          className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 text-sm outline-none focus:border-[#131A2E] resize-y"
+        />
+        <p className="text-xs text-[#6E6E68] mt-1.5">
+          Fica registrado no histórico do pedido.
+        </p>
+      </div>
+
+      {(aviso || erro) && (
+        <p className="text-sm text-[#B00063] mt-3">{aviso || erro}</p>
+      )}
+
+      <div className="mt-4 pt-4 border-t-2 border-[#131A2E]">
+        <div className="flex justify-between items-baseline text-xs text-[#6E6E68]">
+          <span>{brl(metrosTotal)} m no pedido</span>
+          <span className="font-mono">era R$ {brl(totalAtual)}</span>
+        </div>
+        <div className="flex justify-between items-baseline mt-1.5">
+          <span className="font-semibold tracking-tight text-sm">NOVO TOTAL</span>
+          <div className="text-right">
+            <div className="font-mono font-semibold text-xl">
+              R$ {brl(totalNovo)}
+            </div>
+            {valido && diferenca !== 0 && (
+              <div
+                className={`text-[10px] font-mono ${
+                  diferenca > 0 ? 'text-[#2E7D4F]' : 'text-[#B00063]'
+                }`}
+              >
+                {diferenca > 0 ? '+' : '−'}R$ {brl(Math.abs(diferenca))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mt-4">
+        <button
+          onClick={onVoltar}
+          className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide"
+        >
+          CANCELAR
+        </button>
+        <button
+          onClick={salvar}
+          disabled={pendente}
+          className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+        >
+          {pendente ? 'SALVANDO...' : 'SALVAR'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -368,11 +990,9 @@ function TelaAjuste({
   function salvar() {
     if (!alterou) return setAviso('Nenhuma quantidade foi alterada.')
 
-    const estourou = itens.find((i) => (qtds[i.id] ?? 0) > teto(i.pedida))
-    if (estourou) {
-      return setAviso(
-        `${estourou.sku}: máximo de ${teto(estourou.pedida)} un (50% acima do pedido de ${estourou.pedida} un).`
-      )
+    const zerado = itens.find((i) => (qtds[i.id] ?? 0) <= 0)
+    if (zerado) {
+      return setAviso(`${zerado.sku}: a quantidade a faturar deve ser maior que zero.`)
     }
 
     if (motivo.trim().length < 10) {
@@ -398,10 +1018,8 @@ function TelaAjuste({
         <strong className="block text-[10px] tracking-widest mb-1">
           O QUE ACONTECE AO SALVAR
         </strong>
-        O pedido é atualizado no Bling, o valor é recalculado e o cliente vê o
-        ajuste no portal. Se o boleto já tiver sido emitido, ele é cancelado e
-        reemitido com o novo valor. O limite por item é 50% acima do que foi
-        pedido.
+        O pedido é atualizado no Bling e o valor é recalculado. Você pode
+        reduzir ou aumentar livremente até a nota fiscal ser emitida.
       </div>
 
       <div className="space-y-3 mt-4">
@@ -409,8 +1027,6 @@ function TelaAjuste({
           const q = qtds[i.id] ?? 0
           const dif = q - i.faturada
           const metros = q * i.metrosPorUnidade
-          const max = teto(i.pedida)
-          const noLimite = q >= max
 
           return (
             <div key={i.id} className="border border-[#DDDCD5] rounded-sm p-3">
@@ -430,8 +1046,7 @@ function TelaAjuste({
                     {i.nome}
                   </div>
                   <div className="text-[10px] font-mono text-[#6E6E68] mt-1">
-                    {i.metrosPorUnidade.toFixed(2).replace('.', ',')} m/un · R${' '}
-                    {brl(i.precoMetro)}/m
+                    {i.metrosPorUnidade.toFixed(2).replace('.', ',')} m/un
                   </div>
                 </div>
               </div>
@@ -466,21 +1081,19 @@ function TelaAjuste({
                     >
                       −
                     </button>
-                    <input
+                   <input
                       id={`q-${i.id}`}
                       type="number"
                       inputMode="numeric"
                       min={0}
-                      max={max}
                       value={q}
                       onChange={(e) => {
                         setAviso('')
+                        const limpo = e.target.value.replace(/^0+(?=\d)/, '')
                         setQtds((a) => ({
                           ...a,
-                          [i.id]: Math.max(
-                            0,
-                            Math.min(max, parseInt(e.target.value) || 0)
-                          ),
+                          [i.id]:
+                            limpo === '' ? 0 : Math.max(0, parseInt(limpo, 10) || 0),
                         }))
                       }}
                       className="flex-1 w-full py-2 text-center font-mono font-semibold outline-none min-w-0"
@@ -491,7 +1104,7 @@ function TelaAjuste({
                       onClick={() =>
                         setQtds((a) => ({
                           ...a,
-                          [i.id]: Math.min(max, (a[i.id] ?? 0) + 1),
+                          [i.id]: (a[i.id] ?? 0) + 1,
                         }))
                       }
                       className="w-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
@@ -499,13 +1112,6 @@ function TelaAjuste({
                       +
                     </button>
                   </div>
-                  <p
-                    className={`text-[9px] font-mono mt-1 text-right ${
-                      noLimite ? 'text-[#C79600]' : 'text-[#6E6E68]'
-                    }`}
-                  >
-                    máx {max} un
-                  </p>
                 </div>
               </div>
 
@@ -516,8 +1122,7 @@ function TelaAjuste({
                 ) : (
                   <span className={dif > 0 ? 'text-[#2E7D4F]' : 'text-[#B00063]'}>
                     {dif > 0 ? '+' : '−'}
-                    {Math.abs(dif)} un · {dif > 0 ? '+' : '−'}R${' '}
-                    {brl(Math.abs(dif) * i.metrosPorUnidade * i.precoMetro)}
+                    {Math.abs(dif)} un
                   </span>
                 )}
               </div>
@@ -552,8 +1157,7 @@ function TelaAjuste({
       {subiu && (
         <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
           O valor do pedido vai <strong>aumentar</strong>. Confirme com o
-          cliente antes de salvar — ele receberá um boleto maior do que o pedido
-          original.
+          cliente antes de salvar.
         </div>
       )}
 
@@ -652,11 +1256,10 @@ function TelaReimpressao({
                     : 'responsabilidade do cliente'}
                 </b>
               </li>
-              <li>· O retorno fica visível no histórico do pedido</li>
+              <li>· O pedido volta para a fila de impressão</li>
               {reimpressoes > 0 && (
                 <li className="text-[#B00063]">
-                  · Esta seria a <b>{reimpressoes + 1}ª reimpressão</b> deste
-                  pedido
+                  · Esta seria a <b>{reimpressoes + 1}ª reimpressão</b>
                 </li>
               )}
             </ul>
@@ -686,8 +1289,8 @@ function TelaReimpressao({
             <strong className="block text-[10px] tracking-widest mb-1">
               O QUE ACONTECE
             </strong>
-            O pedido volta para a etapa Impressão. O histórico registra o retorno
-            — nada é apagado. O cliente vê que o pedido voltou a produzir.
+            O pedido volta para a etapa Impressão e reentra na fila. O histórico
+            registra o retorno — nada é apagado.
           </div>
 
           {podeAjustar && (
@@ -699,7 +1302,7 @@ function TelaReimpressao({
                 Precisa mudar a quantidade?
               </span>
               <span className="block text-[10px] text-[#6E6E68] mt-0.5 leading-relaxed">
-                Ajuste antes de reimprimir — o limite é 50% acima do pedido.
+                Ajuste antes de reimprimir.
               </span>
             </button>
           )}
@@ -856,8 +1459,7 @@ function TelaCancelamento({
               O QUE ACONTECE
             </strong>
             O pedido de venda é cancelado no Bling, o boleto é cancelado se já
-            tiver sido emitido, e o cliente recebe um e-mail com o motivo. O
-            pedido continua visível no histórico, marcado como cancelado.
+            tiver sido emitido, e o cliente recebe um e-mail com o motivo.
           </div>
 
           <div className="mt-4">

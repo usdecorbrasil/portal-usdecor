@@ -3,14 +3,16 @@ import { lerPerfil } from '@/lib/auth/perfil'
 
 /**
  * Porta de entrada do painel.
- * Dono cai no Dashboard; funcionário, direto nos Pedidos.
+ * Admin e financeiro caem no Dashboard; funcionário, direto na Fila de impressão.
  */
 export default async function AdminHome() {
   const perfil = await lerPerfil()
 
   if (!perfil || perfil.papel === 'cliente') redirect('/')
 
-  if (perfil.papel === 'admin') redirect('/admin/dashboard')
+  if (perfil.papel === 'admin' || perfil.papel === 'financeiro') {
+    redirect('/admin/dashboard')
+  }
 
-  redirect('/admin/pedidos')
+  redirect('/admin/fila')
 }

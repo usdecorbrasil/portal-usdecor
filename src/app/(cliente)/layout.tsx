@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { logout } from '../actions/auth'
 import { CarrinhoProvider } from '@/lib/carrinho/contexto'
 import Navegacao from './navegacao'
+import BuscaHeaderCliente from './busca-header-cliente'
 
 export default async function ClienteLayout({
   children,
@@ -56,11 +57,15 @@ export default async function ClienteLayout({
             <form action={logout}>
               <button
                 type="submit"
-                className="text-xs text-[#6E6E68] hover:text-[#B00063] whitespace-nowrap"
+                className="text-xs text-[#6E6E68] hover:text-[#D8007A] whitespace-nowrap"
               >
                 Sair
               </button>
             </form>
+          </div>
+
+          <div className="max-w-3xl mx-auto px-5 pb-3">
+            <BuscaHeaderCliente />
           </div>
 
           <Navegacao />

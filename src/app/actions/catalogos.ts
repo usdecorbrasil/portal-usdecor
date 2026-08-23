@@ -28,7 +28,7 @@ async function exigirAdmin() {
   const { data: perfil } = await supabase
     .from('profiles').select('role, ativo').eq('id', user.id).single()
 
-  return !!perfil && perfil.ativo && perfil.role === 'admin'
+  return !!perfil && perfil.ativo && (perfil.role === 'admin' || perfil.role === 'financeiro')
 }
 
 export async function criarCatalogo(

@@ -25,18 +25,9 @@ export default function FormularioProduto({
   const [erroImg, setErroImg] = useState('')
   const [processando, setProcessando] = useState(false)
 
-  const [precoMetro, setPrecoMetro] = useState('')
-  const [metros, setMetros] = useState('')
-
-  const pm = Number(precoMetro.replace(',', '.'))
-  const mu = Number(metros.replace(',', '.'))
-  const precoUnidade = pm > 0 && mu > 0 ? pm * mu : null
-
   useEffect(() => {
     if (estado?.ok) {
       form.current?.reset()
-      setPrecoMetro('')
-      setMetros('')
       limparImagem()
     }
   }, [estado])
@@ -124,90 +115,35 @@ export default function FormularioProduto({
           <Campo nome="nome" rotulo="NOME DO DESENHO" obrigatorio placeholder="Floral Noturno" />
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Campo nome="tecido" rotulo="TECIDO" obrigatorio placeholder="Malha PV" />
-
-          <div>
-            <label
-              htmlFor="nv-colecao"
-              className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-            >
-              COLEÇÃO<span className="text-[#B00063] ml-1">*</span>
-            </label>
-            <select
-              id="nv-colecao"
-              name="catalogo_id"
-              required
-              defaultValue={catalogoId}
-              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
-            >
-              {colecoes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label
+            htmlFor="nv-colecao"
+            className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+          >
+            COLEÇÃO<span className="text-[#B00063] ml-1">*</span>
+          </label>
+          <select
+            id="nv-colecao"
+            name="catalogo_id"
+            required
+            defaultValue={catalogoId}
+            className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
+          >
+            {colecoes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="border border-[#DDDCD5] rounded-sm p-4 bg-[#FAFAF8]">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label
-                htmlFor="metros_por_unidade"
-                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-              >
-                METROS POR UNIDADE<span className="text-[#B00063] ml-1">*</span>
-              </label>
-              <input
-                id="metros_por_unidade"
-                name="metros_por_unidade"
-                required
-                inputMode="decimal"
-                placeholder="1,40"
-                value={metros}
-                onChange={(e) => setMetros(e.target.value)}
-                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-              />
-              <p className="text-xs text-[#6E6E68] mt-1">
-                Comprimento de cada repetição
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="preco"
-                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-              >
-                PREÇO POR METRO<span className="text-[#B00063] ml-1">*</span>
-              </label>
-              <input
-                id="preco"
-                name="preco"
-                required
-                inputMode="decimal"
-                placeholder="8,86"
-                value={precoMetro}
-                onChange={(e) => setPrecoMetro(e.target.value)}
-                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-              />
-              <p className="text-xs text-[#6E6E68] mt-1">
-                Valor cobrado no Bling
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 pt-3 border-t border-[#DDDCD5] flex items-baseline justify-between gap-3">
-            <span className="text-xs tracking-widest text-[#6E6E68]">
-              O CLIENTE VÊ
-            </span>
-            <span className="font-mono font-semibold">
-              {precoUnidade
-                ? `R$ ${precoUnidade.toFixed(2).replace('.', ',')} / unidade`
-                : '—'}
-            </span>
-          </div>
-        </div>
+        <Campo
+          nome="metros_por_unidade"
+          rotulo="METROS POR UNIDADE"
+          obrigatorio
+          placeholder="1,40"
+          dica="Comprimento de cada repetição da estampa"
+        />
 
         <div>
           <label

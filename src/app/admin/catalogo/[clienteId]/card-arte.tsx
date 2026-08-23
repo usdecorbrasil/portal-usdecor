@@ -9,8 +9,6 @@ type Produto = {
   id: string
   sku: string
   nome: string
-  tecido: string
-  preco: number
   metrosPorUnidade: number
   ativo: boolean
   catalogoId: string
@@ -29,7 +27,6 @@ export default function CardArte({
 }) {
   const [editando, setEditando] = useState(false)
 
-  const precoUnidade = produto.preco * produto.metrosPorUnidade
   const nomeColecao =
     colecoes.find((c) => c.id === produto.catalogoId)?.nome ?? ''
 
@@ -44,6 +41,8 @@ export default function CardArte({
           <img
             src={imagemUrl}
             alt={produto.nome}
+            loading="lazy"
+            decoding="async"
             className={`w-full h-32 object-cover ${produto.ativo ? '' : 'opacity-60'}`}
           />
         ) : (
@@ -68,18 +67,14 @@ export default function CardArte({
             )}
           </div>
 
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            <span className="text-xs text-[#6E6E68] border border-[#DDDCD5] rounded-sm px-1.5 py-0.5">
-              {produto.tecido}
-            </span>
-            {colecoes.length > 1 && nomeColecao && (
+          {colecoes.length > 1 && nomeColecao && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
               <span className="text-xs text-[#6E6E68] border border-[#DDDCD5] rounded-sm px-1.5 py-0.5">
                 {nomeColecao}
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Funcionário move a arte de coleção; o dono faz isso pelo EDITAR */}
           {!podeEditar && (
             <SeletorColecao
               produtoId={produto.id}
@@ -88,27 +83,9 @@ export default function CardArte({
             />
           )}
 
-          {podeEditar ? (
-            <div className="mt-3 pt-3 border-t border-[#DDDCD5] space-y-1">
-              <div className="flex justify-between items-baseline text-xs">
-                <span className="text-[#6E6E68]">Cliente vê</span>
-                <span className="font-mono font-semibold text-sm">
-                  R$ {precoUnidade.toFixed(2).replace('.', ',')}/un
-                </span>
-              </div>
-              <div className="flex justify-between items-baseline text-xs text-[#6E6E68]">
-                <span>Bling cobra</span>
-                <span className="font-mono">
-                  R$ {produto.preco.toFixed(2).replace('.', ',')}/m ·{' '}
-                  {produto.metrosPorUnidade.toFixed(2).replace('.', ',')} m/un
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3 pt-3 border-t border-[#DDDCD5] text-xs text-[#6E6E68] font-mono">
-              {produto.metrosPorUnidade.toFixed(2).replace('.', ',')} m por unidade
-            </div>
-          )}
+          <div className="mt-3 pt-3 border-t border-[#DDDCD5] text-xs text-[#6E6E68] font-mono">
+            {produto.metrosPorUnidade.toFixed(2).replace('.', ',')} m por unidade
+          </div>
 
           {podeEditar ? (
             <div className="mt-3">

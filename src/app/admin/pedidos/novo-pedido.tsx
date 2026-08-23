@@ -13,7 +13,6 @@ type Arte = {
   id: string
   sku: string
   nome: string
-  tecido: string
   precoMetro: number
   metrosPorUnidade: number
   catalogo: string

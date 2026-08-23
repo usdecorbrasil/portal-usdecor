@@ -13,7 +13,16 @@ const schema = z.object({
   ).min(1, 'O pedido precisa ter ao menos um item')
    .max(200, 'Máximo de 200 itens por pedido'),
   notas: z.string().trim().max(2000).optional(),
-})
+  forma_pagamento: z.enum(['boleto_avista', 'boleto_parcelado', 'cartao_credito', 'cartao_debito'])
+    .default('boleto_avista'),
+  parcelas: z.number().int().min(2).max(24).optional(),
+}).refine(
+  (d) => d.forma_pagamento !== 'boleto_parcelado' || d.parcelas !== undefined,
+  { message: 'Escolha a quantidade de parcelas', path: ['parcelas'] }
+).refine(
+  (d) => d.forma_pagamento === 'boleto_parcelado' || d.parcelas === undefined,
+  { message: 'Quantidade de parcelas só se aplica a boleto parcelado', path: ['parcelas'] }
+)
 
 type Resultado =
   | { ok: true; numero: number; total: number }
@@ -22,6 +31,8 @@ type Resultado =
 export async function criarPedido(dados: {
   itens: { produto_id: string; quantidade: number }[]
   notas?: string
+  forma_pagamento?: string
+  parcelas?: number
 }): Promise<Resultado> {
   const parsed = schema.safeParse(dados)
 
@@ -38,10 +49,12 @@ export async function criarPedido(dados: {
   if (!user) return { ok: false, erro: 'Sessão expirada. Entre novamente.' }
 
   // Toda a validação real acontece dentro da função do banco:
-  // preço, catálogo do cliente, produto ativo, anti-duplicidade.
+  // preço, catálogo do cliente, produto ativo, anti-duplicidade, limite de crédito.
   const { data, error } = await supabase.rpc('criar_pedido', {
     p_itens: parsed.data.itens,
     p_notas: parsed.data.notas || null,
+    p_forma_pagamento: parsed.data.forma_pagamento,
+    p_parcelas: parsed.data.parcelas ?? null,
   })
 
   if (error) {
@@ -62,4 +75,30 @@ export async function criarPedido(dados: {
     numero: Number(pedido.numero),
     total: Number(pedido.total),
   }
+}
+
+export async function verificarPodeParcelar(): Promise<boolean> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return false
+
+  const { data: perfil } = await supabase
+    .from('profiles')
+    .select('cliente_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!perfil?.cliente_id) return false
+
+  const { data, error } = await supabase.rpc('cliente_pode_parcelar', {
+    p_cliente_id: perfil.cliente_id,
+  })
+
+  if (error) return false
+
+  return !!data
 }

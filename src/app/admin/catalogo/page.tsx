@@ -6,7 +6,7 @@ import EnviosPendentes from './envios-pendentes'
 
 export default async function CatalogosPage() {
   const perfil = await lerPerfil()
-  const dono = perfil?.papel === 'admin'
+  const nivelAdmin = perfil?.papel === 'admin' || perfil?.papel === 'financeiro'
 
   const supabase = await createClient()
 
@@ -51,7 +51,7 @@ export default async function CatalogosPage() {
         }))}
       />
 
-      {dono && <NovoCatalogo clientes={ativos} />}
+      {nivelAdmin && <NovoCatalogo clientes={ativos} />}
 
       <div className="mt-8 space-y-8">
         {clientes?.map((cliente) => {
@@ -76,7 +76,7 @@ export default async function CatalogosPage() {
               {meus.length === 0 ? (
                 <p className="text-sm text-[#6E6E68] py-3">
                   Nenhuma coleção.
-                  {dono && ' Crie uma pelo botão acima.'}
+                  {nivelAdmin && ' Crie uma pelo botão acima.'}
                 </p>
               ) : (
                 <div className="space-y-2">

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useCarrinho, precoUnidade } from '@/lib/carrinho/contexto'
+import { useCarrinho } from '@/lib/carrinho/contexto'
 import Visualizador from './visualizador'
 import SeletorColecao, { type Colecao } from '@/components/seletor-colecao'
 
@@ -9,7 +9,6 @@ type Produto = {
   id: string
   sku: string
   nome: string
-  tecido: string
   precoMetro: number
   metrosPorUnidade: number
   catalogoId: string
@@ -19,19 +18,18 @@ export default function CardProduto({
   produto,
   imagemUrl,
   colecoes,
+  prioridade = false,
 }: {
   produto: Produto
   imagemUrl: string | null
   colecoes: Colecao[]
+  prioridade?: boolean
 }) {
   const { adicionar, itens } = useCarrinho()
   const noCarrinho = itens.find((i) => i.produtoId === produto.id)
   const [qtd, setQtd] = useState(noCarrinho?.quantidade ?? 0)
   const [feito, setFeito] = useState(false)
   const [ampliada, setAmpliada] = useState(false)
-
-  const unitario = precoUnidade(produto.precoMetro, produto.metrosPorUnidade)
-  const metrosTotal = qtd * produto.metrosPorUnidade
 
   function ajustar(delta: number) {
     setQtd((v) => Math.max(0, v + delta))
@@ -44,9 +42,9 @@ export default function CardProduto({
         produtoId: produto.id,
         sku: produto.sku,
         nome: produto.nome,
-        tecido: produto.tecido,
         precoMetro: produto.precoMetro,
         metrosPorUnidade: produto.metrosPorUnidade,
+        imagemUrl,
       },
       qtd
     )
@@ -65,6 +63,10 @@ export default function CardProduto({
           <img
             src={imagemUrl}
             alt={produto.nome}
+            width={280}
+            height={112}
+            loading={prioridade ? 'eager' : 'lazy'}
+            decoding="async"
             className="w-full h-28 object-cover group-hover:opacity-85 transition-opacity"
           />
         </button>
@@ -88,9 +90,6 @@ export default function CardProduto({
         <h3 className="text-sm font-semibold tracking-tight leading-tight mt-0.5">
           {produto.nome}
         </h3>
-        <span className="inline-block self-start text-[10px] text-[#6E6E68] border border-[#DDDCD5] rounded-sm px-1.5 py-0.5 mt-1.5">
-          {produto.tecido}
-        </span>
 
         <SeletorColecao
           produtoId={produto.id}
@@ -98,17 +97,7 @@ export default function CardProduto({
           colecoes={colecoes}
         />
 
-        <div className="mt-auto pt-2">
-          <div className="font-mono text-sm font-semibold">
-            R$ {unitario.toFixed(2).replace('.', ',')}
-            <span className="text-[10px] text-[#6E6E68] font-normal"> /un</span>
-          </div>
-          <div className="text-[10px] text-[#6E6E68] font-mono">
-            {produto.metrosPorUnidade.toFixed(2).replace('.', ',')} m por unidade
-          </div>
-        </div>
-
-        <div className="flex border border-[#DDDCD5] rounded-sm overflow-hidden mt-2">
+        <div className="flex border border-[#DDDCD5] rounded-sm overflow-hidden mt-auto pt-2">
           <button
             onClick={() => ajustar(-5)}
             aria-label="Diminuir"
@@ -133,12 +122,6 @@ export default function CardProduto({
             +
           </button>
         </div>
-
-        {qtd > 0 && (
-          <div className="text-[10px] text-[#6E6E68] font-mono mt-1 text-center">
-            {metrosTotal.toFixed(2).replace('.', ',')} m no total
-          </div>
-        )}
 
         <button
           onClick={adicionarAoCarrinho}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
+import { buscarMaxParcelas } from '@/app/actions/configuracoes'
 import PainelAcoes from './painel-acoes'
 
 const brl = (v: number) =>
@@ -26,6 +27,13 @@ const ORIGENS: Record<string, string> = {
   bling: 'Bling',
 }
 
+const ROTULOS_PAGAMENTO: Record<string, string> = {
+  boleto_avista: 'Boleto à vista',
+  boleto_parcelado: 'Boleto parcelado',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+}
+
 function dataHora(iso: string) {
   const d = new Date(iso)
   return (
@@ -33,6 +41,10 @@ function dataHora(iso: string) {
     ' · ' +
     d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   )
+}
+
+function dataBr(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
 export default async function PedidoAdminPage({
@@ -49,9 +61,9 @@ export default async function PedidoAdminPage({
   const supabase = await createClient()
 
   const camposItens = dono
-    ? `id, produto_id, sku, nome, tecido, preco_unitario, metros_por_unidade,
+    ? `id, produto_id, sku, nome, preco_unitario, metros_por_unidade,
        quantidade_pedida, quantidade_faturada, metros_total, subtotal`
-    : `id, produto_id, sku, nome, tecido, metros_por_unidade,
+    : `id, produto_id, sku, nome, metros_por_unidade,
        quantidade_pedida, quantidade_faturada, metros_total`
 
   const camposFinanceiros = dono
@@ -66,24 +78,36 @@ export default async function PedidoAdminPage({
     .select(`
       id, numero, notas, created_at,
       cancelado_em, cancelado_motivo,
+      forma_pagamento, parcelas_solicitadas,
       ${camposFinanceiros}
-      clientes(razao_social, cnpj),
+      clientes(razao_social, cnpj, preco_metro),
       pedido_itens(${camposItens}),
       pedido_status_historico(
         status, origem, created_at, observacao,
         reimpressao_motivo, reimpressao_custo
       ),
       pedido_ajustes(motivo, quantidade_de, quantidade_para, created_at),
-      pedido_solicitacoes(id, texto, status, resposta, created_at)
+      pedido_solicitacoes(id, texto, status, resposta, created_at),
+      pedido_parcelas(numero, valor, vencimento, pago_em)
     `)
     .eq('id', id)
     .single()
 
   if (!pedido) notFound()
 
+  const maxParcelas = await buscarMaxParcelas()
+
   const p = pedido as any
-  const cliente = p.clientes as { razao_social: string; cnpj: string }
+  const cliente = p.clientes as {
+    razao_social: string
+    cnpj: string
+    preco_metro: number
+  }
+  
   const itens = (p.pedido_itens ?? []) as any[]
+  const parcelas = ((p.pedido_parcelas ?? []) as any[]).sort(
+    (a, b) => a.numero - b.numero
+  )
 
   const urls = new Map<string, string>()
   if (itens.length) {
@@ -216,37 +240,43 @@ export default async function PedidoAdminPage({
         </div>
       )}
 
-      {!cancelado && (
-        <PainelAcoes
-          pedidoId={p.id}
-          numero={Number(p.numero)}
-          cliente={cliente.razao_social}
-          statusAtual={atual}
-          usados={usados}
-          total={dono ? Number(p.total) : 0}
-          reimpressoes={reimpressoes}
-          podeCancelarOuAjustar={dono}
-          solicitacao={
-            aberta
-              ? {
-                  id: aberta.id,
-                  texto: aberta.texto,
-                  criadoEm: aberta.created_at,
-                }
-              : null
-          }
-          itens={itens.map((i) => ({
-            id: i.id,
-            sku: i.sku,
-            nome: i.nome,
-            pedida: i.quantidade_pedida,
-            faturada: i.quantidade_faturada,
-            precoMetro: dono ? Number(i.preco_unitario) : 0,
-            metrosPorUnidade: Number(i.metros_por_unidade),
-            imagemUrl: urls.get(i.produto_id) ?? null,
-          }))}
-        />
-      )}
+      <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-semibold tracking-tight text-sm">
+            Forma de pagamento
+          </h2>
+          <span className="text-xs font-mono text-[#6E6E68]">
+            {ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento}
+          </span>
+        </div>
+
+        {p.forma_pagamento === 'boleto_parcelado' && parcelas.length === 0 && (
+          <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
+            Cliente sugeriu {p.parcelas_solicitadas}x — parcelas ainda não
+            geradas (defina ao confirmar o pedido).
+          </p>
+        )}
+
+        {parcelas.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-[#DDDCD5] space-y-1.5">
+            {parcelas.map((pc) => (
+              <div
+                key={pc.numero}
+                className="flex items-center justify-between gap-2 text-xs bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-2.5 py-1.5"
+              >
+                <span className="font-mono text-[#6E6E68]">
+                  {pc.numero}/{parcelas.length}
+                </span>
+                {dono && <span className="font-mono">{brl(Number(pc.valor))}</span>}
+                <span className="text-[#6E6E68]">
+                  venc. {dataBr(pc.vencimento)}
+                </span>
+                <ParcelaBadge vencimento={pc.vencimento} pagoEm={pc.pago_em} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <Titulo>ANDAMENTO</Titulo>
 
@@ -395,8 +425,7 @@ export default async function PedidoAdminPage({
                   {dono &&
                     ` × R$ ${brl(
                       Number(i.preco_unitario) * Number(i.metros_por_unidade)
-                    )}`}{' '}
-                  · {i.tecido}
+                    )}`}
                 </div>
               </div>
 
@@ -442,6 +471,42 @@ export default async function PedidoAdminPage({
           </div>
         )}
       </div>
+
+      {!cancelado && (
+        <PainelAcoes
+          pedidoId={p.id}
+          numero={Number(p.numero)}
+          cliente={cliente.razao_social}
+          statusAtual={atual}
+          usados={usados}
+          total={dono ? Number(p.total) : 0}
+          reimpressoes={reimpressoes}
+          podeCancelarOuAjustar={dono}
+          formaPagamento={p.forma_pagamento}
+          parcelasSolicitadas={p.parcelas_solicitadas}
+          maxParcelas={maxParcelas}
+          precoCliente={dono ? Number(cliente.preco_metro) : 0}
+          solicitacao={
+            aberta
+              ? {
+                  id: aberta.id,
+                  texto: aberta.texto,
+                  criadoEm: aberta.created_at,
+                }
+              : null
+          }
+          itens={itens.map((i) => ({
+            id: i.id,
+            sku: i.sku,
+            nome: i.nome,
+            pedida: i.quantidade_pedida,
+            faturada: i.quantidade_faturada,
+            precoMetro: dono ? Number(i.preco_unitario) : 0,
+            metrosPorUnidade: Number(i.metros_por_unidade),
+            imagemUrl: urls.get(i.produto_id) ?? null,
+          }))}
+        />
+      )}
     </div>
   )
 }
@@ -470,4 +535,28 @@ function Linha({
       <span className={mono ? 'font-mono text-xs self-center' : ''}>{valor}</span>
     </div>
   )
+}
+
+function ParcelaBadge({
+  vencimento,
+  pagoEm,
+}: {
+  vencimento: string
+  pagoEm: string | null
+}) {
+  if (pagoEm) {
+    const atrasou = new Date(pagoEm) > new Date(vencimento + 'T23:59:59')
+    return (
+      <span className={atrasou ? 'text-[#C79600]' : 'text-[#2E7D4F]'}>
+        pago
+      </span>
+    )
+  }
+
+  const venceu = new Date(vencimento) < new Date(new Date().toDateString())
+  if (venceu) {
+    return <span className="text-[#B00063] font-semibold">vencido</span>
+  }
+
+  return <span className="text-[#6E6E68]">aguardando</span>
 }

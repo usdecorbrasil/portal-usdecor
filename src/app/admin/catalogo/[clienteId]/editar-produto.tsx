@@ -10,8 +10,6 @@ type Produto = {
   id: string
   sku: string
   nome: string
-  tecido: string
-  preco: number
   metrosPorUnidade: number
   catalogoId: string
 }
@@ -29,22 +27,11 @@ export default function EditarProduto({
 }) {
   const [estado, acao, pendente] = useActionState(editarProduto, null)
 
-  const [precoMetro, setPrecoMetro] = useState(
-    produto.preco.toFixed(2).replace('.', ',')
-  )
-  const [metros, setMetros] = useState(
-    produto.metrosPorUnidade.toFixed(2).replace('.', ',')
-  )
-
   const [preview, setPreview] = useState<string | null>(null)
   const [reduzida, setReduzida] = useState<Blob | null>(null)
   const [info, setInfo] = useState('')
   const [erroImg, setErroImg] = useState('')
   const [processando, setProcessando] = useState(false)
-
-  const pm = Number(precoMetro.replace(',', '.'))
-  const mu = Number(metros.replace(',', '.'))
-  const precoUnidade = pm > 0 && mu > 0 ? pm * mu : null
 
   useEffect(() => {
     if (estado?.ok) aoFechar()
@@ -122,81 +109,48 @@ export default function EditarProduto({
             <Campo nome="nome" rotulo="NOME DO DESENHO" valor={produto.nome} />
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Campo nome="tecido" rotulo="TECIDO" valor={produto.tecido} />
-
-            <div>
-              <label
-                htmlFor="ed-colecao"
-                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-              >
-                COLEÇÃO
-              </label>
-              <select
-                id="ed-colecao"
-                name="catalogo_id"
-                required
-                defaultValue={produto.catalogoId}
-                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
-              >
-                {colecoes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label
+              htmlFor="ed-colecao"
+              className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+            >
+              COLEÇÃO
+            </label>
+            <select
+              id="ed-colecao"
+              name="catalogo_id"
+              required
+              defaultValue={produto.catalogoId}
+              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
+            >
+              {colecoes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="border border-[#DDDCD5] rounded-sm p-4 bg-[#FAFAF8]">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="ed-metros"
-                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-                >
-                  METROS POR UNIDADE
-                </label>
-                <input
-                  id="ed-metros"
-                  name="metros_por_unidade"
-                  required
-                  inputMode="decimal"
-                  value={metros}
-                  onChange={(e) => setMetros(e.target.value)}
-                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="ed-preco"
-                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-                >
-                  PREÇO POR METRO
-                </label>
-                <input
-                  id="ed-preco"
-                  name="preco"
-                  required
-                  inputMode="decimal"
-                  value={precoMetro}
-                  onChange={(e) => setPrecoMetro(e.target.value)}
-                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-[#DDDCD5] flex items-baseline justify-between gap-3">
-              <span className="text-xs tracking-widest text-[#6E6E68]">
-                O CLIENTE VÊ
-              </span>
-              <span className="font-mono font-semibold">
-                {precoUnidade
-                  ? `R$ ${precoUnidade.toFixed(2).replace('.', ',')} / unidade`
-                  : '—'}
-              </span>
-            </div>
+          <div>
+            <label
+              htmlFor="ed-metros"
+              className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+            >
+              METROS POR UNIDADE
+            </label>
+            <input
+              id="ed-metros"
+              name="metros_por_unidade"
+              required
+              inputMode="decimal"
+              defaultValue={produto.metrosPorUnidade
+                .toFixed(2)
+                .replace('.', ',')}
+              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
+            />
+            <p className="text-xs text-[#6E6E68] mt-1">
+              Comprimento de cada repetição da estampa
+            </p>
           </div>
 
           <div>

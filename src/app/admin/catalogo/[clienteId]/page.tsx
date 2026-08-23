@@ -6,6 +6,9 @@ import FormularioProduto from './formulario'
 import CardArte from './card-arte'
 import EditarColecao from '@/components/editar-colecao'
 
+const brl = (v: number) =>
+  v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 export default async function CatalogoPage({
   params,
 }: {
@@ -16,18 +19,21 @@ export default async function CatalogoPage({
 
   if (!perfil || perfil.papel === 'cliente') redirect('/')
 
-  const dono = perfil.papel === 'admin'
+  const nivelAdmin = perfil.papel === 'admin' || perfil.papel === 'financeiro'
   const supabase = await createClient()
 
   const { data: catalogo } = await supabase
     .from('catalogos')
-    .select('id, nome, descricao, ativo, cliente_id, clientes(razao_social)')
+    .select('id, nome, descricao, ativo, cliente_id, clientes(razao_social, preco_metro)')
     .eq('id', catalogoId)
     .single()
 
   if (!catalogo) notFound()
 
-  const cliente = catalogo.clientes as unknown as { razao_social: string }
+  const cliente = catalogo.clientes as unknown as {
+    razao_social: string
+    preco_metro: number
+  }
 
   const { data: colecoes } = await supabase
     .from('catalogos')
@@ -38,7 +44,7 @@ export default async function CatalogoPage({
 
   const { data: produtos } = await supabase
     .from('produtos')
-    .select('id, sku, nome, tecido, preco, metros_por_unidade, ativo, imagem_path, catalogo_id')
+    .select('id, sku, nome, metros_por_unidade, ativo, imagem_path, catalogo_id')
     .eq('catalogo_id', catalogoId)
     .order('ativo', { ascending: false })
     .order('sku')
@@ -57,6 +63,7 @@ export default async function CatalogoPage({
   }
 
   const inativas = produtos?.filter((p) => !p.ativo).length ?? 0
+  const preco = Number(cliente.preco_metro)
 
   return (
     <div>
@@ -91,12 +98,41 @@ export default async function CatalogoPage({
         <p className="text-sm text-[#6E6E68] mt-1">{catalogo.descricao}</p>
       )}
 
-      <p className="text-sm text-[#6E6E68] mt-1 mb-6">
+      <p className="text-sm text-[#6E6E68] mt-1 mb-5">
         {produtos?.length ?? 0} artes
         {inativas > 0 && ` · ${inativas} aguardando ativação`}
       </p>
 
-      {dono && (
+      {/* ---- preço do cliente, com atalho para editar ---- */}
+      {nivelAdmin && (
+        <Link
+          href="/admin/clientes"
+          className={`flex items-center justify-between gap-3 rounded-sm px-4 py-3 mb-5 border ${
+            preco > 0
+              ? 'bg-white border-[#DDDCD5] hover:border-[#131A2E]'
+              : 'bg-[#FBF0D9] border-[#C79600]'
+          }`}
+        >
+          <div className="min-w-0">
+            <div className="text-[10px] tracking-[0.14em] text-[#6E6E68]">
+              PREÇO POR METRO DESTE CLIENTE
+            </div>
+            <div className="font-mono font-semibold text-lg mt-0.5">
+              {preco > 0 ? `R$ ${brl(preco)}` : 'não definido'}
+            </div>
+            {preco <= 0 && (
+              <p className="text-xs text-[#C79600] mt-1">
+                Sem preço, este cliente não consegue enviar pedidos.
+              </p>
+            )}
+          </div>
+          <span className="text-xs tracking-widest text-[#B00063] shrink-0">
+            EDITAR →
+          </span>
+        </Link>
+      )}
+
+      {nivelAdmin && (
         <FormularioProduto
           clienteId={catalogo.cliente_id}
           catalogoId={catalogo.id}
@@ -112,15 +148,13 @@ export default async function CatalogoPage({
               id: p.id,
               sku: p.sku,
               nome: p.nome,
-              tecido: p.tecido,
-              preco: Number(p.preco),
               metrosPorUnidade: Number(p.metros_por_unidade),
               ativo: p.ativo,
               catalogoId: p.catalogo_id,
             }}
             imagemUrl={p.imagem_path ? urls.get(p.imagem_path) ?? null : null}
             colecoes={colecoes ?? []}
-            podeEditar={dono}
+            podeEditar={nivelAdmin}
           />
         ))}
 

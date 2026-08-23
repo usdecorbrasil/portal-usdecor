@@ -7,7 +7,6 @@ export default function FormularioCliente() {
   const [aberto, setAberto] = useState(false)
   const [estado, acao, pendente] = useActionState(criarCliente, null)
 
-  // Mantém o formulário aberto enquanto a senha estiver na tela
   useEffect(() => {
     if (estado?.ok) setAberto(true)
   }, [estado])
@@ -47,7 +46,16 @@ export default function FormularioCliente() {
           <Campo nome="contato" rotulo="CONTATO" />
         </div>
 
-        <Campo nome="telefone" rotulo="TELEFONE" placeholder="11999999999" />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Campo nome="telefone" rotulo="TELEFONE" placeholder="11999999999" />
+          <Campo
+            nome="preco_metro"
+            rotulo="PREÇO POR METRO"
+            obrigatorio
+            placeholder="8,86"
+            dica="Vale para todas as artes deste cliente"
+          />
+        </div>
 
         {estado && !estado.ok && (
           <p className="text-sm text-[#B00063]">{estado.erro}</p>
@@ -94,12 +102,14 @@ function Campo({
   tipo = 'text',
   obrigatorio = false,
   placeholder,
+  dica,
 }: {
   nome: string
   rotulo: string
   tipo?: string
   obrigatorio?: boolean
   placeholder?: string
+  dica?: string
 }) {
   return (
     <div>
@@ -118,6 +128,7 @@ function Campo({
         placeholder={placeholder}
         className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
       />
+      {dica && <p className="text-xs text-[#6E6E68] mt-1">{dica}</p>}
     </div>
   )
 }
