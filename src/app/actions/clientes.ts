@@ -320,7 +320,22 @@ export async function buscarHistoricoPagamentos(clienteId: string) {
     diasAtraso: p.dias_atraso,
   }))
 }
-export async function buscarAguardandoRecebimento() {
+export type ParcelaAReceber = {
+  pedidoId: string
+  numero: number
+  clienteId: string
+  clienteNome: string
+  status: string
+  formaPagamento: string
+  numeroParcela: number | null
+  totalParcelas: number | null
+  valor: number
+  vencimento: string | null
+  pagoEm: string | null
+  vencida: boolean
+}
+
+export async function buscarAguardandoRecebimento(): Promise<ParcelaAReceber[]> {
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('parcelas_a_receber')
 
