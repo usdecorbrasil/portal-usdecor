@@ -106,7 +106,7 @@ export default function FiltroStatus({ parcelas }: { parcelas: Parcela[] }) {
                 </span>
               </h2>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 {itens.map((p) => {
                   const paga = !!p.pagoEm
 
@@ -114,7 +114,7 @@ export default function FiltroStatus({ parcelas }: { parcelas: Parcela[] }) {
                     <Link
                       key={`${p.pedidoId}-${p.numeroParcela ?? 'unico'}`}
                       href={`/admin/pedidos/${p.pedidoId}`}
-                      className={`flex items-center gap-3 rounded-sm p-4 border ${
+                      className={`flex items-center gap-3 rounded-sm p-2.5 sm:p-4 border ${
                         p.vencida
                           ? 'bg-[#FFF6FA] border-[#B00063] hover:border-[#B00063]'
                           : paga
@@ -124,27 +124,27 @@ export default function FiltroStatus({ parcelas }: { parcelas: Parcela[] }) {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className="font-mono text-xs text-[#6E6E68]">
+                          <span className="font-mono text-[10px] sm:text-xs text-[#6E6E68]">
                             #{p.numero}
                             {p.numeroParcela && p.totalParcelas
                               ? ` · ${p.numeroParcela}/${p.totalParcelas}`
                               : ''}
                           </span>
-                          <h3 className="font-semibold tracking-tight truncate">
+                          <h3 className="font-semibold tracking-tight text-sm sm:text-base truncate">
                             {p.clienteNome}
                           </h3>
                           {p.vencida && (
-                            <span className="text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#B00063] text-white">
+                            <span className="text-[8px] sm:text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#B00063] text-white">
                               vencida
                             </span>
                           )}
                           {paga && (
-                            <span className="text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#E3F0E8] text-[#2E7D4F]">
+                            <span className="text-[8px] sm:text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#E3F0E8] text-[#2E7D4F]">
                               pago
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-[#6E6E68] mt-1">
+                        <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 sm:mt-1">
                           {ROTULOS_PAGAMENTO[p.formaPagamento] ?? p.formaPagamento}
                         </div>
                       </div>
@@ -154,15 +154,15 @@ export default function FiltroStatus({ parcelas }: { parcelas: Parcela[] }) {
                           <div
                             className={`font-mono ${
                               p.vencida
-                                ? 'text-sm font-bold text-[#B00063]'
-                                : 'text-xs font-semibold text-[#131A2E]'
+                                ? 'text-xs sm:text-sm font-bold text-[#B00063]'
+                                : 'text-[10px] sm:text-xs font-semibold text-[#131A2E]'
                             }`}
                           >
                             venc. {dataBr(p.vencimento)}
                           </div>
                         )}
                         <div
-                          className={`font-mono font-semibold text-sm mt-1 ${
+                          className={`font-mono font-semibold text-xs sm:text-sm mt-0.5 sm:mt-1 ${
                             p.vencida ? 'text-[#B00063]' : ''
                           }`}
                         >

@@ -119,7 +119,7 @@ export default function ListaFila({
         </p>
       )}
 
-      <div className={`space-y-2 ${pendente ? 'opacity-60' : ''}`}>
+      <div className={`space-y-1.5 sm:space-y-2 ${pendente ? 'opacity-60' : ''}`}>
         {lista.map((item, idx) => (
           <div
             key={item.id}
@@ -143,38 +143,38 @@ export default function ListaFila({
                   ? { touchAction: 'none', cursor: 'grab' }
                   : undefined
               }
-              className="w-11 shrink-0 bg-[#131A2E] text-white flex flex-col items-center justify-center font-mono font-semibold select-none"
+              className="w-8 sm:w-11 shrink-0 bg-[#131A2E] text-white flex flex-col items-center justify-center font-mono font-semibold text-sm sm:text-base select-none"
             >
               <span>{idx + 1}</span>
               {podeReordenar && (
-                <span className="text-[8px] tracking-widest text-white/40 mt-0.5">
+                <span className="text-[7px] sm:text-[8px] tracking-widest text-white/40 mt-0.5">
                   ⣿
                 </span>
               )}
             </div>
 
-            <div className="flex-1 min-w-0 p-3.5">
+            <div className="flex-1 min-w-0 p-2.5 sm:p-3.5">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-mono font-semibold">#{item.numero}</span>
-                <span className="font-mono text-sm whitespace-nowrap">
+                <span className="font-mono font-semibold text-sm sm:text-base">#{item.numero}</span>
+                <span className="font-mono text-xs sm:text-sm whitespace-nowrap">
                   {brl(item.metros)} m
                 </span>
               </div>
 
-              <p className="text-sm text-[#6E6E68] mt-0.5 truncate">
+              <p className="text-xs sm:text-sm text-[#6E6E68] mt-0.5 truncate">
                 {item.cliente}
               </p>
 
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <div className="flex items-center gap-2 mt-1 sm:mt-1.5 flex-wrap">
                 {item.reimpressao && (
-                  <span className="text-[10px] font-mono tracking-wider uppercase bg-[#FBF0D9] text-[#C79600] px-1.5 py-0.5 rounded-sm">
+                  <span className="text-[9px] sm:text-[10px] font-mono tracking-wider uppercase bg-[#FBF0D9] text-[#C79600] px-1.5 py-0.5 rounded-sm">
                     reimpressão
                   </span>
                 )}
-                <span className="text-[10px] text-[#6E6E68]">
+                <span className="text-[9px] sm:text-[10px] text-[#6E6E68]">
                   {item.artes} {item.artes === 1 ? 'arte' : 'artes'}
                 </span>
-                <span className="text-[10px] text-[#6E6E68]">
+                <span className="text-[9px] sm:text-[10px] text-[#6E6E68]">
                   desde{' '}
                   {new Date(item.desde).toLocaleDateString('pt-BR', {
                     day: '2-digit',
@@ -185,7 +185,7 @@ export default function ListaFila({
 
               <Link
                 href={`/admin/pedidos/${item.id}`}
-                className="inline-block text-[10px] tracking-widest text-[#B00063] mt-2"
+                className="inline-block text-[9px] sm:text-[10px] tracking-widest text-[#B00063] mt-1.5 sm:mt-2"
               >
                 ABRIR PEDIDO →
               </Link>
@@ -193,12 +193,12 @@ export default function ListaFila({
 
             {/* setas: alternativa ao arrasto, essencial no celular */}
             {podeReordenar && (
-              <div className="w-9 shrink-0 border-l border-[#DDDCD5] flex flex-col">
+              <div className="w-7 sm:w-9 shrink-0 border-l border-[#DDDCD5] flex flex-col">
                 <button
                   onClick={() => mover(item.id, -1)}
                   disabled={idx === 0 || pendente}
                   aria-label="Subir"
-                  className="flex-1 text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25"
+                  className="flex-1 text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 text-sm"
                 >
                   ▲
                 </button>
@@ -206,7 +206,7 @@ export default function ListaFila({
                   onClick={() => mover(item.id, 1)}
                   disabled={idx === lista.length - 1 || pendente}
                   aria-label="Descer"
-                  className="flex-1 border-t border-[#DDDCD5] text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25"
+                  className="flex-1 border-t border-[#DDDCD5] text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 text-sm"
                 >
                   ▼
                 </button>

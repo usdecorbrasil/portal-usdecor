@@ -136,18 +136,18 @@ export default async function DashboardPage() {
             <span className="flex-1 h-px bg-[#DDDCD5]" />
           </h2>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             {aguardando.length > 0 && (
               <Link
                 href="/admin/pedidos?etapa=aguardando"
-                className="flex items-center gap-3 bg-white border-2 border-[#0090D8] rounded-sm px-4 py-3.5 hover:bg-[#F4FAFD]"
+                className="flex items-center gap-3 bg-white border-2 border-[#0090D8] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#F4FAFD]"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold tracking-tight text-sm">
+                  <div className="font-semibold tracking-tight text-xs sm:text-sm">
                     {aguardando.length} pedido
                     {aguardando.length > 1 ? 's' : ''} aguardando confirmação
                   </div>
-                  <div className="text-xs text-[#6E6E68] mt-0.5 font-mono">
+                  <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 font-mono">
                     R$ {brl(valorAguardando)} · o cliente ainda pode cancelar
                   </div>
                 </div>
@@ -158,14 +158,14 @@ export default async function DashboardPage() {
             {solicitacoes.length > 0 && (
               <Link
                 href="/admin/pedidos"
-                className="flex items-center gap-3 bg-white border-2 border-[#B00063] rounded-sm px-4 py-3.5 hover:bg-[#FFF6FA]"
+                className="flex items-center gap-3 bg-white border-2 border-[#B00063] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#FFF6FA]"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold tracking-tight text-sm">
+                  <div className="font-semibold tracking-tight text-xs sm:text-sm">
                     {solicitacoes.length} solicitação
                     {solicitacoes.length > 1 ? 'ões' : ''} de cancelamento
                   </div>
-                  <div className="text-xs text-[#6E6E68] mt-0.5">
+                  <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
                     Pedido{solicitacoes.length > 1 ? 's' : ''} #
                     {solicitacoes.map((s) => s.numero).join(', #')}
                   </div>
@@ -178,17 +178,17 @@ export default async function DashboardPage() {
       )}
 
       {/* ---- indicadores ---- */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4">
-          <div className="text-[10px] tracking-[0.13em] text-[#6E6E68]">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
+          <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
             FATURAMENTO DO MÊS
           </div>
-          <div className="font-mono font-semibold text-xl mt-1">
+          <div className="font-mono font-semibold text-base sm:text-xl mt-0.5 sm:mt-1">
             R$ {brl(fatMes)}
           </div>
           {variacao !== null && (
             <div
-              className={`text-[10px] font-mono mt-1 ${
+              className={`text-[9px] sm:text-[10px] font-mono mt-0.5 sm:mt-1 ${
                 variacao >= 0 ? 'text-[#2E7D4F]' : 'text-[#B00063]'
               }`}
             >
@@ -208,31 +208,31 @@ export default async function DashboardPage() {
 
       <Link
         href="/admin/pedidos"
-        className="block bg-white border border-[#DDDCD5] rounded-sm p-4 hover:border-[#131A2E]"
+        className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
       >
         <div className="flex items-baseline justify-between gap-3">
           <div>
-            <div className="font-mono text-2xl font-semibold">
+            <div className="font-mono text-lg sm:text-2xl font-semibold">
               {emProducao.length}
             </div>
-            <div className="text-xs text-[#6E6E68] mt-0.5">
+            <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
               pedidos em produção
             </div>
           </div>
           <div className="text-right">
-            <div className="font-mono text-lg font-semibold">
+            <div className="font-mono text-sm sm:text-lg font-semibold">
               {brl(metrosProducao)} m
             </div>
-            <div className="text-xs text-[#6E6E68] mt-0.5">a estampar</div>
+            <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">a estampar</div>
           </div>
         </div>
 
-        <div className="mt-3 pt-3 border-t border-[#DDDCD5] flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] flex flex-wrap gap-x-3 gap-y-1 sm:gap-x-4">
           {EM_PRODUCAO.map((e) => {
             const n = emProducao.filter((p) => p.status === e).length
             if (n === 0) return null
             return (
-              <span key={e} className="text-xs text-[#6E6E68]">
+              <span key={e} className="text-[10px] sm:text-xs text-[#6E6E68]">
                 {rotuloEtapa(e)}{' '}
                 <strong className="font-mono text-[#131A2E]">{n}</strong>
               </span>
@@ -251,34 +251,34 @@ export default async function DashboardPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5 sm:space-y-2">
           {ranking.map((c, i) => (
             <div
               key={c.nome}
-              className="bg-white border border-[#DDDCD5] rounded-sm p-4"
+              className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-mono text-xs text-[#6E6E68] shrink-0">
+                  <span className="font-mono text-[10px] sm:text-xs text-[#6E6E68] shrink-0">
                     {i + 1}º
                   </span>
-                  <span className="font-semibold tracking-tight truncate">
+                  <span className="font-semibold tracking-tight text-sm sm:text-base truncate">
                     {c.nome}
                   </span>
                 </div>
-                <span className="font-mono font-semibold whitespace-nowrap">
+                <span className="font-mono font-semibold text-sm sm:text-base whitespace-nowrap">
                   R$ {brl(c.total)}
                 </span>
               </div>
 
-              <div className="h-1.5 bg-[#EEEDE7] rounded-full mt-2.5 overflow-hidden">
+              <div className="h-1 sm:h-1.5 bg-[#EEEDE7] rounded-full mt-1.5 sm:mt-2.5 overflow-hidden">
                 <div
                   className="h-full bg-[#B00063] rounded-full"
                   style={{ width: `${(c.total / maiorValor) * 100}%` }}
                 />
               </div>
 
-              <div className="flex justify-between text-xs text-[#6E6E68] mt-1.5">
+              <div className="flex justify-between text-[10px] sm:text-xs text-[#6E6E68] mt-1 sm:mt-1.5">
                 <span>
                   {c.pedidos} pedido{c.pedidos > 1 ? 's' : ''}
                 </span>
@@ -305,11 +305,11 @@ function rotuloEtapa(e: string) {
 
 function Cartao({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
-    <div className="bg-white border border-[#DDDCD5] rounded-sm p-4">
-      <div className="text-[10px] tracking-[0.13em] text-[#6E6E68]">
+    <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
+      <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
         {rotulo}
       </div>
-      <div className="font-mono font-semibold text-xl mt-1">{valor}</div>
+      <div className="font-mono font-semibold text-base sm:text-xl mt-0.5 sm:mt-1">{valor}</div>
     </div>
   )
 }

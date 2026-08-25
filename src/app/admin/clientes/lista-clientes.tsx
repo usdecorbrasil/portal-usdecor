@@ -41,18 +41,18 @@ export default function ListaClientes({
         </button>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-1.5 sm:space-y-2">
         {clientes.map((c) => (
           <Link
             key={c.id}
             href={`/admin/clientes/${c.id}`}
-            className={`flex items-center gap-3 bg-white border rounded-sm p-4 hover:border-[#131A2E] ${
+            className={`flex items-center gap-3 bg-white border rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E] ${
               c.temAtraso ? 'border-[#B00063]' : 'border-[#DDDCD5]'
             }`}
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-semibold tracking-tight truncate">
+                <h2 className="font-semibold tracking-tight text-sm sm:text-base truncate">
                   {c.razao_social}
                 </h2>
                 {!c.ativo && (
@@ -66,22 +66,22 @@ export default function ListaClientes({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#6E6E68] mt-0.5 font-mono">
+              <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 font-mono">
                 {formatarCnpj(c.cnpj)}
               </p>
-              <p className="text-xs text-[#6E6E68]">{c.email}</p>
+              <p className="text-[10px] sm:text-xs text-[#6E6E68]">{c.email}</p>
             </div>
 
             <div className="text-right shrink-0">
               <div className="flex items-baseline gap-1.5 justify-end">
-                <span className="text-[9px] font-mono tracking-widest uppercase text-[#6E6E68]">
+                <span className="text-[8px] sm:text-[9px] font-mono tracking-widest uppercase text-[#6E6E68]">
                   R$/m
                 </span>
-                <span className="font-mono font-semibold text-sm">
+                <span className="font-mono font-semibold text-xs sm:text-sm">
                   {brl(c.preco_metro)}
                 </span>
               </div>
-              <div className="flex items-baseline gap-1.5 justify-end mt-1">
+              <div className="flex items-baseline gap-1.5 justify-end mt-0.5 sm:mt-1">
                 <span className="text-[9px] font-mono tracking-widest uppercase text-[#6E6E68]">
                   limite
                 </span>
