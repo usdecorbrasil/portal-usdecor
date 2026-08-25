@@ -125,7 +125,6 @@ export default async function PedidosAdminPage({
     })
     .filter((p) => ATIVOS.includes(p.status))
 
-  // Escopo: todos os pedidos, ou só do cliente selecionado no filtro
   const lista = clienteFiltro
     ? listaCompleta.filter((p) => p.clienteId === clienteFiltro)
     : listaCompleta
@@ -247,7 +246,7 @@ export default async function PedidosAdminPage({
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         {visiveis.map((p) => {
           const s = sinal(p.status, p.dias)
           const c = CORES[s.cl]
@@ -259,7 +258,7 @@ export default async function PedidosAdminPage({
               className={`block bg-white border rounded-sm overflow-hidden ${c.borda}`}
             >
               <div
-                className={`text-[10px] tracking-[0.13em] font-mono px-4 py-1.5 flex justify-between gap-2 ${c.tarja}`}
+                className={`text-[9px] sm:text-[10px] tracking-[0.13em] font-mono px-3 py-1 sm:px-4 sm:py-1.5 flex justify-between gap-2 ${c.tarja}`}
               >
                 <span>{s.tx.toUpperCase()}</span>
                 {p.temSolicitacao && (
@@ -269,21 +268,25 @@ export default async function PedidosAdminPage({
                 )}
               </div>
 
-              <div className="p-4">
+              <div className="p-3 sm:p-4">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-mono font-semibold">#{p.numero}</span>
-                  <span className="font-mono font-semibold whitespace-nowrap">
-                    {p.total !== null
-                      ? `R$ ${brl(p.total)}`
-                      : `${brl(p.metros)} m`}
+                  <span className="font-semibold tracking-tight text-base sm:text-lg truncate">
+                    {p.cliente}
+                  </span>
+                  <span className="font-mono font-semibold text-sm sm:text-base whitespace-nowrap shrink-0">
+                    #{p.numero}
                   </span>
                 </div>
 
-                <p className="text-sm text-[#6E6E68] mt-1">{p.cliente}</p>
+                <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 sm:mt-1 font-mono">
+                  {p.total !== null
+                    ? `R$ ${brl(p.total)}`
+                    : `${brl(p.metros)} m`}
+                </p>
 
-                <div className="flex items-center justify-between gap-3 mt-2">
+                <div className="mt-1.5 sm:mt-2">
                   <span
-                    className={`text-xs px-2 py-1 rounded-sm ${
+                    className={`text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-sm ${
                       p.status === 'aguardando'
                         ? 'bg-[#E6EDEE] text-[#0090D8]'
                         : 'bg-[#FBF0D9] text-[#C79600]'
@@ -291,16 +294,9 @@ export default async function PedidosAdminPage({
                   >
                     {ROTULOS[p.status]}
                   </span>
-                  <span className="text-xs text-[#6E6E68]">
-                    desde{' '}
-                    {new Date(p.desde).toLocaleDateString('pt-BR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                    })}
-                  </span>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-[#DDDCD5] text-[10px] font-mono tracking-[0.11em] text-[#6E6E68]">
+                <div className="flex items-center justify-between gap-3 mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] text-[9px] sm:text-[10px] font-mono tracking-[0.11em] text-[#6E6E68]">
                   <span>
                     ENTROU{' '}
                     {new Date(p.entrada).toLocaleDateString('pt-BR', {

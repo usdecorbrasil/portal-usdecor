@@ -64,29 +64,33 @@ export default async function ArquivadosPage() {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         {lista.map((p) => (
           <Link
             key={p.id}
             href={`/admin/pedidos/${p.id}`}
-            className="block bg-white border border-[#DDDCD5] rounded-sm p-4 hover:border-[#131A2E]"
+            className="block bg-white border border-[#DDDCD5] rounded-sm p-3 sm:p-4 hover:border-[#131A2E]"
           >
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-mono font-semibold">#{p.numero}</span>
-              <span
-                className={`font-mono font-semibold whitespace-nowrap ${
-                  p.cancelado ? 'text-[#6E6E68] line-through' : ''
-                }`}
-              >
-                R$ {brl(p.total)}
+              <span className="font-semibold tracking-tight text-base sm:text-lg truncate">
+                {p.cliente}
+              </span>
+              <span className="font-mono font-semibold text-sm sm:text-base whitespace-nowrap shrink-0">
+                #{p.numero}
               </span>
             </div>
 
-            <p className="text-sm text-[#6E6E68] mt-1">{p.cliente}</p>
+            <p
+              className={`text-[10px] sm:text-xs mt-0.5 sm:mt-1 font-mono ${
+                p.cancelado ? 'text-[#6E6E68] line-through' : 'text-[#6E6E68]'
+              }`}
+            >
+              R$ {brl(p.total)}
+            </p>
 
-            <div className="flex items-center justify-between gap-3 mt-2">
+            <div className="flex items-center justify-between gap-3 mt-1.5 sm:mt-2">
               <span
-                className={`text-xs px-2 py-1 rounded-sm ${
+                className={`text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-sm ${
                   p.cancelado
                     ? 'bg-[#EAE9E3] text-[#6E6E68]'
                     : 'bg-[#E3F0E8] text-[#2E7D4F]'
@@ -94,13 +98,13 @@ export default async function ArquivadosPage() {
               >
                 {p.cancelado ? 'Cancelado' : 'Pedido fechado'}
               </span>
-              <span className="text-xs text-[#6E6E68]">
+              <span className="text-[10px] sm:text-xs text-[#6E6E68]">
                 {new Date(p.encerrado).toLocaleDateString('pt-BR')}
               </span>
             </div>
 
             {p.cancelado && p.motivo && (
-              <p className="text-xs text-[#6E6E68] mt-2 pt-2 border-t border-[#DDDCD5] leading-relaxed">
+              <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-[#DDDCD5] leading-relaxed">
                 {p.motivo}
               </p>
             )}
