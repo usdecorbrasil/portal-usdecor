@@ -42,12 +42,10 @@ export default function ListaFila({
       const r = await reordenarFila(movidoId, anterior, posterior)
       if (!r.ok) {
         setErro(r.erro)
-        setLista(itens) // desfaz se o banco recusar
+        setLista(itens)
       }
     })
   }
-
-  // ---- arrasto via Pointer Events (funciona em mouse e toque) ----
 
   function aoPointerDown(e: React.PointerEvent, id: string) {
     if (!podeReordenar) return
@@ -85,8 +83,6 @@ export default function ListaFila({
     setSobre(null)
     commitReorder(listaRef.current, id)
   }
-
-  // ---- setas: alternativa sempre disponível ----
 
   function mover(id: string, direcao: -1 | 1) {
     const pos = lista.findIndex((i) => i.id === id)
@@ -132,7 +128,6 @@ export default function ListaFila({
                 : 'border-[#DDDCD5]'
             } ${arrastando === item.id ? 'opacity-50' : ''}`}
           >
-            {/* alça de arrasto — posição */}
             <div
               onPointerDown={(e) => aoPointerDown(e, item.id)}
               onPointerMove={aoPointerMove}
@@ -155,14 +150,16 @@ export default function ListaFila({
 
             <div className="flex-1 min-w-0 p-2.5 sm:p-3.5">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-mono font-semibold text-sm sm:text-base">#{item.numero}</span>
-                <span className="font-mono text-xs sm:text-sm whitespace-nowrap">
-                  {brl(item.metros)} m
+                <span className="font-semibold tracking-tight text-sm sm:text-base truncate">
+                  {item.cliente}
+                </span>
+                <span className="font-mono font-semibold text-xs sm:text-sm whitespace-nowrap shrink-0">
+                  #{item.numero}
                 </span>
               </div>
 
-              <p className="text-xs sm:text-sm text-[#6E6E68] mt-0.5 truncate">
-                {item.cliente}
+              <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 font-mono">
+                {brl(item.metros)} m
               </p>
 
               <div className="flex items-center gap-2 mt-1 sm:mt-1.5 flex-wrap">
@@ -191,7 +188,6 @@ export default function ListaFila({
               </Link>
             </div>
 
-            {/* setas: alternativa ao arrasto, essencial no celular */}
             {podeReordenar && (
               <div className="w-7 sm:w-9 shrink-0 border-l border-[#DDDCD5] flex flex-col">
                 <button
