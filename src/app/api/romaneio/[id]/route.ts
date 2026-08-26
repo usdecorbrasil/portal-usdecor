@@ -31,7 +31,7 @@ export async function GET(
     RomaneioDocumento({ pedidos: [documento] })
   )
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="romaneio-pedido-${dados.numero}.pdf"`,
