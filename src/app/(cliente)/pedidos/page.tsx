@@ -16,6 +16,11 @@ const ETAPAS: Record<string, { label: string; cor: string }> = {
   fechado:       { label: 'Pedido fechado',    cor: 'bg-[#EAE9E3] text-[#6E6E68]' },
 }
 
+const ORDEM = [
+  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
+  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+]
+
 export default async function PedidosPage() {
   const supabase = await createClient()
 
@@ -24,6 +29,7 @@ export default async function PedidosPage() {
     .from('pedidos')
     .select(`
       id, numero, total, created_at, cancelado_em,
+      pedido_itens(metros_total),
       pedido_status_historico(status, created_at)
     `)
     .order('created_at', { ascending: false })
@@ -49,6 +55,11 @@ export default async function PedidosPage() {
           const atual = hist[0]?.status ?? 'recebido'
           const etapa = ETAPAS[atual] ?? ETAPAS.recebido
           const cancelado = !!p.cancelado_em
+          const liberadoValor = ORDEM.indexOf(atual) >= ORDEM.indexOf('pronto')
+          const metros = (p.pedido_itens ?? []).reduce(
+            (a: number, i: any) => a + Number(i.metros_total),
+            0
+          )
 
           return (
             <Link
@@ -71,9 +82,17 @@ export default async function PedidosPage() {
                 >
                   {cancelado ? 'Cancelado' : etapa.label}
                 </span>
-                <span className="font-mono font-semibold whitespace-nowrap">
-                  R$ {brl(Number(p.total))}
-                </span>
+
+                <div className="text-right">
+                  <div className="font-mono font-semibold whitespace-nowrap">
+                    {brl(metros)} m
+                  </div>
+                  {liberadoValor && (
+                    <div className="text-xs text-[#6E6E68] font-mono whitespace-nowrap">
+                      R$ {brl(Number(p.total))}
+                    </div>
+                  )}
+                </div>
               </div>
             </Link>
           )

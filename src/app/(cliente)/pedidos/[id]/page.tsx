@@ -26,6 +26,11 @@ const ROTULOS_PAGAMENTO: Record<string, string> = {
   cartao_debito: 'Cartão de débito',
 }
 
+const ORDEM = [
+  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
+  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+]
+
 function dataHora(iso: string) {
   const d = new Date(iso)
   return (
@@ -47,14 +52,14 @@ export default async function DetalhePedidoPage({
   const { id } = await params
   const supabase = await createClient()
 
-    const { data: pedido, error: erroQuery } = await supabase
+  const { data: pedido } = await supabase
     .from('pedidos')
     .select(`
       id, numero, total, notas, created_at, cancelado_em, cancelado_motivo,
       forma_pagamento, parcelas_solicitadas,
       pedido_itens(
-        id, produto_id, sku, nome, preco_unitario, metros_por_unidade,
-        quantidade_pedida, quantidade_faturada, metros_total, subtotal
+        id, produto_id, sku, nome, metros_por_unidade,
+        quantidade_pedida, quantidade_faturada, metros_total
       ),
       pedido_status_historico(status, created_at),
       pedido_ajustes(motivo, created_at),
@@ -63,10 +68,6 @@ export default async function DetalhePedidoPage({
     `)
     .eq('id', id)
     .single()
-
-  if (erroQuery) {
-    console.error('ERRO AO BUSCAR PEDIDO:', erroQuery)
-  }
 
   if (!pedido) notFound()
 
@@ -118,11 +119,13 @@ export default async function DetalhePedidoPage({
   const aguardando = atual === 'aguardando'
   const ajuste = (p.pedido_ajustes ?? [])[0]
 
+  // Valor só é exibido ao cliente a partir de "Pedido pronto"
+  const liberadoValor = ORDEM.indexOf(atual) >= ORDEM.indexOf('pronto')
+
   const solicitacoes = (p.pedido_solicitacoes ?? []) as any[]
   const aberta = solicitacoes.find((s) => s.status === 'aberta')
   const recusada = solicitacoes.find((s) => s.status === 'recusada')
 
-  // Pode solicitar cancelamento até a nota fiscal sair
   const podeSolicitar =
     !cancelado &&
     !aguardando &&
@@ -231,7 +234,9 @@ export default async function DetalhePedidoPage({
                 <span className="font-mono text-[#6E6E68]">
                   {pc.numero}/{parcelas.length}
                 </span>
-                <span className="font-mono">{brl(Number(pc.valor))}</span>
+                {liberadoValor && (
+                  <span className="font-mono">{brl(Number(pc.valor))}</span>
+                )}
                 <span className="text-[#6E6E68]">
                   venc. {dataBr(pc.vencimento)}
                 </span>
@@ -239,6 +244,12 @@ export default async function DetalhePedidoPage({
               </div>
             ))}
           </div>
+        )}
+
+        {!liberadoValor && (
+          <p className="text-xs text-[#6E6E68] mt-3 pt-3 border-t border-[#DDDCD5] leading-relaxed">
+            O valor será informado assim que o pedido estiver pronto.
+          </p>
         )}
       </div>
 
@@ -299,8 +310,6 @@ export default async function DetalhePedidoPage({
       <div className="space-y-2">
         {itens.map((i) => {
           const mudou = i.quantidade_faturada !== i.quantidade_pedida
-          const unitario =
-            Number(i.preco_unitario) * Number(i.metros_por_unidade)
           const img = urls.get(i.produto_id)
 
           return (
@@ -330,15 +339,13 @@ export default async function DetalhePedidoPage({
                   <span className={mudou ? 'text-[#B00063] font-semibold' : ''}>
                     {i.quantidade_faturada} un
                   </span>{' '}
-                  × R$ {brl(unitario)}
+                  ·{' '}
+                  {Number(i.metros_por_unidade).toFixed(2).replace('.', ',')} m/un
                 </div>
               </div>
 
               <div className="text-right whitespace-nowrap">
-                <div className="font-mono font-semibold text-sm">
-                  R$ {brl(Number(i.subtotal))}
-                </div>
-                <div className="text-[10px] font-mono text-[#6E6E68]">
+                <div className="text-sm font-semibold text-[#131A2E] font-mono">
                   {brl(Number(i.metros_total))} m
                 </div>
               </div>
@@ -364,12 +371,18 @@ export default async function DetalhePedidoPage({
           <span>Metragem total</span>
           <span className="font-mono">{brl(metrosTotal)} m</span>
         </div>
-        <div className="flex justify-between items-baseline mt-2">
-          <span className="font-semibold tracking-tight">TOTAL</span>
-          <strong className="font-mono text-2xl">
-            R$ {brl(Number(p.total))}
-          </strong>
-        </div>
+        {liberadoValor ? (
+          <div className="flex justify-between items-baseline mt-2">
+            <span className="font-semibold tracking-tight">TOTAL</span>
+            <strong className="font-mono text-2xl">
+              R$ {brl(Number(p.total))}
+            </strong>
+          </div>
+        ) : (
+          <p className="text-xs text-[#6E6E68] mt-2">
+            O valor total será informado quando o pedido estiver pronto.
+          </p>
+        )}
       </div>
 
       {!cancelado && (

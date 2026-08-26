@@ -1,10 +1,16 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import FiltroData from '../pedidos/filtro-data'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export default async function ArquivadosPage() {
+export default async function ArquivadosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ de?: string; ate?: string }>
+}) {
+  const { de: dataDe, ate: dataAte } = await searchParams
   const supabase = await createClient()
 
   const { data: pedidos } = await supabase
@@ -17,7 +23,7 @@ export default async function ArquivadosPage() {
     `)
     .order('created_at', { ascending: false })
 
-  const lista = (pedidos ?? [])
+  let lista = (pedidos ?? [])
     .map((p) => {
       const hist = (p.pedido_status_historico ?? [])
         .slice()
@@ -41,6 +47,15 @@ export default async function ArquivadosPage() {
     })
     .filter((p) => p.cancelado || p.status === 'fechado')
 
+  if (dataDe) {
+    const inicio = new Date(dataDe + 'T00:00:00')
+    lista = lista.filter((p) => new Date(p.encerrado) >= inicio)
+  }
+  if (dataAte) {
+    const fim = new Date(dataAte + 'T23:59:59')
+    lista = lista.filter((p) => new Date(p.encerrado) <= fim)
+  }
+
   const fechados = lista.filter((p) => !p.cancelado)
   const cancelados = lista.filter((p) => p.cancelado)
   const faturado = fechados.reduce((a, p) => a + p.total, 0)
@@ -50,10 +65,18 @@ export default async function ArquivadosPage() {
       <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
         Pedidos arquivados
       </h1>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-6">
+      <p className="text-sm text-[#6E6E68] mt-1 mb-4">
         {fechados.length} fechado{fechados.length === 1 ? '' : 's'} ·{' '}
         {cancelados.length} cancelado{cancelados.length === 1 ? '' : 's'}
       </p>
+
+      <div className="mb-6">
+        <FiltroData
+          rota="/admin/arquivados"
+          deAtual={dataDe}
+          ateAtual={dataAte}
+        />
+      </div>
 
       {fechados.length > 0 && (
         <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mb-6 flex items-baseline justify-between gap-3">
@@ -114,11 +137,15 @@ export default async function ArquivadosPage() {
         {lista.length === 0 && (
           <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center">
             <p className="text-sm text-[#6E6E68]">
-              Nenhum pedido arquivado ainda.
+              {dataDe || dataAte
+                ? 'Nenhum pedido arquivado nesse período.'
+                : 'Nenhum pedido arquivado ainda.'}
             </p>
-            <p className="text-xs text-[#6E6E68] mt-2">
-              Pedidos aparecem aqui quando são fechados ou cancelados.
-            </p>
+            {!dataDe && !dataAte && (
+              <p className="text-xs text-[#6E6E68] mt-2">
+                Pedidos aparecem aqui quando são fechados ou cancelados.
+              </p>
+            )}
           </div>
         )}
       </div>

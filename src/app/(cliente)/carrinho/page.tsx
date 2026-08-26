@@ -127,8 +127,6 @@ export default function CarrinhoPage() {
     )
   }
 
-  const opcoesParcelamento = Array.from({ length: maxParcelas }, (_, i) => i + 1)
-
   return (
     <div>
       <h1 className="text-3xl font-bold tracking-tight text-[#131A2E]">
@@ -284,9 +282,9 @@ export default function CarrinhoPage() {
             </label>
             <div
               className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${opcoesParcelamento.length}, 1fr)` }}
+              style={{ gridTemplateColumns: `repeat(${maxParcelas}, 1fr)` }}
             >
-              {opcoesParcelamento.map((n) => {
+              {Array.from({ length: maxParcelas }, (_, i) => i + 1).map((n) => {
                 const bloqueado = n > 1 && !podeParcelar
                 return (
                   <button
@@ -302,16 +300,7 @@ export default function CarrinhoPage() {
                         : 'border-[#DDDCD5] text-[#6E6E68] hover:border-[#131A2E]'
                     }`}
                   >
-                    {n === 1 ? (
-                      'À vista'
-                    ) : (
-                      <>
-                        {n}x
-                        <span className="block text-sm font-semibold mt-1">
-                          R$ {brl(totalValor / n)}
-                        </span>
-                      </>
-                    )}
+                    {n === 1 ? 'À vista' : `${n}x`}
                   </button>
                 )
               })}
@@ -323,7 +312,7 @@ export default function CarrinhoPage() {
             )}
             {parcelasBoleto > 1 && (
               <p className="text-xs text-[#6E6E68] mt-2">
-                A equipe confirma os vencimentos ao processar seu pedido.
+                A equipe confirma os vencimentos e o valor ao processar seu pedido.
               </p>
             )}
           </div>
@@ -332,13 +321,12 @@ export default function CarrinhoPage() {
 
       <div className="mt-6 border-t-2 border-[#131A2E] pt-4 space-y-2">
         <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
-          <span>Total do pedido</span>
-          <span className="font-mono">R$ {brl(totalValor)}</span>
-        </div>
-        <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
           <span>Metragem total</span>
           <span className="font-mono">{brl(totalMetros)} m</span>
         </div>
+        <p className="text-xs text-[#6E6E68]">
+          O valor do pedido será informado assim que ele estiver pronto.
+        </p>
       </div>
 
       {erro && (

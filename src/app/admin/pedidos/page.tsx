@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import NovoPedido from './novo-pedido'
 import FiltroCliente from './filtro-cliente'
+import FiltroData from './filtro-data'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -56,9 +57,9 @@ const CORES: Record<string, { borda: string; tarja: string }> = {
 export default async function PedidosAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ etapa?: string; cliente?: string }>
+  searchParams: Promise<{ etapa?: string; cliente?: string; de?: string; ate?: string }>
 }) {
-  const { etapa: filtro, cliente: clienteFiltro } = await searchParams
+  const { etapa: filtro, cliente: clienteFiltro, de: dataDe, ate: dataAte } = await searchParams
   const perfil = await lerPerfil()
   const supabase = await createClient()
 
@@ -125,9 +126,19 @@ export default async function PedidosAdminPage({
     })
     .filter((p) => ATIVOS.includes(p.status))
 
-  const lista = clienteFiltro
+  // Escopo: todos os pedidos, filtrado por cliente e/ou intervalo de datas
+  let lista = clienteFiltro
     ? listaCompleta.filter((p) => p.clienteId === clienteFiltro)
     : listaCompleta
+
+  if (dataDe) {
+    const inicio = new Date(dataDe + 'T00:00:00')
+    lista = lista.filter((p) => new Date(p.entrada) >= inicio)
+  }
+  if (dataAte) {
+    const fim = new Date(dataAte + 'T23:59:59')
+    lista = lista.filter((p) => new Date(p.entrada) <= fim)
+  }
 
   const etapas = [...new Set(lista.map((p) => p.status))].sort(
     (a, b) => ATIVOS.indexOf(a) - ATIVOS.indexOf(b)
@@ -137,6 +148,8 @@ export default async function PedidosAdminPage({
     const params = new URLSearchParams()
     if (etapa) params.set('etapa', etapa)
     if (clienteFiltro) params.set('cliente', clienteFiltro)
+    if (dataDe) params.set('de', dataDe)
+    if (dataAte) params.set('ate', dataAte)
     const qs = params.toString()
     return `/admin/pedidos${qs ? `?${qs}` : ''}`
   }
@@ -182,15 +195,22 @@ export default async function PedidosAdminPage({
         )}
       </div>
 
-      {dono && clientes && clientes.length > 0 && (
-        <div className="mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
+        {dono && clientes && clientes.length > 0 && (
           <FiltroCliente
             clientes={clientes}
             clienteAtual={clienteFiltro}
             etapaAtual={filtro}
           />
-        </div>
-      )}
+        )}
+        <FiltroData
+          rota="/admin/pedidos"
+          etapaAtual={filtro}
+          clienteAtual={clienteFiltro}
+          deAtual={dataDe}
+          ateAtual={dataAte}
+        />
+      </div>
 
       {(aguardando > 0 || solicitacoes > 0) && (
         <div className="space-y-2 mb-5">
@@ -315,7 +335,9 @@ export default async function PedidosAdminPage({
         {visiveis.length === 0 && (
           <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center">
             <p className="text-sm text-[#6E6E68]">
-              {filtro ? 'Nenhum pedido nesta etapa.' : 'Nenhum pedido ativo.'}
+              {filtro || dataDe || dataAte
+                ? 'Nenhum pedido encontrado com esses filtros.'
+                : 'Nenhum pedido ativo.'}
             </p>
           </div>
         )}

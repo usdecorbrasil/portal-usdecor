@@ -13,6 +13,7 @@ import {
   confirmarPedido,
   responderSolicitacao,
 } from '@/app/actions/confirmacao'
+import { confirmarRomaneio } from '@/app/actions/romaneio'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -137,6 +138,30 @@ export default function PainelAcoes({
       const r = await lancarStatus(pedidoId, chave)
       if (!r.ok) setErro(r.erro)
       setStatusPendente(null)
+    })
+  }
+
+  function confirmarRomaneioEAvancar(
+    metragem: number,
+    rolos: number,
+    saldo: string
+  ) {
+    setErro('')
+    iniciar(async () => {
+      const r1 = await confirmarRomaneio(pedidoId, metragem, rolos, saldo)
+      if (!r1.ok) {
+        setErro(r1.erro)
+        return
+      }
+
+      const r2 = await lancarStatus(pedidoId, 'estampando')
+      if (!r2.ok) {
+        setErro(r2.erro)
+        return
+      }
+
+      setStatusPendente(null)
+      window.open(`/api/romaneio/${pedidoId}`, '_blank')
     })
   }
 
@@ -446,7 +471,13 @@ export default function PainelAcoes({
                     {m.rotulo}
                   </span>
                   <span className="block text-[9px] font-mono tracking-[0.09em] uppercase text-[#6E6E68] mt-1">
-                    {m.email ? 'dispara e-mail' : 'sem e-mail'}
+                    {m.chave === 'impressao'
+                      ? 'revisa valor'
+                      : m.chave === 'estampando'
+                      ? 'gera romaneio'
+                      : m.email
+                      ? 'dispara e-mail'
+                      : 'sem e-mail'}
                   </span>
                 </button>
               ))}
@@ -509,24 +540,318 @@ export default function PainelAcoes({
         </>
       )}
 
-      {statusPendente && (
-        <ModalConfirmarStatus
-          de={statusAtual}
-          para={statusPendente}
+      {statusPendente === 'impressao' && podeCancelarOuAjustar && (
+        <ModalConfirmarValor
+          numero={numero}
+          itens={itens}
+          total={total}
           pendente={pendente}
           erro={erro}
           onCancelar={() => {
             setErro('')
             setStatusPendente(null)
           }}
-          onConfirmar={() => avancar(statusPendente)}
+          onConfirmar={() => avancar('impressao')}
         />
       )}
+
+      {statusPendente === 'estampando' && (
+        <ModalRomaneio
+          numero={numero}
+          pendente={pendente}
+          erro={erro}
+          onCancelar={() => {
+            setErro('')
+            setStatusPendente(null)
+          }}
+          onConfirmar={confirmarRomaneioEAvancar}
+        />
+      )}
+
+      {statusPendente &&
+        statusPendente !== 'estampando' &&
+        !(statusPendente === 'impressao' && podeCancelarOuAjustar) && (
+          <ModalConfirmarStatus
+            de={statusAtual}
+            para={statusPendente}
+            pendente={pendente}
+            erro={erro}
+            onCancelar={() => {
+              setErro('')
+              setStatusPendente(null)
+            }}
+            onConfirmar={() => avancar(statusPendente)}
+          />
+        )}
     </div>
   )
 }
 
-/* ---------------- modal de confirmação de status ---------------- */
+/* ---------------- modal do romaneio (ao lançar Estampando) ---------------- */
+
+function ModalRomaneio({
+  numero,
+  pendente,
+  erro,
+  onCancelar,
+  onConfirmar,
+}: {
+  numero: number
+  pendente: boolean
+  erro: string
+  onCancelar: () => void
+  onConfirmar: (metragem: number, rolos: number, saldo: string) => void
+}) {
+  const [metragem, setMetragem] = useState('')
+  const [rolos, setRolos] = useState('')
+  const [saldo, setSaldo] = useState('')
+  const [aviso, setAviso] = useState('')
+
+  useEffect(() => {
+    function tecla(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !pendente) onCancelar()
+    }
+    document.addEventListener('keydown', tecla)
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', tecla)
+      document.body.style.overflow = overflow
+    }
+  }, [onCancelar, pendente])
+
+  function confirmar() {
+    const metragemNum = Number(metragem.replace(',', '.'))
+    const rolosNum = parseInt(rolos, 10)
+
+    if (isNaN(metragemNum) || metragemNum <= 0) {
+      return setAviso('Informe a metragem total impressa.')
+    }
+    if (isNaN(rolosNum) || rolosNum < 1) {
+      return setAviso('Informe a quantidade de rolos (mínimo 1).')
+    }
+
+    setAviso('')
+    onConfirmar(metragemNum, rolosNum, saldo.trim())
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-[#131A2E]/70"
+        onClick={() => !pendente && onCancelar()}
+      />
+
+      <div className="relative bg-white rounded-sm w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
+        <div className="p-5">
+          <h2 className="font-semibold tracking-tight text-lg">
+            Gerar romaneio de calandra
+          </h2>
+          <p className="text-sm text-[#6E6E68] mt-1.5 leading-relaxed">
+            Pedido #{numero} saindo da Impressão. Informe os dados reais da
+            produção — isso recalcula o valor de cobrança e gera o PDF para a
+            calandra.
+          </p>
+
+          <div className="mt-4">
+            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
+              METRAGEM TOTAL IMPRESSA<span className="text-[#B00063] ml-1">*</span>
+            </label>
+            <input
+              value={metragem}
+              onChange={(e) => {
+                setMetragem(e.target.value)
+                setAviso('')
+              }}
+              inputMode="decimal"
+              placeholder="Ex.: 128,50"
+              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
+            />
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
+              QUANTIDADE DE ROLOS<span className="text-[#B00063] ml-1">*</span>
+            </label>
+            <input
+              value={rolos}
+              onChange={(e) => {
+                setRolos(e.target.value.replace(/\D/g, ''))
+                setAviso('')
+              }}
+              inputMode="numeric"
+              placeholder="Ex.: 3"
+              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
+            />
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
+              SALDO (OPCIONAL)
+            </label>
+            <input
+              value={saldo}
+              onChange={(e) => setSaldo(e.target.value)}
+              placeholder="Ex.: sobrou 4,2m no rolo 2"
+              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
+            />
+          </div>
+
+          <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-4 text-xs leading-relaxed">
+            <strong className="block text-[10px] tracking-widest mb-1">
+              ATENÇÃO
+            </strong>
+            O valor do pedido será recalculado com base nessa metragem. Se o
+            pedido for parcelado, as parcelas ainda não pagas serão
+            regeneradas.
+          </div>
+
+          {(aviso || erro) && (
+            <p className="text-sm text-[#B00063] mt-3">{aviso || erro}</p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 mt-5">
+            <button
+              onClick={onCancelar}
+              disabled={pendente}
+              className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+            >
+              CANCELAR
+            </button>
+            <button
+              onClick={confirmar}
+              disabled={pendente}
+              className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+            >
+              {pendente ? 'GERANDO...' : 'GERAR ROMANEIO'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- modal de confirmação de valor (só ao lançar Impressão) ---------------- */
+
+function ModalConfirmarValor({
+  numero,
+  itens,
+  total,
+  pendente,
+  erro,
+  onCancelar,
+  onConfirmar,
+}: {
+  numero: number
+  itens: Item[]
+  total: number
+  pendente: boolean
+  erro: string
+  onCancelar: () => void
+  onConfirmar: () => void
+}) {
+  useEffect(() => {
+    function tecla(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !pendente) onCancelar()
+    }
+    document.addEventListener('keydown', tecla)
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', tecla)
+      document.body.style.overflow = overflow
+    }
+  }, [onCancelar, pendente])
+
+  const somaConferencia = itens.reduce(
+    (a, i) => a + i.faturada * i.metrosPorUnidade * i.precoMetro,
+    0
+  )
+  const bateComTotal = Math.abs(somaConferencia - total) < 0.01
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-[#131A2E]/70"
+        onClick={() => !pendente && onCancelar()}
+      />
+
+      <div className="relative bg-white rounded-sm w-full max-w-lg my-8 max-h-[90vh] overflow-y-auto">
+        <div className="p-5">
+          <h2 className="font-semibold tracking-tight text-lg">
+            Revise o valor antes de iniciar a impressão
+          </h2>
+          <p className="text-sm text-[#6E6E68] mt-1.5 leading-relaxed">
+            O cliente só vê esse valor quando o pedido chegar em &ldquo;Pedido
+            pronto&rdquo; — mas ele já é calculado agora, com base no preço
+            padrão (ou ajustado) deste pedido. Confira item por item antes de
+            avançar.
+          </p>
+
+          <div className="mt-4 space-y-1.5">
+            {itens.map((i) => (
+              <div
+                key={i.id}
+                className="flex items-center justify-between gap-2 text-xs bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-2.5 py-1.5"
+              >
+                <span className="font-mono text-[#6E6E68] shrink-0">
+                  {i.sku}
+                </span>
+                <span className="flex-1 min-w-0 truncate">{i.nome}</span>
+                <span className="font-mono text-[#6E6E68] shrink-0">
+                  {i.faturada}un × {i.metrosPorUnidade.toFixed(2)}m
+                </span>
+                <span className="font-mono font-semibold shrink-0">
+                  R$ {brl(i.faturada * i.metrosPorUnidade * i.precoMetro)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {!bateComTotal && (
+            <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
+              <strong className="block text-[10px] tracking-widest mb-1">
+                ATENÇÃO
+              </strong>
+              A soma dos itens (R$ {brl(somaConferencia)}) não bate com o
+              total registrado do pedido (R$ {brl(total)}). Verifique antes de
+              avançar.
+            </div>
+          )}
+
+          <div className="flex justify-between items-baseline mt-4 pt-4 border-t-2 border-[#131A2E]">
+            <span className="font-semibold tracking-tight text-sm">
+              TOTAL DO PEDIDO #{numero}
+            </span>
+            <strong className="font-mono text-xl">R$ {brl(total)}</strong>
+          </div>
+
+          {erro && <p className="text-sm text-[#B00063] mt-3">{erro}</p>}
+
+          <div className="grid grid-cols-2 gap-3 mt-5">
+            <button
+              onClick={onCancelar}
+              disabled={pendente}
+              className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+            >
+              CANCELAR
+            </button>
+            <button
+              onClick={onConfirmar}
+              disabled={pendente}
+              className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+            >
+              {pendente ? '...' : 'CONFIRMAR VALOR E AVANÇAR'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- modal de confirmação de status (demais etapas) ---------------- */
 
 function ModalConfirmarStatus({
   de,
