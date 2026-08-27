@@ -65,21 +65,15 @@ export default async function PedidosAdminPage({
 
   const dono = !!perfil?.veValores
 
-  const campos = dono
-    ? `id, numero, total, cliente_id, created_at, cancelado_em,
-       clientes(razao_social),
-       pedido_status_historico(status, created_at),
-       pedido_itens(metros_total),
-       pedido_solicitacoes(id, status)`
-    : `id, numero, cliente_id, created_at, cancelado_em,
-       clientes(razao_social),
-       pedido_status_historico(status, created_at),
-       pedido_itens(metros_total),
-       pedido_solicitacoes(id, status)`
-
   const { data: pedidos } = await supabase
     .from('pedidos')
-    .select(campos)
+    .select(`
+      id, numero, total, cliente_id, created_at, cancelado_em, metragem_impressa,
+      clientes(razao_social),
+      pedido_status_historico(status, created_at),
+      pedido_itens(quantidade_faturada),
+      pedido_solicitacoes(id, status)
+    `)
     .is('cancelado_em', null)
     .order('created_at', { ascending: false })
 
@@ -102,18 +96,24 @@ export default async function PedidosAdminPage({
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )
       const ultimo = hist[0]
+      const status = ultimo?.status ?? 'aguardando'
+
+      const liberadoMetragem =
+        ATIVOS.indexOf(status) >= ATIVOS.indexOf('estampando')
 
       return {
         id: p.id,
         numero: p.numero,
         clienteId: p.cliente_id as string,
-        total: p.total !== undefined ? Number(p.total) : null,
-        metros: (p.pedido_itens ?? []).reduce(
-          (a: number, i: any) => a + Number(i.metros_total),
+        total: Number(p.total),
+        metragemImpressa: p.metragem_impressa ? Number(p.metragem_impressa) : null,
+        liberadoMetragem,
+        unidades: (p.pedido_itens ?? []).reduce(
+          (a: number, i: any) => a + Number(i.quantidade_faturada),
           0
         ),
         cliente: p.clientes?.razao_social ?? '—',
-        status: ultimo?.status ?? 'aguardando',
+        status,
         desde: ultimo?.created_at ?? p.created_at,
         dias: ultimo
           ? Math.floor((agora - new Date(ultimo.created_at).getTime()) / DIA)
@@ -126,7 +126,6 @@ export default async function PedidosAdminPage({
     })
     .filter((p) => ATIVOS.includes(p.status))
 
-  // Escopo: todos os pedidos, filtrado por cliente e/ou intervalo de datas
   let lista = clienteFiltro
     ? listaCompleta.filter((p) => p.clienteId === clienteFiltro)
     : listaCompleta
@@ -299,9 +298,9 @@ export default async function PedidosAdminPage({
                 </div>
 
                 <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 sm:mt-1 font-mono">
-                  {p.total !== null
-                    ? `R$ ${brl(p.total)}`
-                    : `${brl(p.metros)} m`}
+                  {!p.liberadoMetragem && `${p.unidades} un`}
+                  {p.liberadoMetragem && !dono && `${brl(p.metragemImpressa ?? 0)} m`}
+                  {p.liberadoMetragem && dono && `R$ ${brl(p.total)}`}
                 </p>
 
                 <div className="mt-1.5 sm:mt-2">
@@ -323,7 +322,6 @@ export default async function PedidosAdminPage({
                       day: '2-digit',
                       month: '2-digit',
                     })}
-                    {p.total !== null && ` · ${brl(p.metros)} M`}
                   </span>
                   <span className="text-[#B00063] font-semibold">abrir →</span>
                 </div>
