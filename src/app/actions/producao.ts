@@ -159,6 +159,39 @@ export async function ajustarItem(
   return { ok: true }
 }
 
+export async function adicionarItem(
+  pedidoId: string,
+  produtoId: string,
+  quantidade: number,
+  motivo: string
+): Promise<Resultado> {
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    produtoId: z.string().uuid(),
+    quantidade: z.number().int().min(1).max(100000),
+    motivo: z.string().trim().min(10, 'Descreva o motivo com pelo menos 10 caracteres').max(500),
+  }).safeParse({ pedidoId, produtoId, quantidade, motivo })
+
+  if (!parsed.success) {
+    return { ok: false, erro: parsed.error.issues[0].message }
+  }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('admin_adicionar_item', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_produto_id: parsed.data.produtoId,
+    p_quantidade: parsed.data.quantidade,
+    p_motivo: parsed.data.motivo,
+  })
+
+  if (error) return { ok: false, erro: error.message }
+
+  revalidar()
+  revalidatePath('/pedidos')
+  return { ok: true }
+}
+
 /**
  * Altera o preço por metro de um pedido específico.
  * Não afeta o preço padrão do cliente nem outros pedidos.

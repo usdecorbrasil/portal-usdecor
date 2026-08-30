@@ -74,22 +74,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottom: '1 solid #EEEDE7',
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 6,
   },
   imagem: {
-    width: 32,
-    height: 32,
+    width: 56,
+    height: 56,
     objectFit: 'cover',
-    borderRadius: 2,
-    marginRight: 8,
+    borderRadius: 3,
+    marginRight: 10,
   },
   imagemVazia: {
-    width: 32,
-    height: 32,
+    width: 56,
+    height: 56,
     backgroundColor: '#EEEDE7',
-    borderRadius: 2,
-    marginRight: 8,
+    borderRadius: 3,
+    marginRight: 10,
   },
   rodape: {
     marginTop: 24,
@@ -111,7 +111,7 @@ export type ItemRomaneio = {
 export type DadosRomaneio = {
   numero: number
   cliente: string
-  rolos: number
+  rolos: number | null
   saldo: string | null
   metragemImpressa: number
   itens: ItemRomaneio[]
@@ -141,10 +141,12 @@ export function RomaneioDocumento({ pedidos }: { pedidos: DadosRomaneio[] }) {
                 {p.metragemImpressa.toFixed(2).replace('.', ',')} m
               </Text>
             </View>
-            <View style={styles.cartaoResumo}>
-              <Text style={styles.rotuloResumo}>Rolos de Tecido</Text>
-              <Text style={styles.valorResumo}>{p.rolos}</Text>
-            </View>
+            {p.rolos !== null && (
+              <View style={styles.cartaoResumo}>
+                <Text style={styles.rotuloResumo}>Rolos de Tecido</Text>
+                <Text style={styles.valorResumo}>{p.rolos}</Text>
+              </View>
+            )}
             {p.saldo && (
               <View style={styles.cartaoResumo}>
                 <Text style={styles.rotuloResumo}>Saldo</Text>
@@ -154,7 +156,7 @@ export function RomaneioDocumento({ pedidos }: { pedidos: DadosRomaneio[] }) {
           </View>
 
           <View style={styles.tabelaCabecalho}>
-            <Text style={[styles.tabelaCabecalhoTexto, { width: 40 }]}>Img</Text>
+            <Text style={[styles.tabelaCabecalhoTexto, { width: 66 }]}>Img</Text>
             <Text style={[styles.tabelaCabecalhoTexto, { width: 70 }]}>SKU</Text>
             <Text style={[styles.tabelaCabecalhoTexto, { flex: 1 }]}>Produto</Text>
             <Text

@@ -29,20 +29,49 @@ export default function ListaClientes({
   arquivados: Cliente[]
 }) {
   const [verArquivados, setVerArquivados] = useState(false)
+  const [busca, setBusca] = useState('')
+
+  const termo = busca.trim().toLowerCase()
+  const filtrar = (lista: Cliente[]) =>
+    termo
+      ? lista.filter(
+          (c) =>
+            c.razao_social.toLowerCase().includes(termo) ||
+            c.cnpj.includes(termo) ||
+            c.email.toLowerCase().includes(termo)
+        )
+      : lista
+
+  const clientesFiltrados = filtrar(clientes)
+  const arquivadosFiltrados = filtrar(arquivados)
 
   return (
     <div className="mt-8">
-      {arquivados.length > 0 && (
-        <button
-          onClick={() => setVerArquivados((v) => !v)}
-          className="border border-[#DDDCD5] rounded-sm px-4 py-2 text-xs font-semibold tracking-wide text-[#6E6E68] hover:border-[#131A2E] hover:text-[#131A2E] mb-4"
-        >
-          {verArquivados ? 'OCULTAR' : 'VER'} ARQUIVADOS ({arquivados.length})
-        </button>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nome, CNPJ ou e-mail"
+          className="flex-1 border border-[#DDDCD5] rounded-sm px-3 py-2.5 text-sm outline-none focus:border-[#131A2E] bg-white"
+        />
+        {arquivados.length > 0 && (
+          <button
+            onClick={() => setVerArquivados((v) => !v)}
+            className="shrink-0 border border-[#DDDCD5] rounded-sm px-4 py-2 text-xs font-semibold tracking-wide text-[#6E6E68] hover:border-[#131A2E] hover:text-[#131A2E]"
+          >
+            {verArquivados ? 'OCULTAR' : 'VER'} ARQUIVADOS ({arquivados.length})
+          </button>
+        )}
+      </div>
+
+      {termo && (
+        <p className="text-xs text-[#6E6E68] mb-3">
+          {clientesFiltrados.length} de {clientes.length} clientes
+        </p>
       )}
 
       <div className="space-y-1.5 sm:space-y-2">
-        {clientes.map((c) => (
+        {clientesFiltrados.map((c) => (
           <Link
             key={c.id}
             href={`/admin/clientes/${c.id}`}
@@ -95,23 +124,25 @@ export default function ListaClientes({
           </Link>
         ))}
 
-        {clientes.length === 0 && (
+        {clientesFiltrados.length === 0 && (
           <div className="border border-dashed border-[#DDDCD5] rounded-sm py-12 text-center">
             <p className="text-sm text-[#6E6E68]">
-              Nenhum cliente cadastrado ainda.
+              {termo
+                ? 'Nenhum cliente encontrado com esse termo.'
+                : 'Nenhum cliente cadastrado ainda.'}
             </p>
           </div>
         )}
       </div>
 
-      {verArquivados && arquivados.length > 0 && (
+      {verArquivados && arquivadosFiltrados.length > 0 && (
         <div className="mt-6">
           <h3 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-3 flex items-center gap-2">
             ARQUIVADOS
             <span className="flex-1 h-px bg-[#DDDCD5]" />
           </h3>
           <div className="space-y-2">
-            {arquivados.map((c) => (
+            {arquivadosFiltrados.map((c) => (
               <div
                 key={c.id}
                 className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-4 opacity-70"

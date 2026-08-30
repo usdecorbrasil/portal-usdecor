@@ -7,6 +7,7 @@ import {
   atualizarMembro,
   alternarMembroAtivo,
   arquivarMembro,
+  restaurarMembro,
 } from '@/app/actions/equipe'
 
 export type Membro = {
@@ -182,31 +183,81 @@ export default function Equipe({
           </h3>
           <div className="space-y-2">
             {arquivados.map((m) => (
-              <div
-                key={m.id}
-                className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-4 opacity-70"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold tracking-tight">
-                      {m.nome ?? '—'}
-                    </h3>
-                    <p className="text-xs text-[#6E6E68] mt-0.5 truncate">
-                      {m.email}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-sm whitespace-nowrap ${COR_PAPEL[m.papel]}`}
-                  >
-                    {LABEL_PAPEL[m.papel]}
-                  </span>
-                </div>
-              </div>
+              <CardArquivado key={m.id} membro={m} />
             ))}
           </div>
         </div>
       )}
     </section>
+  )
+}
+
+function CardArquivado({ membro }: { membro: Membro }) {
+  const [confirmando, setConfirmando] = useState(false)
+  const [erro, setErro] = useState('')
+  const [pendente, iniciar] = useTransition()
+
+  const emailOriginal = membro.email.replace(/^arquivado\+[^+]+\+/, '')
+
+  function restaurar() {
+    setErro('')
+    iniciar(async () => {
+      const r = await restaurarMembro(membro.id)
+      if (!r.ok) setErro(r.erro)
+      setConfirmando(false)
+    })
+  }
+
+  return (
+    <div className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-4 opacity-70">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold tracking-tight">{membro.nome ?? '—'}</h3>
+          <p className="text-xs text-[#6E6E68] mt-0.5 truncate">
+            {emailOriginal}
+          </p>
+        </div>
+        <span
+          className={`text-xs px-2 py-0.5 rounded-sm whitespace-nowrap ${COR_PAPEL[membro.papel]}`}
+        >
+          {LABEL_PAPEL[membro.papel]}
+        </span>
+      </div>
+
+      {erro && <p className="text-xs text-[#B00063] mt-2">{erro}</p>}
+
+      {confirmando ? (
+        <div className="mt-3 border border-[#E8C36B] bg-[#FBF0D9] rounded-sm p-3">
+          <p className="text-xs leading-relaxed mb-3">
+            <strong>Restaurar {membro.nome}?</strong> O e-mail volta a ser{' '}
+            <code className="font-mono">{emailOriginal}</code> e o acesso é
+            reativado.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setConfirmando(false)}
+              className="border border-[#131A2E] rounded-sm py-2 text-xs font-semibold"
+            >
+              VOLTAR
+            </button>
+            <button
+              onClick={restaurar}
+              disabled={pendente}
+              className="bg-[#131A2E] text-white rounded-sm py-2 text-xs font-semibold disabled:opacity-50"
+            >
+              {pendente ? '...' : 'RESTAURAR'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirmando(true)}
+          className="w-full mt-3 border border-[#DDDCD5] rounded-sm py-2 text-[10px] font-semibold tracking-wider text-[#6E6E68] hover:border-[#131A2E] hover:text-[#131A2E]"
+        >
+          RESTAURAR
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -245,6 +296,11 @@ function CardMembro({ membro }: { membro: Membro }) {
     })
   }
 
+  const emailTravado = membro.email.startsWith('arquivado+')
+  const emailExibido = emailTravado
+    ? membro.email.replace(/^arquivado\+[^+]+\+/, '')
+    : membro.email
+
   return (
     <div className="bg-white border border-[#DDDCD5] rounded-sm p-4">
       <div className="flex items-start justify-between gap-3">
@@ -257,7 +313,12 @@ function CardMembro({ membro }: { membro: Membro }) {
               </span>
             )}
           </h3>
-          <p className="text-xs text-[#6E6E68] mt-0.5">{membro.email}</p>
+          <p className="text-xs text-[#6E6E68] mt-0.5">{emailExibido}</p>
+          {emailTravado && (
+            <p className="text-[10px] text-[#B00063] mt-0.5">
+              E-mail travado no login — não consegue entrar até ser corrigido.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col items-end gap-1 shrink-0">

@@ -11,7 +11,7 @@ export async function GET(
 
   const dados = await buscarDadosRomaneio(id)
 
-  if (!dados || dados.metragemImpressa === null || dados.rolos === null) {
+  if (!dados || dados.metragemImpressa === null) {
     return NextResponse.json(
       { erro: 'Romaneio ainda não foi confirmado para este pedido.' },
       { status: 404 }

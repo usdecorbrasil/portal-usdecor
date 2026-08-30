@@ -173,7 +173,7 @@ export async function atualizarMembro(
       ok: false,
       erro: erroEmail.message.includes('already')
         ? 'Este e-mail já está em uso por outra conta.'
-        : 'Não foi possível atualizar o e-mail.',
+        : `Não foi possível atualizar o e-mail: ${erroEmail.message} (status ${erroEmail.status}, code ${erroEmail.code})`,
     }
   }
 
@@ -276,6 +276,57 @@ export async function arquivarMembro(usuarioId: string): Promise<Resultado> {
     email_novo: emailArquivado,
     autor_id: meuId,
   })
+
+  revalidatePath('/admin/configuracoes')
+  return { ok: true }
+}
+
+export async function restaurarMembro(usuarioId: string): Promise<Resultado> {
+  const meuId = await exigirDono()
+  if (!meuId) return { ok: false, erro: 'Acesso negado.' }
+
+  const parsed = z.string().uuid().safeParse(usuarioId)
+  if (!parsed.success) return { ok: false, erro: 'Usuário inválido.' }
+
+  const admin = createAdminClient()
+
+  const { data: perfil } = await admin
+    .from('profiles').select('arquivado').eq('id', parsed.data).single()
+
+  if (!perfil?.arquivado) {
+    return { ok: false, erro: 'Este usuário não está arquivado.' }
+  }
+
+  const { data: usuario } = await admin.auth.admin.getUserById(parsed.data)
+  const emailAtual = usuario?.user?.email
+
+  if (!emailAtual) {
+    return { ok: false, erro: 'E-mail do usuário não encontrado.' }
+  }
+
+  const emailOriginal = emailAtual.replace(/^arquivado\+[^+]+\+/, '')
+
+  if (emailOriginal === emailAtual) {
+    return { ok: false, erro: 'Não foi possível identificar o e-mail original.' }
+  }
+
+  const { error: erroEmail } = await admin.auth.admin.updateUserById(parsed.data, {
+    email: emailOriginal,
+  })
+
+  if (erroEmail) {
+    return {
+      ok: false,
+      erro: `Não foi possível restaurar o e-mail (${emailOriginal}): ${erroEmail.message} (status ${erroEmail.status}, code ${erroEmail.code})`,
+    }
+  }
+
+  const { error: erroPerfil } = await admin
+    .from('profiles').update({ ativo: true, arquivado: false }).eq('id', parsed.data)
+
+  if (erroPerfil) {
+    return { ok: false, erro: 'Não foi possível restaurar o acesso.' }
+  }
 
   revalidatePath('/admin/configuracoes')
   return { ok: true }

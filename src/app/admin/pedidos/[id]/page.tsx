@@ -34,6 +34,11 @@ const ROTULOS_PAGAMENTO: Record<string, string> = {
   cartao_debito: 'Cartão de débito',
 }
 
+function rotuloForma(forma: string, parcelas: number | null) {
+  const label = ROTULOS_PAGAMENTO[forma] ?? forma
+  return forma === 'boleto_parcelado' && parcelas ? `${label} (${parcelas}x)` : label
+}
+
 function dataHora(iso: string) {
   const d = new Date(iso)
   return (
@@ -66,19 +71,14 @@ export default async function PedidoAdminPage({
     : `id, produto_id, sku, nome, metros_por_unidade,
        quantidade_pedida, quantidade_faturada, metros_total`
 
-  const camposFinanceiros = dono
-    ? `total, bling_pedido_id, bling_numero, bling_sync_status,
-       nf_numero, nf_emitida_em,
-       boleto_linha, boleto_vencimento, boleto_emitido_em,
-       baixa_financeira_em,`
-    : ''
+  const camposFinanceiros = dono ? `total,` : ''
 
   const { data: pedido } = await supabase
     .from('pedidos')
     .select(`
       id, numero, notas, created_at,
       cancelado_em, cancelado_motivo,
-      forma_pagamento, parcelas_solicitadas,
+      forma_pagamento, parcelas_solicitadas, cliente_id,
       ${camposFinanceiros}
       clientes(razao_social, cnpj, preco_metro),
       pedido_itens(${camposItens}),
@@ -86,7 +86,11 @@ export default async function PedidoAdminPage({
         status, origem, created_at, observacao,
         reimpressao_motivo, reimpressao_custo
       ),
-      pedido_ajustes(motivo, quantidade_de, quantidade_para, created_at),
+      pedido_ajustes(motivo, item_id, quantidade_de, quantidade_para, created_at),
+      pedido_forma_pagamento_historico(
+        forma_anterior, forma_nova, parcelas_anterior, parcelas_nova, motivo, criado_em
+      ),
+      pedido_precos(preco_de, preco_para, motivo, created_at),
       pedido_solicitacoes(id, texto, status, resposta, created_at),
       pedido_parcelas(numero, valor, vencimento, pago_em)
     `)
@@ -151,7 +155,49 @@ export default async function PedidoAdminPage({
   const aguardando = atual === 'aguardando'
   const reimpressoes = hist.filter((h: any) => h.reimpressao_motivo).length
   const metrosTotal = itens.reduce((a, i) => a + Number(i.metros_total), 0)
-  const ajustes = (p.pedido_ajustes ?? []) as any[]
+  const unidadesTotal = itens.reduce(
+    (a, i) => a + Number(i.quantidade_faturada),
+    0
+  )
+  const antesDoEstampando = ['aguardando', 'recebido', 'impressao'].includes(atual)
+  const ajustesQtd = (p.pedido_ajustes ?? []) as any[]
+  const ajustesForma = (p.pedido_forma_pagamento_historico ?? []) as any[]
+  const ajustesPreco = (p.pedido_precos ?? []) as any[]
+  const itemPorId = new Map(itens.map((i) => [i.id, i]))
+
+  const alteracoes = [
+    ...ajustesQtd.map((a) => {
+      const item = itemPorId.get(a.item_id)
+      const produto = item ? `${item.sku} — ${item.nome}: ` : ''
+      return {
+        tipo: 'Quantidade',
+        motivo: a.motivo as string,
+        detalhe: `${produto}${a.quantidade_de} → ${a.quantidade_para} un`,
+        data: a.created_at as string,
+      }
+    }),
+    ...ajustesForma.map((a) => ({
+      tipo: 'Forma de pagamento',
+      motivo: a.motivo as string,
+      detalhe:
+        a.forma_anterior === a.forma_nova
+          ? `${a.parcelas_anterior}x → ${a.parcelas_nova}x`
+          : `${rotuloForma(a.forma_anterior, a.parcelas_anterior)} → ${rotuloForma(
+              a.forma_nova,
+              a.parcelas_nova
+            )}`,
+      data: a.criado_em as string,
+    })),
+    ...ajustesPreco.map((a) => ({
+      tipo: 'Preço',
+      motivo: a.motivo as string,
+      detalhe:
+        dono && !antesDoEstampando
+          ? `R$ ${brl(Number(a.preco_de))} → R$ ${brl(Number(a.preco_para))} /m`
+          : 'Preço por metro alterado',
+      data: a.created_at as string,
+    })),
+  ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
 
   const solicitacoes = (p.pedido_solicitacoes ?? []) as any[]
   const aberta = solicitacoes.find((s) => s.status === 'aberta')
@@ -173,39 +219,6 @@ export default async function PedidoAdminPage({
         {cliente.razao_social} ·{' '}
         {new Date(p.created_at).toLocaleDateString('pt-BR')}
       </p>
-
-      {dono && !aguardando && (
-        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
-          <h2 className="font-semibold tracking-tight text-sm mb-3">Bling</h2>
-          <Linha rotulo="Pedido de venda" valor={p.bling_numero ?? '—'} mono />
-          <Linha
-            rotulo="Sincronização"
-            valor={
-              p.bling_sync_status === 'enviado'
-                ? 'enviado'
-                : p.bling_sync_status === 'erro'
-                ? 'erro'
-                : 'pendente'
-            }
-          />
-          <Linha
-            rotulo="Nota fiscal"
-            valor={p.nf_numero ? `emitida · ${p.nf_numero}` : 'aguardando'}
-          />
-          <Linha
-            rotulo="Boleto"
-            valor={p.boleto_emitido_em ? 'emitido' : 'não emitido'}
-          />
-          <Linha
-            rotulo="Baixa financeira"
-            valor={
-              p.baixa_financeira_em
-                ? new Date(p.baixa_financeira_em).toLocaleDateString('pt-BR')
-                : 'aguardando'
-            }
-          />
-        </div>
-      )}
 
       {cancelado ? (
         <div className="mt-5 bg-[#EEEDE7] border-l-4 border-[#6E6E68] rounded-r-sm p-4">
@@ -240,6 +253,153 @@ export default async function PedidoAdminPage({
         </div>
       )}
 
+      {respondidas.length > 0 && (
+        <>
+          <Titulo>SOLICITAÇÕES DO CLIENTE</Titulo>
+          <div className="space-y-2">
+            {respondidas.map((s) => (
+              <div
+                key={s.id}
+                className="bg-white border border-[#DDDCD5] rounded-sm p-3"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-semibold tracking-tight">
+                    Cancelamento
+                  </span>
+                  <span
+                    className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-sm ${
+                      s.status === 'aceita'
+                        ? 'bg-[#E3F0E8] text-[#2E7D4F]'
+                        : 'bg-[#EAE9E3] text-[#6E6E68]'
+                    }`}
+                  >
+                    {s.status === 'aceita' ? 'aceita' : 'recusada'}
+                  </span>
+                </div>
+                <p className="text-sm italic text-[#6E6E68] mt-1.5 leading-relaxed">
+                  &ldquo;{s.texto}&rdquo;
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <Titulo>ITENS</Titulo>
+
+      <div className="space-y-2">
+        {itens.map((i) => {
+          const mudou = i.quantidade_faturada !== i.quantidade_pedida
+          const img = urls.get(i.produto_id)
+
+          return (
+            <div
+              key={i.id}
+              className="bg-white border border-[#DDDCD5] rounded-sm p-3 flex gap-3"
+            >
+              {img ? (
+                <img
+                  src={img}
+                  alt={i.nome}
+                  className="w-14 h-14 object-cover rounded-sm shrink-0"
+                />
+              ) : (
+                <div className="w-14 h-14 bg-[#EEEDE7] rounded-sm shrink-0" />
+              )}
+
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-mono text-[#131A2E]">{i.sku}</div>
+                <div className="font-semibold tracking-tight text-sm mt-0.5">
+                  {i.nome}
+                </div>
+              </div>
+
+              <div className="text-right whitespace-nowrap">
+                <span
+                  className={`font-mono font-semibold text-sm ${
+                    mudou ? 'text-[#B00063]' : 'text-[#131A2E]'
+                  }`}
+                >
+                  {i.quantidade_faturada} un
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {p.notas && (
+        <>
+          <Titulo>NOTAS DO CLIENTE</Titulo>
+          <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 text-sm leading-relaxed">
+            {p.notas}
+          </div>
+        </>
+      )}
+
+      <div className="mt-6 border-t-2 border-[#131A2E] pt-4">
+        {antesDoEstampando ? (
+          <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
+            <span className="font-semibold tracking-tight">Quantidade total</span>
+            <strong className="font-mono text-2xl">{unidadesTotal} un</strong>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
+              <span>Metragem total</span>
+              <span className="font-mono">{brl(metrosTotal)} m</span>
+            </div>
+            {dono && (
+              <div className="flex justify-between items-baseline mt-2">
+                <span className="font-semibold tracking-tight">TOTAL</span>
+                <strong className="font-mono text-2xl">
+                  R$ {brl(Number(p.total))}
+                </strong>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {!cancelado && (
+        <PainelAcoes
+          pedidoId={p.id}
+          numero={Number(p.numero)}
+          cliente={cliente.razao_social}
+          clienteId={p.cliente_id}
+          statusAtual={atual}
+          usados={usados}
+          total={dono ? Number(p.total) : 0}
+          reimpressoes={reimpressoes}
+          podeCancelarOuAjustar={dono}
+          formaPagamento={p.forma_pagamento}
+          parcelasSolicitadas={p.parcelas_solicitadas}
+          parcelasAtuais={parcelas.length}
+          maxParcelas={maxParcelas}
+          precoCliente={dono ? Number(cliente.preco_metro) : 0}
+          solicitacao={
+            aberta
+              ? {
+                  id: aberta.id,
+                  texto: aberta.texto,
+                  criadoEm: aberta.created_at,
+                }
+              : null
+          }
+          itens={itens.map((i) => ({
+            id: i.id,
+            produtoId: i.produto_id,
+            sku: i.sku,
+            nome: i.nome,
+            pedida: i.quantidade_pedida,
+            faturada: i.quantidade_faturada,
+            precoMetro: dono ? Number(i.preco_unitario) : 0,
+            metrosPorUnidade: Number(i.metros_por_unidade),
+            imagemUrl: urls.get(i.produto_id) ?? null,
+          }))}
+        />
+      )}
+
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="font-semibold tracking-tight text-sm">
@@ -267,7 +427,9 @@ export default async function PedidoAdminPage({
                 <span className="font-mono text-[#6E6E68]">
                   {pc.numero}/{parcelas.length}
                 </span>
-                {dono && <span className="font-mono">{brl(Number(pc.valor))}</span>}
+                {dono && !antesDoEstampando && (
+                  <span className="font-mono">{brl(Number(pc.valor))}</span>
+                )}
                 <span className="text-[#6E6E68]">
                   venc. {dataBr(pc.vencimento)}
                 </span>
@@ -336,176 +498,28 @@ export default async function PedidoAdminPage({
         })}
       </ol>
 
-      {respondidas.length > 0 && (
+      {alteracoes.length > 0 && (
         <>
-          <Titulo>SOLICITAÇÕES DO CLIENTE</Titulo>
+          <Titulo>ALTERAÇÕES NO PEDIDO</Titulo>
           <div className="space-y-2">
-            {respondidas.map((s) => (
-              <div
-                key={s.id}
-                className="bg-white border border-[#DDDCD5] rounded-sm p-3"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-sm font-semibold tracking-tight">
-                    Cancelamento
-                  </span>
-                  <span
-                    className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-sm ${
-                      s.status === 'aceita'
-                        ? 'bg-[#E3F0E8] text-[#2E7D4F]'
-                        : 'bg-[#EAE9E3] text-[#6E6E68]'
-                    }`}
-                  >
-                    {s.status === 'aceita' ? 'aceita' : 'recusada'}
-                  </span>
-                </div>
-                <p className="text-sm italic text-[#6E6E68] mt-1.5 leading-relaxed">
-                  &ldquo;{s.texto}&rdquo;
-                </p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {ajustes.length > 0 && (
-        <>
-          <Titulo>AJUSTES DE QUANTIDADE</Titulo>
-          <div className="space-y-2">
-            {ajustes.map((a, i) => (
+            {alteracoes.map((a, i) => (
               <div
                 key={i}
-                className="bg-[#FFF6FA] border border-[#B00063] rounded-sm p-3"
+                className="bg-[#EEF4EF] border border-[#B9D8C2] rounded-sm p-3"
               >
-                <p className="text-sm leading-relaxed">{a.motivo}</p>
-                <p className="text-[10px] font-mono text-[#6E6E68] mt-1.5 uppercase tracking-wider">
-                  {a.quantidade_de} → {a.quantidade_para} un ·{' '}
-                  {dataHora(a.created_at)}
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#4A7A5A]">
+                  {a.tipo}
+                </span>
+                <p className="text-sm leading-relaxed mt-1 text-[#2C4C38]">
+                  {a.motivo}
+                </p>
+                <p className="text-[10px] font-mono text-[#6E9478] mt-1.5 uppercase tracking-wider">
+                  {a.detalhe} · {dataHora(a.data)}
                 </p>
               </div>
             ))}
           </div>
         </>
-      )}
-
-      <Titulo>ITENS</Titulo>
-
-      <div className="space-y-2">
-        {itens.map((i) => {
-          const mudou = i.quantidade_faturada !== i.quantidade_pedida
-          const img = urls.get(i.produto_id)
-
-          return (
-            <div
-              key={i.id}
-              className="bg-white border border-[#DDDCD5] rounded-sm p-3 flex gap-3"
-            >
-              {img ? (
-                <img
-                  src={img}
-                  alt={i.nome}
-                  className="w-14 h-14 object-cover rounded-sm shrink-0"
-                />
-              ) : (
-                <div className="w-14 h-14 bg-[#EEEDE7] rounded-sm shrink-0" />
-              )}
-
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-mono text-[#131A2E]">{i.sku}</div>
-                <div className="font-semibold tracking-tight text-sm mt-0.5">
-                  {i.nome}
-                </div>
-                <div className="text-xs text-[#6E6E68] mt-0.5">
-                  {mudou && (
-                    <s className="opacity-60 mr-1">{i.quantidade_pedida}</s>
-                  )}
-                  <span className={mudou ? 'text-[#B00063] font-semibold' : ''}>
-                    {i.quantidade_faturada} un
-                  </span>
-                  {dono &&
-                    ` × R$ ${brl(
-                      Number(i.preco_unitario) * Number(i.metros_por_unidade)
-                    )}`}
-                </div>
-              </div>
-
-              <div className="text-right whitespace-nowrap">
-                {dono && (
-                  <div className="font-mono font-semibold text-sm">
-                    R$ {brl(Number(i.subtotal))}
-                  </div>
-                )}
-                <div
-                  className={`font-mono text-[#6E6E68] ${
-                    dono ? 'text-[10px]' : 'text-sm font-semibold text-[#131A2E]'
-                  }`}
-                >
-                  {brl(Number(i.metros_total))} m
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {p.notas && (
-        <>
-          <Titulo>NOTAS DO CLIENTE</Titulo>
-          <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 text-sm leading-relaxed">
-            {p.notas}
-          </div>
-        </>
-      )}
-
-      <div className="mt-6 border-t-2 border-[#131A2E] pt-4">
-        <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
-          <span>Metragem total</span>
-          <span className="font-mono">{brl(metrosTotal)} m</span>
-        </div>
-        {dono && (
-          <div className="flex justify-between items-baseline mt-2">
-            <span className="font-semibold tracking-tight">TOTAL</span>
-            <strong className="font-mono text-2xl">
-              R$ {brl(Number(p.total))}
-            </strong>
-          </div>
-        )}
-      </div>
-
-      {!cancelado && (
-        <PainelAcoes
-          pedidoId={p.id}
-          numero={Number(p.numero)}
-          cliente={cliente.razao_social}
-          statusAtual={atual}
-          usados={usados}
-          total={dono ? Number(p.total) : 0}
-          reimpressoes={reimpressoes}
-          podeCancelarOuAjustar={dono}
-          formaPagamento={p.forma_pagamento}
-          parcelasSolicitadas={p.parcelas_solicitadas}
-          maxParcelas={maxParcelas}
-          precoCliente={dono ? Number(cliente.preco_metro) : 0}
-          solicitacao={
-            aberta
-              ? {
-                  id: aberta.id,
-                  texto: aberta.texto,
-                  criadoEm: aberta.created_at,
-                }
-              : null
-          }
-          itens={itens.map((i) => ({
-            id: i.id,
-            sku: i.sku,
-            nome: i.nome,
-            pedida: i.quantidade_pedida,
-            faturada: i.quantidade_faturada,
-            precoMetro: dono ? Number(i.preco_unitario) : 0,
-            metrosPorUnidade: Number(i.metros_por_unidade),
-            imagemUrl: urls.get(i.produto_id) ?? null,
-          }))}
-        />
       )}
     </div>
   )
@@ -517,23 +531,6 @@ function Titulo({ children }: { children: React.ReactNode }) {
       {children}
       <span className="flex-1 h-px bg-[#DDDCD5]" />
     </h2>
-  )
-}
-
-function Linha({
-  rotulo,
-  valor,
-  mono = false,
-}: {
-  rotulo: string
-  valor: string
-  mono?: boolean
-}) {
-  return (
-    <div className="flex justify-between gap-3 py-1 text-sm">
-      <span className="text-[#6E6E68]">{rotulo}</span>
-      <span className={mono ? 'font-mono text-xs self-center' : ''}>{valor}</span>
-    </div>
   )
 }
 

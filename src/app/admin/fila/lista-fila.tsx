@@ -32,6 +32,25 @@ export default function ListaFila({
   const listaRef = useRef(lista)
   listaRef.current = lista
 
+  // Em toque/caneta, exige pressionar e segurar antes de iniciar o arraste,
+  // pra não atrapalhar o scroll normal da lista. No mouse, arrasta na hora.
+  const pressTimer = useRef<number | null>(null)
+  const pressInfo = useRef<{
+    id: string
+    x: number
+    y: number
+    pointerId: number
+    el: HTMLElement
+  } | null>(null)
+
+  function cancelarPressPendente() {
+    if (pressTimer.current !== null) {
+      window.clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+    pressInfo.current = null
+  }
+
   function commitReorder(novaLista: ItemFila[], movidoId: string) {
     const pos = novaLista.findIndex((i) => i.id === movidoId)
     const anterior = pos > 0 ? novaLista[pos - 1].id : null
@@ -49,11 +68,35 @@ export default function ListaFila({
 
   function aoPointerDown(e: React.PointerEvent, id: string) {
     if (!podeReordenar) return
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    setArrastando(id)
+    if ((e.target as HTMLElement).closest('a, button')) return
+
+    const el = e.currentTarget as HTMLElement
+
+    if (e.pointerType === 'mouse') {
+      el.setPointerCapture(e.pointerId)
+      setArrastando(id)
+      return
+    }
+
+    // toque/caneta: aguarda um toque e segura antes de assumir que é arraste
+    cancelarPressPendente()
+    pressInfo.current = { id, x: e.clientX, y: e.clientY, pointerId: e.pointerId, el }
+    pressTimer.current = window.setTimeout(() => {
+      if (!pressInfo.current) return
+      pressInfo.current.el.setPointerCapture(pressInfo.current.pointerId)
+      setArrastando(pressInfo.current.id)
+      pressInfo.current = null
+    }, 350)
   }
 
   function aoPointerMove(e: React.PointerEvent) {
+    if (pressInfo.current) {
+      const dx = e.clientX - pressInfo.current.x
+      const dy = e.clientY - pressInfo.current.y
+      if (Math.hypot(dx, dy) > 10) cancelarPressPendente()
+      return
+    }
+
     if (!arrastando) return
 
     const alvo = document.elementFromPoint(e.clientX, e.clientY)
@@ -77,6 +120,7 @@ export default function ListaFila({
   }
 
   function aoPointerUp() {
+    cancelarPressPendente()
     if (!arrastando) return
     const id = arrastando
     setArrastando(null)
@@ -120,7 +164,19 @@ export default function ListaFila({
           <div
             key={item.id}
             data-item-id={item.id}
-            className={`bg-white border rounded-sm flex items-stretch overflow-hidden transition-colors ${
+            onPointerDown={(e) => aoPointerDown(e, item.id)}
+            onPointerMove={aoPointerMove}
+            onPointerUp={aoPointerUp}
+            onPointerCancel={aoPointerUp}
+            style={
+              podeReordenar
+                ? {
+                    touchAction: arrastando === item.id ? 'none' : 'pan-y',
+                    cursor: arrastando === item.id ? 'grabbing' : 'grab',
+                  }
+                : undefined
+            }
+            className={`bg-white border rounded-sm flex items-stretch overflow-hidden transition-colors select-none ${
               sobre === item.id && arrastando && arrastando !== item.id
                 ? 'border-[#B00063] border-2'
                 : item.reimpressao
@@ -128,18 +184,7 @@ export default function ListaFila({
                 : 'border-[#DDDCD5]'
             } ${arrastando === item.id ? 'opacity-50' : ''}`}
           >
-            <div
-              onPointerDown={(e) => aoPointerDown(e, item.id)}
-              onPointerMove={aoPointerMove}
-              onPointerUp={aoPointerUp}
-              onPointerCancel={aoPointerUp}
-              style={
-                podeReordenar
-                  ? { touchAction: 'none', cursor: 'grab' }
-                  : undefined
-              }
-              className="w-8 sm:w-11 shrink-0 bg-[#131A2E] text-white flex flex-col items-center justify-center font-mono font-semibold text-sm sm:text-base select-none"
-            >
+            <div className="w-8 sm:w-11 shrink-0 bg-[#131A2E] text-white flex flex-col items-center justify-center font-mono font-semibold text-sm sm:text-base select-none">
               <span>{idx + 1}</span>
               {podeReordenar && (
                 <span className="text-[7px] sm:text-[8px] tracking-widest text-white/40 mt-0.5">
@@ -182,7 +227,7 @@ export default function ListaFila({
 
               <Link
                 href={`/admin/pedidos/${item.id}`}
-                className="inline-block text-[9px] sm:text-[10px] tracking-widest text-[#B00063] mt-1.5 sm:mt-2"
+                className="inline-block cursor-pointer text-[9px] sm:text-[10px] tracking-widest text-[#B00063] mt-1.5 sm:mt-2"
               >
                 ABRIR PEDIDO →
               </Link>
@@ -194,7 +239,7 @@ export default function ListaFila({
                   onClick={() => mover(item.id, -1)}
                   disabled={idx === 0 || pendente}
                   aria-label="Subir"
-                  className="flex-1 text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 text-sm"
+                  className="flex-1 cursor-pointer text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 disabled:cursor-not-allowed text-sm"
                 >
                   ▲
                 </button>
@@ -202,7 +247,7 @@ export default function ListaFila({
                   onClick={() => mover(item.id, 1)}
                   disabled={idx === lista.length - 1 || pendente}
                   aria-label="Descer"
-                  className="flex-1 border-t border-[#DDDCD5] text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 text-sm"
+                  className="flex-1 cursor-pointer border-t border-[#DDDCD5] text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 disabled:cursor-not-allowed text-sm"
                 >
                   ▼
                 </button>
@@ -214,8 +259,8 @@ export default function ListaFila({
 
       {podeReordenar && (
         <p className="text-xs text-[#6E6E68] mt-4 leading-relaxed">
-          Toque e segure o número à esquerda para arrastar, ou use as setas —
-          mais prático no celular.
+          Toque e segure em qualquer parte do card para arrastar, ou use as
+          setas — mais prático no celular.
         </p>
       )}
     </div>

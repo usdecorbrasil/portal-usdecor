@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bello Tecido — Portal de Pedidos",
   description: "Portal de pedidos B2B da Bello Tecido",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Bello Tecido",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#131A2E",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

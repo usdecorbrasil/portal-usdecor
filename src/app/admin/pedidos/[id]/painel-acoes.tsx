@@ -6,6 +6,7 @@ import {
   reimprimir,
   cancelarPedido,
   ajustarItem,
+  adicionarItem,
   alterarPrecoPedido,
   alterarFormaPagamento,
 } from '@/app/actions/producao'
@@ -14,6 +15,7 @@ import {
   responderSolicitacao,
 } from '@/app/actions/confirmacao'
 import { confirmarRomaneio } from '@/app/actions/romaneio'
+import { buscarCatalogo } from '@/app/actions/pedido-admin'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -52,12 +54,23 @@ const ROTULOS_PAGAMENTO: Record<string, string> = {
 
 type Item = {
   id: string
+  produtoId: string
   sku: string
   nome: string
   pedida: number
   faturada: number
   precoMetro: number
   metrosPorUnidade: number
+  imagemUrl: string | null
+}
+
+type Arte = {
+  id: string
+  sku: string
+  nome: string
+  precoMetro: number
+  metrosPorUnidade: number
+  catalogo: string
   imagemUrl: string | null
 }
 
@@ -79,6 +92,7 @@ export default function PainelAcoes({
   pedidoId,
   numero,
   cliente,
+  clienteId,
   statusAtual,
   usados,
   total,
@@ -86,6 +100,7 @@ export default function PainelAcoes({
   podeCancelarOuAjustar,
   formaPagamento,
   parcelasSolicitadas,
+  parcelasAtuais,
   maxParcelas,
   solicitacao,
   precoCliente,
@@ -94,6 +109,7 @@ export default function PainelAcoes({
   pedidoId: string
   numero: number
   cliente: string
+  clienteId: string
   statusAtual: string
   usados: string[]
   total: number
@@ -101,6 +117,7 @@ export default function PainelAcoes({
   podeCancelarOuAjustar: boolean
   formaPagamento: string
   parcelasSolicitadas: number | null
+  parcelasAtuais: number
   maxParcelas: number
   solicitacao: Solicitacao | null
   precoCliente: number
@@ -109,6 +126,7 @@ export default function PainelAcoes({
   const [tela, setTela] = useState<Tela>(null)
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
+  const [ajustesAbertos, setAjustesAbertos] = useState(false)
 
   const [qtdParcelas, setQtdParcelas] = useState(
     Math.min(parcelasSolicitadas ?? 3, maxParcelas)
@@ -119,6 +137,7 @@ export default function PainelAcoes({
   const idx = ORDEM.indexOf(statusAtual)
   const aguardando = statusAtual === 'aguardando'
   const emProducao = idx >= 2 && idx <= 5
+  const antesDoEstampando = idx < ORDEM.indexOf('estampando')
   const passouNF = usados.some((s) =>
     ['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(s)
   )
@@ -128,9 +147,9 @@ export default function PainelAcoes({
 
   const disponiveis = aguardando
     ? []
-    : MANUAIS.filter(
-        (m) => ORDEM.indexOf(m.chave) > idx && !usados.includes(m.chave)
-      )
+    : statusAtual === 'estampando'
+    ? MANUAIS.filter((m) => ['corte_costura', 'pronto'].includes(m.chave))
+    : MANUAIS.filter((m) => ORDEM.indexOf(m.chave) === idx + 1)
 
   function avancar(chave: string) {
     setErro('')
@@ -143,12 +162,20 @@ export default function PainelAcoes({
 
   function confirmarRomaneioEAvancar(
     metragem: number,
-    rolos: number,
-    saldo: string
+    alteracoes: { id: string; qtd: number }[],
+    motivoAjuste: string
   ) {
     setErro('')
     iniciar(async () => {
-      const r1 = await confirmarRomaneio(pedidoId, metragem, rolos, saldo)
+      for (const a of alteracoes) {
+        const rAjuste = await ajustarItem(a.id, a.qtd, motivoAjuste)
+        if (!rAjuste.ok) {
+          setErro(rAjuste.erro)
+          return
+        }
+      }
+
+      const r1 = await confirmarRomaneio(pedidoId, metragem)
       if (!r1.ok) {
         setErro(r1.erro)
         return
@@ -224,7 +251,9 @@ export default function PainelAcoes({
     return (
       <TelaFormaPagamento
         formaAtual={formaPagamento}
+        parcelasAtual={parcelasAtuais || parcelasSolicitadas}
         total={total}
+        antesDoEstampando={antesDoEstampando}
         maxParcelas={maxParcelas}
         pendente={pendente}
         erro={erro}
@@ -256,6 +285,7 @@ export default function PainelAcoes({
   if (tela === 'ajustar') {
     return (
       <TelaAjuste
+        clienteId={clienteId}
         itens={itens}
         pendente={pendente}
         erro={erro}
@@ -263,10 +293,17 @@ export default function PainelAcoes({
           setErro('')
           setTela(null)
         }}
-        onSalvar={(alteracoes, motivo) =>
+        onSalvar={(alteracoes, novos, motivo) =>
           iniciar(async () => {
             for (const a of alteracoes) {
               const r = await ajustarItem(a.id, a.qtd, motivo)
+              if (!r.ok) {
+                setErro(r.erro)
+                return
+              }
+            }
+            for (const n of novos) {
+              const r = await adicionarItem(pedidoId, n.produtoId, n.qtd, motivo)
               if (!r.ok) {
                 setErro(r.erro)
                 return
@@ -453,11 +490,14 @@ export default function PainelAcoes({
         </div>
       ) : (
         disponiveis.length > 0 && (
-          <>
-            <Titulo>LANÇAR PRÓXIMA ETAPA</Titulo>
-            <p className="text-xs text-[#6E6E68] mb-2.5 leading-relaxed">
-              Pule o que não se aplica. Um pedido sem costura vai direto de
-              Estampando para Pedido pronto.
+          <div className="bg-[#FFF3F8] border-2 border-[#E8A9C7] rounded-sm p-4">
+            <h2 className="font-semibold tracking-tight text-sm text-[#8A2856]">
+              Lançar próxima etapa
+            </h2>
+            <p className="text-xs text-[#6E6E68] mt-1 mb-3 leading-relaxed">
+              {statusAtual === 'estampando'
+                ? 'Pedido sem costura vai direto para Pedido pronto.'
+                : 'Etapas seguem em ordem, uma de cada vez.'}
             </p>
             <div className="grid sm:grid-cols-2 gap-2">
               {disponiveis.map((m) => (
@@ -472,7 +512,7 @@ export default function PainelAcoes({
                   </span>
                   <span className="block text-[9px] font-mono tracking-[0.09em] uppercase text-[#6E6E68] mt-1">
                     {m.chave === 'impressao'
-                      ? 'revisa valor'
+                      ? 'revisa quantidade'
                       : m.chave === 'estampando'
                       ? 'gera romaneio'
                       : m.email
@@ -482,69 +522,127 @@ export default function PainelAcoes({
                 </button>
               ))}
             </div>
-          </>
+          </div>
         )
       )}
 
-      {temAcoes && (
-        <>
-          <Titulo>AÇÕES</Titulo>
-          <div className="space-y-2">
-            {podeCancelarOuAjustar && !passouNF && (
-              <BotaoAcao
-                titulo="Alterar preço deste pedido"
-                legenda={`hoje R$ ${brl(precoAtual)}/m · padrão do cliente R$ ${brl(precoCliente)}/m`}
-                onClick={() => setTela('preco')}
-              />
-            )}
-            {podeCancelarOuAjustar && !passouNF && (
-              <BotaoAcao
-                titulo="Alterar forma de pagamento"
-                legenda={`hoje: ${ROTULOS_PAGAMENTO[formaPagamento] ?? formaPagamento}`}
-                onClick={() => setTela('forma')}
-              />
-            )}
-            {podeCancelarOuAjustar && !passouNF && (
-              <BotaoAcao
-                titulo="Ajustar quantidades"
-                legenda="reduz ou aumenta o que será faturado"
-                onClick={() => setTela('ajustar')}
-              />
-            )}
-            {emProducao && idx >= 2 && (
-              <BotaoAcao
-                titulo="Retornar para reimpressão"
-                legenda="volta o pedido para Impressão"
-                onClick={() => setTela('reimprimir')}
-              />
-            )}
-            {podeCancelarOuAjustar && !passouNF && (
-              <BotaoAcao
-                titulo="Cancelar pedido"
-                legenda="cancela no Bling e avisa o cliente"
-                perigo
-                onClick={() => setTela('cancelar')}
-              />
-            )}
+      {statusAtual === 'estampando' && (
+        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold tracking-tight text-sm">
+                Romaneio de calandra
+              </h2>
+              <p className="text-xs text-[#6E6E68] mt-1">
+                Gera novamente o PDF com os dados registrados na saída da
+                Impressão.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                window.open(`/api/romaneio/${pedidoId}`, '_blank')
+              }
+              className="shrink-0 bg-[#131A2E] text-white text-xs font-semibold tracking-wide rounded-sm px-3 py-2.5"
+            >
+              GERAR ROMANEIO
+            </button>
           </div>
-        </>
+        </div>
+      )}
+
+      {temAcoes && (
+        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
+          <button
+            type="button"
+            onClick={() => setAjustesAbertos((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 text-left"
+          >
+            <h2 className="font-semibold tracking-tight text-sm">
+              Ajustes no pedido
+            </h2>
+            <span
+              className={`text-[#6E6E68] text-xs transition-transform ${
+                ajustesAbertos ? 'rotate-180' : ''
+              }`}
+            >
+              ▾
+            </span>
+          </button>
+          {ajustesAbertos && (
+            <div className="space-y-2 mt-3">
+              {podeCancelarOuAjustar && !passouNF && (
+                <BotaoAcao
+                  titulo="Ajustar quantidades"
+                  legenda="reduz ou aumenta o que será faturado"
+                  onClick={() => setTela('ajustar')}
+                />
+              )}
+              {podeCancelarOuAjustar && !passouNF && (
+                <BotaoAcao
+                  titulo="Alterar preço deste pedido"
+                  legenda={`hoje R$ ${brl(precoAtual)}/m · padrão do cliente R$ ${brl(precoCliente)}/m`}
+                  onClick={() => setTela('preco')}
+                />
+              )}
+              {podeCancelarOuAjustar && !passouNF && (
+                <BotaoAcao
+                  titulo="Alterar forma de pagamento"
+                  legenda={`hoje: ${ROTULOS_PAGAMENTO[formaPagamento] ?? formaPagamento}`}
+                  onClick={() => setTela('forma')}
+                />
+              )}
+              {emProducao && idx >= 2 && (
+                <BotaoAcao
+                  titulo="Retornar para reimpressão"
+                  legenda="volta o pedido para Impressão"
+                  onClick={() => setTela('reimprimir')}
+                />
+              )}
+              {podeCancelarOuAjustar && !passouNF && (
+                <BotaoAcao
+                  titulo="Cancelar pedido"
+                  legenda="cancela no Bling e avisa o cliente"
+                  perigo
+                  onClick={() => setTela('cancelar')}
+                />
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {podeCancelarOuAjustar && passouNF && (
-        <>
-          <Titulo>AÇÕES</Titulo>
-          <div className="bg-[#EEEDE7] border-l-4 border-[#6E6E68] rounded-r-sm p-3 text-xs text-[#6E6E68] leading-relaxed">
-            Pedido travado — a nota fiscal já foi emitida. Alterações a partir
-            daqui exigem devolução ou carta de correção no Bling.
-          </div>
-        </>
+        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
+          <button
+            type="button"
+            onClick={() => setAjustesAbertos((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 text-left"
+          >
+            <h2 className="font-semibold tracking-tight text-sm">
+              Ajustes no pedido
+            </h2>
+            <span
+              className={`text-[#6E6E68] text-xs transition-transform ${
+                ajustesAbertos ? 'rotate-180' : ''
+              }`}
+            >
+              ▾
+            </span>
+          </button>
+          {ajustesAbertos && (
+            <div className="bg-[#EEEDE7] border-l-4 border-[#6E6E68] rounded-r-sm p-3 text-xs text-[#6E6E68] leading-relaxed mt-3">
+              Pedido travado — a nota fiscal já foi emitida. Alterações a
+              partir daqui exigem devolução ou carta de correção no Bling.
+            </div>
+          )}
+        </div>
       )}
 
       {statusPendente === 'impressao' && podeCancelarOuAjustar && (
         <ModalConfirmarValor
           numero={numero}
           itens={itens}
-          total={total}
           pendente={pendente}
           erro={erro}
           onCancelar={() => {
@@ -558,6 +656,7 @@ export default function PainelAcoes({
       {statusPendente === 'estampando' && (
         <ModalRomaneio
           numero={numero}
+          itens={itens}
           pendente={pendente}
           erro={erro}
           onCancelar={() => {
@@ -591,21 +690,31 @@ export default function PainelAcoes({
 
 function ModalRomaneio({
   numero,
+  itens,
   pendente,
   erro,
   onCancelar,
   onConfirmar,
 }: {
   numero: number
+  itens: Item[]
   pendente: boolean
   erro: string
   onCancelar: () => void
-  onConfirmar: (metragem: number, rolos: number, saldo: string) => void
+  onConfirmar: (
+    metragem: number,
+    alteracoes: { id: string; qtd: number }[],
+    motivoAjuste: string
+  ) => void
 }) {
   const [metragem, setMetragem] = useState('')
-  const [rolos, setRolos] = useState('')
-  const [saldo, setSaldo] = useState('')
+  const [qtds, setQtds] = useState<Record<string, number>>(
+    Object.fromEntries(itens.map((i) => [i.id, i.faturada]))
+  )
+  const [motivoAjuste, setMotivoAjuste] = useState('')
   const [aviso, setAviso] = useState('')
+
+  const alterouQtd = itens.some((i) => (qtds[i.id] ?? 0) !== i.faturada)
 
   useEffect(() => {
     function tecla(e: KeyboardEvent) {
@@ -622,17 +731,29 @@ function ModalRomaneio({
 
   function confirmar() {
     const metragemNum = Number(metragem.replace(',', '.'))
-    const rolosNum = parseInt(rolos, 10)
 
     if (isNaN(metragemNum) || metragemNum <= 0) {
       return setAviso('Informe a metragem total impressa.')
     }
-    if (isNaN(rolosNum) || rolosNum < 1) {
-      return setAviso('Informe a quantidade de rolos (mínimo 1).')
+
+    const alteracoes = itens
+      .filter((i) => (qtds[i.id] ?? 0) !== i.faturada)
+      .map((i) => ({ id: i.id, qtd: qtds[i.id] ?? 0 }))
+
+    if (alteracoes.length > 0) {
+      const zerado = itens.find((i) => (qtds[i.id] ?? 0) <= 0)
+      if (zerado) {
+        return setAviso(`${zerado.sku}: a quantidade deve ser maior que zero.`)
+      }
+      if (motivoAjuste.trim().length < 10) {
+        return setAviso(
+          'Descreva o motivo do ajuste de quantidade com pelo menos 10 caracteres.'
+        )
+      }
     }
 
     setAviso('')
-    onConfirmar(metragemNum, rolosNum, saldo.trim())
+    onConfirmar(metragemNum, alteracoes, motivoAjuste.trim())
   }
 
   return (
@@ -655,6 +776,113 @@ function ModalRomaneio({
 
           <div className="mt-4">
             <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
+              QUANTIDADES IMPRESSAS
+            </label>
+            <div className="space-y-1.5">
+              {itens.map((i) => {
+                const q = qtds[i.id] ?? 0
+                const mudou = q !== i.faturada
+
+                return (
+                  <div
+                    key={i.id}
+                    className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-2.5 py-1.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1 text-xs">
+                        <span className="font-mono text-[#6E6E68]">
+                          {i.sku}
+                        </span>
+                        <span className="block truncate">{i.nome}</span>
+                      </div>
+
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <div className="flex border border-[#131A2E] rounded-sm overflow-hidden bg-white">
+                          <button
+                            type="button"
+                            aria-label="Diminuir"
+                            onClick={() => {
+                              setAviso('')
+                              setQtds((a) => ({
+                                ...a,
+                                [i.id]: Math.max(0, (a[i.id] ?? 0) - 1),
+                              }))
+                            }}
+                            className="w-5 text-xs bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            value={q}
+                            onChange={(e) => {
+                              setAviso('')
+                              const limpo = e.target.value.replace(/^0+(?=\d)/, '')
+                              setQtds((a) => ({
+                                ...a,
+                                [i.id]:
+                                  limpo === ''
+                                    ? 0
+                                    : Math.max(0, parseInt(limpo, 10) || 0),
+                              }))
+                            }}
+                            className="w-9 py-1 text-center text-xs font-mono font-semibold outline-none"
+                          />
+                          <button
+                            type="button"
+                            aria-label="Aumentar"
+                            onClick={() => {
+                              setAviso('')
+                              setQtds((a) => ({
+                                ...a,
+                                [i.id]: (a[i.id] ?? 0) + 1,
+                              }))
+                            }}
+                            className="w-5 text-xs bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
+                          >
+                            +
+                          </button>
+                        </div>
+                        {mudou && (
+                          <span className="text-[9px] font-mono text-[#B00063] whitespace-nowrap">
+                            pedido: {i.faturada}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {alterouQtd && (
+            <div className="mt-3">
+              <label
+                htmlFor="motivo-ajuste-romaneio"
+                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+              >
+                MOTIVO DO AJUSTE DE QUANTIDADE
+                <span className="text-[#B00063] ml-1">*</span>
+              </label>
+              <textarea
+                id="motivo-ajuste-romaneio"
+                rows={2}
+                value={motivoAjuste}
+                onChange={(e) => {
+                  setMotivoAjuste(e.target.value)
+                  setAviso('')
+                }}
+                placeholder="Ex.: 2 unidades saíram com defeito na impressão"
+                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 text-sm outline-none focus:border-[#131A2E] resize-y"
+              />
+            </div>
+          )}
+
+          <div className="mt-4">
+            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
               METRAGEM TOTAL IMPRESSA<span className="text-[#B00063] ml-1">*</span>
             </label>
             <input
@@ -666,34 +894,6 @@ function ModalRomaneio({
               inputMode="decimal"
               placeholder="Ex.: 128,50"
               className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-            />
-          </div>
-
-          <div className="mt-3">
-            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
-              QUANTIDADE DE ROLOS<span className="text-[#B00063] ml-1">*</span>
-            </label>
-            <input
-              value={rolos}
-              onChange={(e) => {
-                setRolos(e.target.value.replace(/\D/g, ''))
-                setAviso('')
-              }}
-              inputMode="numeric"
-              placeholder="Ex.: 3"
-              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-            />
-          </div>
-
-          <div className="mt-3">
-            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
-              SALDO (OPCIONAL)
-            </label>
-            <input
-              value={saldo}
-              onChange={(e) => setSaldo(e.target.value)}
-              placeholder="Ex.: sobrou 4,2m no rolo 2"
-              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
             />
           </div>
 
@@ -737,7 +937,6 @@ function ModalRomaneio({
 function ModalConfirmarValor({
   numero,
   itens,
-  total,
   pendente,
   erro,
   onCancelar,
@@ -745,7 +944,6 @@ function ModalConfirmarValor({
 }: {
   numero: number
   itens: Item[]
-  total: number
   pendente: boolean
   erro: string
   onCancelar: () => void
@@ -764,11 +962,7 @@ function ModalConfirmarValor({
     }
   }, [onCancelar, pendente])
 
-  const somaConferencia = itens.reduce(
-    (a, i) => a + i.faturada * i.metrosPorUnidade * i.precoMetro,
-    0
-  )
-  const bateComTotal = Math.abs(somaConferencia - total) < 0.01
+  const quantidadeTotal = itens.reduce((a, i) => a + i.faturada, 0)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -780,13 +974,10 @@ function ModalConfirmarValor({
       <div className="relative bg-white rounded-sm w-full max-w-lg my-8 max-h-[90vh] overflow-y-auto">
         <div className="p-5">
           <h2 className="font-semibold tracking-tight text-lg">
-            Revise o valor antes de iniciar a impressão
+            Revise a quantidade antes de iniciar a impressão
           </h2>
           <p className="text-sm text-[#6E6E68] mt-1.5 leading-relaxed">
-            O cliente só vê esse valor quando o pedido chegar em &ldquo;Pedido
-            pronto&rdquo; — mas ele já é calculado agora, com base no preço
-            padrão (ou ajustado) deste pedido. Confira item por item antes de
-            avançar.
+            Confira item por item antes de avançar.
           </p>
 
           <div className="mt-4 space-y-1.5">
@@ -799,32 +990,18 @@ function ModalConfirmarValor({
                   {i.sku}
                 </span>
                 <span className="flex-1 min-w-0 truncate">{i.nome}</span>
-                <span className="font-mono text-[#6E6E68] shrink-0">
-                  {i.faturada}un × {i.metrosPorUnidade.toFixed(2)}m
-                </span>
                 <span className="font-mono font-semibold shrink-0">
-                  R$ {brl(i.faturada * i.metrosPorUnidade * i.precoMetro)}
+                  {i.faturada} un
                 </span>
               </div>
             ))}
           </div>
 
-          {!bateComTotal && (
-            <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
-              <strong className="block text-[10px] tracking-widest mb-1">
-                ATENÇÃO
-              </strong>
-              A soma dos itens (R$ {brl(somaConferencia)}) não bate com o
-              total registrado do pedido (R$ {brl(total)}). Verifique antes de
-              avançar.
-            </div>
-          )}
-
           <div className="flex justify-between items-baseline mt-4 pt-4 border-t-2 border-[#131A2E]">
             <span className="font-semibold tracking-tight text-sm">
-              TOTAL DO PEDIDO #{numero}
+              QUANTIDADE TOTAL DO PEDIDO #{numero}
             </span>
-            <strong className="font-mono text-xl">R$ {brl(total)}</strong>
+            <strong className="font-mono text-xl">{quantidadeTotal} un</strong>
           </div>
 
           {erro && <p className="text-sm text-[#B00063] mt-3">{erro}</p>}
@@ -842,7 +1019,7 @@ function ModalConfirmarValor({
               disabled={pendente}
               className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
             >
-              {pendente ? '...' : 'CONFIRMAR VALOR E AVANÇAR'}
+              {pendente ? '...' : 'CONFIRMAR QUANTIDADE E AVANÇAR'}
             </button>
           </div>
         </div>
@@ -932,7 +1109,9 @@ function ModalConfirmarStatus({
 
 function TelaFormaPagamento({
   formaAtual,
+  parcelasAtual,
   total,
+  antesDoEstampando,
   maxParcelas,
   pendente,
   erro,
@@ -940,7 +1119,9 @@ function TelaFormaPagamento({
   onSalvar,
 }: {
   formaAtual: string
+  parcelasAtual: number | null
   total: number
+  antesDoEstampando: boolean
   maxParcelas: number
   pendente: boolean
   erro: string
@@ -953,17 +1134,23 @@ function TelaFormaPagamento({
   ) => void
 }) {
   const [formaNova, setFormaNova] = useState(formaAtual)
-  const [parcelas, setParcelas] = useState(Math.min(3, maxParcelas))
+  const [parcelas, setParcelas] = useState(
+    formaAtual === 'boleto_parcelado'
+      ? Math.min(parcelasAtual ?? 3, maxParcelas)
+      : Math.min(3, maxParcelas)
+  )
   const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(30))
   const [motivo, setMotivo] = useState('')
   const [aviso, setAviso] = useState('')
 
   const ehParcelado = formaNova === 'boleto_parcelado'
-  const mudouAlgo = formaNova !== formaAtual
+  const mudouParcelas =
+    ehParcelado && formaAtual === 'boleto_parcelado' && parcelas !== parcelasAtual
+  const mudouAlgo = formaNova !== formaAtual || mudouParcelas
 
   function salvar() {
     if (!mudouAlgo) {
-      return setAviso('Escolha uma forma de pagamento diferente da atual.')
+      return setAviso('Escolha uma forma de pagamento ou quantidade de parcelas diferente da atual.')
     }
     if (ehParcelado && (parcelas < 2 || parcelas > maxParcelas)) {
       return setAviso(`Escolha entre 2 e ${maxParcelas} parcelas.`)
@@ -1001,6 +1188,9 @@ function TelaFormaPagamento({
         </label>
         <div className="font-mono text-[#6E6E68] py-1">
           {ROTULOS_PAGAMENTO[formaAtual] ?? formaAtual}
+          {formaAtual === 'boleto_parcelado' && parcelasAtual
+            ? ` (${parcelasAtual}x)`
+            : ''}
         </div>
       </div>
 
@@ -1058,7 +1248,9 @@ function TelaFormaPagamento({
             />
           </div>
           <p className="text-xs text-[#6E6E68] col-span-2">
-            {parcelas}x de R$ {brl(total / parcelas)}
+            {antesDoEstampando
+              ? `${parcelas}x`
+              : `${parcelas}x de R$ ${brl(total / parcelas)}`}
           </p>
         </div>
       )}
@@ -1283,17 +1475,23 @@ function TelaPreco({
 /* ---------------- ajuste de quantidades ---------------- */
 
 function TelaAjuste({
+  clienteId,
   itens,
   pendente,
   erro,
   onVoltar,
   onSalvar,
 }: {
+  clienteId: string
   itens: Item[]
   pendente: boolean
   erro: string
   onVoltar: () => void
-  onSalvar: (alteracoes: { id: string; qtd: number }[], motivo: string) => void
+  onSalvar: (
+    alteracoes: { id: string; qtd: number }[],
+    novos: { produtoId: string; qtd: number }[],
+    motivo: string
+  ) => void
 }) {
   const [qtds, setQtds] = useState<Record<string, number>>(
     Object.fromEntries(itens.map((i) => [i.id, i.faturada]))
@@ -1301,19 +1499,55 @@ function TelaAjuste({
   const [motivo, setMotivo] = useState('')
   const [aviso, setAviso] = useState('')
 
-  const novoTotal = itens.reduce(
-    (a, i) => a + (qtds[i.id] ?? 0) * i.metrosPorUnidade * i.precoMetro,
-    0
+  const [mostrarCatalogo, setMostrarCatalogo] = useState(false)
+  const [catalogoCarregado, setCatalogoCarregado] = useState(false)
+  const [carregandoCatalogo, setCarregandoCatalogo] = useState(false)
+  const [catalogo, setCatalogo] = useState<Arte[]>([])
+  const [buscaCatalogo, setBuscaCatalogo] = useState('')
+  const [novosQtds, setNovosQtds] = useState<Record<string, number>>({})
+
+  const catalogoDisponivel = catalogo.filter(
+    (a) => !itens.some((i) => i.produtoId === a.id)
   )
+  const catalogoFiltrado = buscaCatalogo.trim()
+    ? catalogoDisponivel.filter(
+        (a) =>
+          a.sku.toLowerCase().includes(buscaCatalogo.toLowerCase()) ||
+          a.nome.toLowerCase().includes(buscaCatalogo.toLowerCase())
+      )
+    : catalogoDisponivel
+  const novosEscolhidos = catalogoDisponivel.filter(
+    (a) => (novosQtds[a.id] ?? 0) > 0
+  )
+
+  async function abrirCatalogo() {
+    setMostrarCatalogo(true)
+    if (catalogoCarregado) return
+    setCarregandoCatalogo(true)
+    const lista = await buscarCatalogo(clienteId)
+    setCatalogo(lista)
+    setCatalogoCarregado(true)
+    setCarregandoCatalogo(false)
+  }
+
+  const novoTotal =
+    itens.reduce((a, i) => a + (qtds[i.id] ?? 0) * i.metrosPorUnidade * i.precoMetro, 0) +
+    novosEscolhidos.reduce(
+      (a, n) => a + (novosQtds[n.id] ?? 0) * n.metrosPorUnidade * n.precoMetro,
+      0
+    )
   const totalAtual = itens.reduce(
     (a, i) => a + i.faturada * i.metrosPorUnidade * i.precoMetro,
     0
   )
-  const alterou = itens.some((i) => (qtds[i.id] ?? 0) !== i.faturada)
+  const alterou =
+    itens.some((i) => (qtds[i.id] ?? 0) !== i.faturada) || novosEscolhidos.length > 0
   const subiu = novoTotal > totalAtual
 
   function salvar() {
-    if (!alterou) return setAviso('Nenhuma quantidade foi alterada.')
+    if (!alterou) {
+      return setAviso('Nenhuma quantidade foi alterada nem produto adicionado.')
+    }
 
     const zerado = itens.find((i) => (qtds[i.id] ?? 0) <= 0)
     if (zerado) {
@@ -1331,6 +1565,7 @@ function TelaAjuste({
       itens
         .filter((i) => (qtds[i.id] ?? 0) !== i.faturada)
         .map((i) => ({ id: i.id, qtd: qtds[i.id] ?? 0 })),
+      novosEscolhidos.map((n) => ({ produtoId: n.id, qtd: novosQtds[n.id] ?? 0 })),
       motivo.trim()
     )
   }
@@ -1344,7 +1579,8 @@ function TelaAjuste({
           O QUE ACONTECE AO SALVAR
         </strong>
         O pedido é atualizado no Bling e o valor é recalculado. Você pode
-        reduzir ou aumentar livremente até a nota fiscal ser emitida.
+        reduzir ou aumentar livremente até a nota fiscal ser emitida, e
+        também adicionar novos produtos do catálogo do cliente.
       </div>
 
       <div className="space-y-3 mt-4">
@@ -1454,6 +1690,131 @@ function TelaAjuste({
             </div>
           )
         })}
+      </div>
+
+      <div className="mt-4">
+        {!mostrarCatalogo ? (
+          <button
+            type="button"
+            onClick={abrirCatalogo}
+            className="w-full border border-dashed border-[#DDDCD5] rounded-sm py-2.5 text-sm font-semibold text-[#6E6E68] hover:border-[#131A2E] hover:text-[#131A2E]"
+          >
+            + ADICIONAR PRODUTO DO CATÁLOGO
+          </button>
+        ) : (
+          <div className="border border-[#DDDCD5] rounded-sm p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label className="block text-xs tracking-widest text-[#6E6E68]">
+                CATÁLOGO DO CLIENTE
+              </label>
+              <button
+                type="button"
+                onClick={() => setMostrarCatalogo(false)}
+                className="text-xs text-[#6E6E68] hover:text-[#131A2E]"
+              >
+                fechar
+              </button>
+            </div>
+
+            {carregandoCatalogo && (
+              <p className="text-sm text-[#6E6E68]">Carregando catálogo...</p>
+            )}
+
+            {!carregandoCatalogo && catalogoDisponivel.length === 0 && (
+              <p className="text-sm text-[#6E6E68]">
+                {catalogo.length === 0
+                  ? 'Este cliente não tem artes ativas no catálogo.'
+                  : 'Todos os produtos do catálogo já estão neste pedido.'}
+              </p>
+            )}
+
+            {!carregandoCatalogo && catalogoDisponivel.length > 0 && (
+              <>
+                <input
+                  value={buscaCatalogo}
+                  onChange={(e) => setBuscaCatalogo(e.target.value)}
+                  placeholder="Buscar por SKU ou nome"
+                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E] mb-2"
+                />
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {catalogoFiltrado.map((a) => {
+                    const q = novosQtds[a.id] ?? 0
+                    return (
+                      <div
+                        key={a.id}
+                        className={`border rounded-sm p-2.5 flex gap-2.5 items-center ${
+                          q > 0 ? 'border-[#131A2E] bg-[#FAFAF8]' : 'border-[#DDDCD5]'
+                        }`}
+                      >
+                        {a.imagemUrl ? (
+                          <img
+                            src={a.imagemUrl}
+                            alt={a.nome}
+                            className="w-10 h-10 object-cover rounded-sm shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-[#EEEDE7] rounded-sm shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[10px] font-mono text-[#131A2E]">
+                            {a.sku}
+                          </div>
+                          <div className="font-semibold tracking-tight text-xs truncate">
+                            {a.nome}
+                          </div>
+                        </div>
+                        <div className="flex border border-[#DDDCD5] rounded-sm overflow-hidden shrink-0">
+                          <button
+                            type="button"
+                            aria-label="Diminuir"
+                            onClick={() => {
+                              setAviso('')
+                              setNovosQtds((x) => ({
+                                ...x,
+                                [a.id]: Math.max(0, (x[a.id] ?? 0) - 1),
+                              }))
+                            }}
+                            className="w-7 h-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            value={q}
+                            onChange={(e) => {
+                              setAviso('')
+                              setNovosQtds((x) => ({
+                                ...x,
+                                [a.id]: Math.max(0, parseInt(e.target.value) || 0),
+                              }))
+                            }}
+                            className="w-12 text-center font-mono text-xs outline-none"
+                          />
+                          <button
+                            type="button"
+                            aria-label="Aumentar"
+                            onClick={() => {
+                              setAviso('')
+                              setNovosQtds((x) => ({
+                                ...x,
+                                [a.id]: (x[a.id] ?? 0) + 1,
+                              }))
+                            }}
+                            className="w-7 h-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-4">
@@ -1833,15 +2194,6 @@ function TelaCancelamento({
 }
 
 /* ---------------- auxiliares ---------------- */
-
-function Titulo({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-6 mb-3 flex items-center gap-2">
-      {children}
-      <span className="flex-1 h-px bg-[#DDDCD5]" />
-    </h2>
-  )
-}
 
 function BotaoAcao({
   titulo,

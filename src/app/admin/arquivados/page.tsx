@@ -5,6 +5,11 @@ import FiltroData from '../pedidos/filtro-data'
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+const ATIVOS = [
+  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
+  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+]
+
 export default async function ArquivadosPage({
   searchParams,
 }: {
@@ -17,8 +22,9 @@ export default async function ArquivadosPage({
     .from('pedidos')
     .select(`
       id, numero, total, created_at, cancelado_em, cancelado_motivo,
-      baixa_financeira_em,
+      metragem_impressa,
       clientes(razao_social),
+      pedido_itens(quantidade_faturada),
       pedido_status_historico(status, created_at)
     `)
     .order('created_at', { ascending: false })
@@ -31,14 +37,23 @@ export default async function ArquivadosPage({
           (a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )
+      const status = hist[0]?.status ?? 'recebido'
+      const liberadoMetragem = ATIVOS.indexOf(status) >= ATIVOS.indexOf('estampando')
+
       return {
         id: p.id,
         numero: p.numero,
         total: Number(p.total),
+        metragemImpressa: p.metragem_impressa ? Number(p.metragem_impressa) : null,
+        liberadoMetragem,
+        unidades: (p.pedido_itens ?? []).reduce(
+          (a: number, i: any) => a + Number(i.quantidade_faturada),
+          0
+        ),
         cliente:
           (p.clientes as unknown as { razao_social: string } | null)
             ?.razao_social ?? '—',
-        status: hist[0]?.status ?? 'recebido',
+        status,
         cancelado: !!p.cancelado_em,
         motivo: p.cancelado_motivo,
         criado: p.created_at,
@@ -94,22 +109,34 @@ export default async function ArquivadosPage({
             href={`/admin/pedidos/${p.id}`}
             className="block bg-white border border-[#DDDCD5] rounded-sm p-3 sm:p-4 hover:border-[#131A2E]"
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="font-semibold tracking-tight text-base sm:text-lg truncate">
-                {p.cliente}
-              </span>
-              <span className="font-mono font-semibold text-sm sm:text-base whitespace-nowrap shrink-0">
-                #{p.numero}
-              </span>
-            </div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-xs sm:text-sm text-[#6E6E68] whitespace-nowrap">
+                  #{p.numero}
+                </div>
+                <span className="font-semibold tracking-tight text-base sm:text-lg truncate block">
+                  {p.cliente}
+                </span>
+              </div>
 
-            <p
-              className={`text-[10px] sm:text-xs mt-0.5 sm:mt-1 font-mono ${
-                p.cancelado ? 'text-[#6E6E68] line-through' : 'text-[#6E6E68]'
-              }`}
-            >
-              R$ {brl(p.total)}
-            </p>
+              <div
+                className={`text-right shrink-0 text-xs sm:text-sm font-mono ${
+                  p.cancelado ? 'text-[#6E6E68] line-through' : 'text-[#6E6E68]'
+                }`}
+              >
+                {!p.liberadoMetragem && (
+                  <div className="whitespace-nowrap">{p.unidades} un</div>
+                )}
+                {p.liberadoMetragem && (
+                  <>
+                    <div className="whitespace-nowrap">{p.unidades} un</div>
+                    <div className="font-bold text-[#131A2E] whitespace-nowrap">
+                      R$ {brl(p.total)}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
 
             <div className="flex items-center justify-between gap-3 mt-1.5 sm:mt-2">
               <span
@@ -141,11 +168,6 @@ export default async function ArquivadosPage({
                 ? 'Nenhum pedido arquivado nesse período.'
                 : 'Nenhum pedido arquivado ainda.'}
             </p>
-            {!dataDe && !dataAte && (
-              <p className="text-xs text-[#6E6E68] mt-2">
-                Pedidos aparecem aqui quando são fechados ou cancelados.
-              </p>
-            )}
           </div>
         )}
       </div>

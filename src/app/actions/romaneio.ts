@@ -2,22 +2,19 @@
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import sharp from 'sharp'
 import { createClient } from '@/lib/supabase/server'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
 export async function confirmarRomaneio(
   pedidoId: string,
-  metragem: number,
-  rolos: number,
-  saldo?: string
+  metragem: number
 ): Promise<Resultado> {
   const parsed = z.object({
     pedidoId: z.string().uuid(),
     metragem: z.number().positive('Informe a metragem total impressa'),
-    rolos: z.number().int().min(1, 'Informe ao menos 1 rolo'),
-    saldo: z.string().trim().max(200).optional(),
-  }).safeParse({ pedidoId, metragem, rolos, saldo })
+  }).safeParse({ pedidoId, metragem })
 
   if (!parsed.success) {
     return { ok: false, erro: parsed.error.issues[0].message }
@@ -28,8 +25,8 @@ export async function confirmarRomaneio(
   const { error } = await supabase.rpc('confirmar_romaneio', {
     p_pedido_id: parsed.data.pedidoId,
     p_metragem: parsed.data.metragem,
-    p_rolos: parsed.data.rolos,
-    p_saldo: parsed.data.saldo || null,
+    p_rolos: null,
+    p_saldo: null,
   })
 
   if (error) return { ok: false, erro: error.message }
@@ -69,14 +66,25 @@ export async function buscarDadosRomaneio(pedidoId: string) {
     const caminhos = (produtos ?? []).map((x) => x.imagem_path).filter(Boolean) as string[]
 
     if (caminhos.length) {
-      const { data: assinadas } = await supabase.storage
-        .from('artes')
-        .createSignedUrls(caminhos, 3600)
-
+      // O PDF (@react-pdf/renderer) não suporta imagens .webp, então baixamos
+      // e convertemos para PNG embutido como data URI em vez de usar URL assinada.
       const porCaminho = new Map<string, string>()
-      assinadas?.forEach((a) => {
-        if (a.path && a.signedUrl) porCaminho.set(a.path, a.signedUrl)
-      })
+
+      await Promise.all(
+        caminhos.map(async (caminho) => {
+          const { data } = await supabase.storage.from('artes').download(caminho)
+          if (!data) return
+
+          try {
+            const bytes = Buffer.from(await data.arrayBuffer())
+            const png = await sharp(bytes).png().toBuffer()
+            porCaminho.set(caminho, `data:image/png;base64,${png.toString('base64')}`)
+          } catch {
+            // imagem corrompida/formato não suportado — segue sem ela
+          }
+        })
+      )
+
       produtos?.forEach((x) => {
         if (x.imagem_path) {
           const u = porCaminho.get(x.imagem_path)

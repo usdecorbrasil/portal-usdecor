@@ -4,6 +4,7 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import NovoPedido from './novo-pedido'
 import FiltroCliente from './filtro-cliente'
 import FiltroData from './filtro-data'
+import SelecaoRomaneio from './selecao-romaneio'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -27,31 +28,133 @@ const ATIVOS = [
 
 const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'corte_costura', 'pronto']
 
-const DIA = 86_400_000
+const DIA = 86400000
 
 function sinal(status: string, dias: number) {
   if (status === 'aguardando') {
-    return { cl: 'novo', tx: 'Aguardando sua confirmação', ord: -1 }
+    return { cl: 'novo', tx: 'Aguardando sua confirmação' }
   }
   if (!EM_PRODUCAO.includes(status)) {
-    return { cl: 'bling', tx: 'Aguardando o Bling', ord: 4 }
+    return { cl: 'bling', tx: 'Aguardando o Bling' }
   }
-  if (dias >= 7) return { cl: 'crit', tx: `Parado há ${dias} dias`, ord: 0 }
-  if (dias >= 4) return { cl: 'crit', tx: `Parado há ${dias} dias`, ord: 1 }
-  if (dias >= 2) return { cl: 'aten', tx: `Parado há ${dias} dias`, ord: 2 }
+  if (dias >= 4) return { cl: 'crit', tx: 'Parado há ' + dias + ' dias' }
+  if (dias >= 2) return { cl: 'aten', tx: 'Parado há ' + dias + ' dias' }
   return {
     cl: 'ok',
     tx: dias === 0 ? 'Movimentado hoje' : 'Movimentado ontem',
-    ord: 3,
   }
 }
 
-const CORES: Record<string, { borda: string; tarja: string }> = {
-  novo:  { borda: 'border-[#0090D8]', tarja: 'bg-[#0090D8] text-white' },
-  crit:  { borda: 'border-[#B00063]', tarja: 'bg-[#B00063] text-white' },
-  aten:  { borda: 'border-[#E8C36B]', tarja: 'bg-[#FBF0D9] text-[#C79600]' },
-  ok:    { borda: 'border-[#DDDCD5]', tarja: 'bg-[#EFF3F0] text-[#2E7D4F]' },
-  bling: { borda: 'border-[#DDDCD5]', tarja: 'bg-[#E6EDEE] text-[#0090D8]' },
+function nivelUrgencia(cl: string) {
+  if (cl === 'crit' || cl === 'novo') return 'forte'
+  if (cl === 'aten') return 'medio'
+  return 'leve'
+}
+
+type Tons = {
+  leve: string
+  medio: string
+  forte: string
+}
+
+type CorEstagio = {
+  fundo: string
+  borda: string
+  texto: string
+  tarja: Tons
+}
+
+const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
+  aguardando: {
+    fundo: 'bg-[#EEF3F7]',
+    borda: 'border-[#8FADC4]',
+    texto: 'text-[#4A6B85]',
+    tarja: {
+      leve: 'bg-[#E4EDF3] text-[#5D7A93]',
+      medio: 'bg-[#C7D9E6] text-[#3D5870]',
+      forte: 'bg-[#9FBBCF] text-[#24384A]',
+    },
+  },
+  recebido: {
+    fundo: 'bg-[#EEF5F4]',
+    borda: 'border-[#85B0AC]',
+    texto: 'text-[#457066]',
+    tarja: {
+      leve: 'bg-[#E2EEEC] text-[#4F7A72]',
+      medio: 'bg-[#BEDAD5] text-[#2F5850]',
+      forte: 'bg-[#8FBBB3] text-[#1D3B34]',
+    },
+  },
+  impressao: {
+    fundo: 'bg-[#F7F1E6]',
+    borda: 'border-[#C4A868]',
+    texto: 'text-[#8A6E33]',
+    tarja: {
+      leve: 'bg-[#F0E5CC] text-[#93773D]',
+      medio: 'bg-[#DFC896] text-[#6B5320]',
+      forte: 'bg-[#C4A868] text-[#4A3810]',
+    },
+  },
+  estampando: {
+    fundo: 'bg-[#F2EFF7]',
+    borda: 'border-[#A997C4]',
+    texto: 'text-[#6B5787]',
+    tarja: {
+      leve: 'bg-[#E8E2F0] text-[#766093]',
+      medio: 'bg-[#D0C2E3] text-[#55406F]',
+      forte: 'bg-[#A997C4] text-[#382953]',
+    },
+  },
+  corte_costura: {
+    fundo: 'bg-[#F7EFF3]',
+    borda: 'border-[#C495AC]',
+    texto: 'text-[#8A4F66]',
+    tarja: {
+      leve: 'bg-[#F0E1E8] text-[#93586F]',
+      medio: 'bg-[#E0BECE] text-[#6B324A]',
+      forte: 'bg-[#C495AC] text-[#4A1E30]',
+    },
+  },
+  pronto: {
+    fundo: 'bg-[#EEF4F0]',
+    borda: 'border-[#85AD92]',
+    texto: 'text-[#45664F]',
+    tarja: {
+      leve: 'bg-[#E1EDE4] text-[#4F7358]',
+      medio: 'bg-[#BDD9C6] text-[#2F4E37]',
+      forte: 'bg-[#8CB399] text-[#1D3323]',
+    },
+  },
+  nf_emitida: {
+    fundo: 'bg-[#EFF1F6]',
+    borda: 'border-[#92A0C0]',
+    texto: 'text-[#4E5D80]',
+    tarja: {
+      leve: 'bg-[#E4E7F0] text-[#586A8E]',
+      medio: 'bg-[#C4CBE1] text-[#3A4763]',
+      forte: 'bg-[#92A0C0] text-[#262F45]',
+    },
+  },
+  expedido: {
+    fundo: 'bg-[#F7F0E7]',
+    borda: 'border-[#C4A17A]',
+    texto: 'text-[#8A6541]',
+    tarja: {
+      leve: 'bg-[#F0E3D1] text-[#93714A]',
+      medio: 'bg-[#E0C6A3] text-[#6B4D2C]',
+      forte: 'bg-[#C4A17A] text-[#4A3419]',
+    },
+  },
+  entregue: {
+    fundo: 'bg-[#EEF4EF]',
+    borda: 'border-[#7FAA8B]',
+    texto: 'text-[#416150]',
+    tarja: {
+      leve: 'bg-[#E1EEE3] text-[#4A6F57]',
+      medio: 'bg-[#B9D8C2] text-[#2C4C38]',
+      forte: 'bg-[#85B594] text-[#1B3325]',
+    },
+  },
 }
 
 export default async function PedidosAdminPage({
@@ -114,7 +217,6 @@ export default async function PedidosAdminPage({
         ),
         cliente: p.clientes?.razao_social ?? '—',
         status,
-        desde: ultimo?.created_at ?? p.created_at,
         dias: ultimo
           ? Math.floor((agora - new Date(ultimo.created_at).getTime()) / DIA)
           : 0,
@@ -150,15 +252,19 @@ export default async function PedidosAdminPage({
     if (dataDe) params.set('de', dataDe)
     if (dataAte) params.set('ate', dataAte)
     const qs = params.toString()
-    return `/admin/pedidos${qs ? `?${qs}` : ''}`
+    return '/admin/pedidos' + (qs ? '?' + qs : '')
   }
 
-  const visiveis = (filtro ? lista.filter((p) => p.status === filtro) : lista)
-    .sort((a, b) => {
-      const sa = sinal(a.status, a.dias)
-      const sb = sinal(b.status, b.dias)
-      return sa.ord - sb.ord || b.dias - a.dias
-    })
+  const visiveis = filtro ? lista.filter((p) => p.status === filtro) : lista
+
+  const grupos = ATIVOS.filter((status) =>
+    visiveis.some((p) => p.status === status)
+  ).map((status) => ({
+    status,
+    itens: visiveis
+      .filter((p) => p.status === status)
+      .sort((a, b) => b.dias - a.dias),
+  }))
 
   const aguardando = lista.filter((p) => p.status === 'aguardando').length
   const solicitacoes = lista.filter((p) => p.temSolicitacao).length
@@ -265,68 +371,126 @@ export default async function PedidosAdminPage({
         </div>
       )}
 
-      <div className="space-y-2 sm:space-y-3">
-        {visiveis.map((p) => {
-          const s = sinal(p.status, p.dias)
-          const c = CORES[s.cl]
+      <div className="space-y-8">
+        {grupos.map((grupo) => {
+          const ce = CORES_ESTAGIO[grupo.status]
 
           return (
-            <Link
-              key={p.id}
-              href={`/admin/pedidos/${p.id}`}
-              className={`block bg-white border rounded-sm overflow-hidden ${c.borda}`}
-            >
+            <section key={grupo.status} className="relative">
               <div
-                className={`text-[9px] sm:text-[10px] tracking-[0.13em] font-mono px-3 py-1 sm:px-4 sm:py-1.5 flex justify-between gap-2 ${c.tarja}`}
+                className={
+                  ce.fundo +
+                  ' inline-flex items-center gap-2 border-2 border-b-0 ' +
+                  ce.borda +
+                  ' rounded-t-lg px-5 py-2 relative z-10 -mb-0.5'
+                }
               >
-                <span>{s.tx.toUpperCase()}</span>
-                {p.temSolicitacao && (
-                  <span className="normal-case tracking-normal">
-                    pediu cancelamento
-                  </span>
+                <h2 className={ce.texto + ' font-bold tracking-tight text-base sm:text-lg'}>
+                  {ROTULOS[grupo.status]}
+                </h2>
+                <span className={ce.texto + ' font-mono font-semibold opacity-70 text-sm'}>
+                  {grupo.itens.length}
+                </span>
+              </div>
+
+              <div
+                className={
+                  'border-2 ' +
+                  ce.borda +
+                  ' rounded-b-sm rounded-tr-sm p-2.5 sm:p-3 space-y-2 sm:space-y-3 bg-white'
+                }
+              >
+                {grupo.status === 'estampando' ? (
+                  <SelecaoRomaneio
+                    itens={grupo.itens.map((p) => ({
+                      id: p.id,
+                      numero: p.numero,
+                      cliente: p.cliente,
+                      unidades: p.unidades,
+                      total: p.total,
+                      metragemImpressa: p.metragemImpressa,
+                      temSolicitacao: p.temSolicitacao,
+                      entrada: p.entrada,
+                      dias: p.dias,
+                    }))}
+                    dono={dono}
+                    borda={ce.borda}
+                    tarja={ce.tarja}
+                  />
+                ) : (
+                  grupo.itens.map((p) => {
+                    const s = sinal(p.status, p.dias)
+                    const nivel = nivelUrgencia(s.cl)
+                    const tarjaClasse = ce.tarja[nivel as keyof Tons]
+
+                    return (
+                      <Link
+                        key={p.id}
+                        href={'/admin/pedidos/' + p.id}
+                        className={'block bg-white border rounded-sm overflow-hidden ' + ce.borda}
+                      >
+                        <div
+                          className={
+                            tarjaClasse +
+                            ' text-[9px] sm:text-[10px] tracking-[0.13em] font-mono px-3 py-1 sm:px-4 sm:py-1.5 flex justify-between gap-2'
+                          }
+                        >
+                          <span>{s.tx.toUpperCase()}</span>
+                          {p.temSolicitacao && (
+                            <span className="normal-case tracking-normal">
+                              pediu cancelamento
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-3 sm:p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs sm:text-sm font-mono text-[#6E6E68] whitespace-nowrap">
+                                #{p.numero}
+                              </div>
+                              <span className="font-semibold tracking-tight text-base sm:text-lg truncate block">
+                                {p.cliente}
+                              </span>
+                            </div>
+
+                            <div className="text-right shrink-0 text-xs sm:text-sm font-mono text-[#6E6E68]">
+                              {!p.liberadoMetragem && (
+                                <div className="whitespace-nowrap">{p.unidades} un</div>
+                              )}
+                              {p.liberadoMetragem && !dono && (
+                                <div className="whitespace-nowrap">
+                                  {brl(p.metragemImpressa ?? 0)} m
+                                </div>
+                              )}
+                              {p.liberadoMetragem && dono && (
+                                <>
+                                  <div className="whitespace-nowrap">{p.unidades} un</div>
+                                  <div className="font-bold text-[#131A2E] whitespace-nowrap">
+                                    R$ {brl(p.total)}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] text-[9px] sm:text-[10px] font-mono tracking-[0.11em] text-[#6E6E68]">
+                            <span>
+                              ENTROU{' '}
+                              {new Date(p.entrada).toLocaleDateString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                              })}
+                            </span>
+                            <span className="text-[#B00063] font-semibold">abrir →</span>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })
                 )}
               </div>
-
-              <div className="p-3 sm:p-4">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-semibold tracking-tight text-base sm:text-lg truncate">
-                    {p.cliente}
-                  </span>
-                  <span className="font-mono font-semibold text-sm sm:text-base whitespace-nowrap shrink-0">
-                    #{p.numero}
-                  </span>
-                </div>
-
-                <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 sm:mt-1 font-mono">
-                  {!p.liberadoMetragem && `${p.unidades} un`}
-                  {p.liberadoMetragem && !dono && `${brl(p.metragemImpressa ?? 0)} m`}
-                  {p.liberadoMetragem && dono && `R$ ${brl(p.total)}`}
-                </p>
-
-                <div className="mt-1.5 sm:mt-2">
-                  <span
-                    className={`text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-sm ${
-                      p.status === 'aguardando'
-                        ? 'bg-[#E6EDEE] text-[#0090D8]'
-                        : 'bg-[#FBF0D9] text-[#C79600]'
-                    }`}
-                  >
-                    {ROTULOS[p.status]}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] text-[9px] sm:text-[10px] font-mono tracking-[0.11em] text-[#6E6E68]">
-                  <span>
-                    ENTROU{' '}
-                    {new Date(p.entrada).toLocaleDateString('pt-BR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                    })}
-                  </span>
-                  <span className="text-[#B00063] font-semibold">abrir →</span>
-                </div>
-              </div>
-            </Link>
+            </section>
           )
         })}
 
@@ -358,11 +522,12 @@ function Chip({
   return (
     <Link
       href={href}
-      className={`shrink-0 text-xs font-semibold rounded-full px-3.5 py-2 border whitespace-nowrap ${
-        ativo
+      className={
+        (ativo
           ? 'bg-[#131A2E] text-white border-[#131A2E]'
-          : 'bg-white text-[#6E6E68] border-[#DDDCD5]'
-      }`}
+          : 'bg-white text-[#6E6E68] border-[#DDDCD5]') +
+        ' shrink-0 text-xs font-semibold rounded-full px-3.5 py-2 border whitespace-nowrap'
+      }
     >
       {rotulo}
       <span className="ml-1.5 font-mono text-[10px] opacity-65">{n}</span>
