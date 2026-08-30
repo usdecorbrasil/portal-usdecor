@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { reordenarFila } from '@/app/actions/fila'
 
@@ -51,6 +51,21 @@ export default function ListaFila({
     pressInfo.current = null
   }
 
+  // Enquanto um card está sendo arrastado, trava o scroll da página inteira.
+  // touch-action sozinho não é confiável em todo navegador pra impedir o
+  // scroll nativo assim que o arraste começa em pleno gesto de toque.
+  useEffect(() => {
+    if (!arrastando) return
+    const overflowAnterior = document.body.style.overflow
+    const touchActionAnterior = document.body.style.touchAction
+    document.body.style.overflow = 'hidden'
+    document.body.style.touchAction = 'none'
+    return () => {
+      document.body.style.overflow = overflowAnterior
+      document.body.style.touchAction = touchActionAnterior
+    }
+  }, [arrastando])
+
   function commitReorder(novaLista: ItemFila[], movidoId: string) {
     const pos = novaLista.findIndex((i) => i.id === movidoId)
     const anterior = pos > 0 ? novaLista[pos - 1].id : null
@@ -98,6 +113,7 @@ export default function ListaFila({
     }
 
     if (!arrastando) return
+    e.preventDefault()
 
     const alvo = document.elementFromPoint(e.clientX, e.clientY)
     const cartao = alvo?.closest('[data-item-id]') as HTMLElement | null
