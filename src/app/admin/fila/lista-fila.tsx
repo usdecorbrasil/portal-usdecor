@@ -242,45 +242,44 @@ export default function ListaFila({
                 : 'border-[#DDDCD5]'
             } ${arrastando === item.id ? 'opacity-50' : ''}`}
           >
-            <div className="w-8 sm:w-11 shrink-0 bg-[#131A2E] text-white flex flex-col items-center justify-center font-mono font-semibold text-sm sm:text-base select-none">
-              <span>{idx + 1}</span>
-              {podeReordenar && (
-                <span className="text-[7px] sm:text-[8px] tracking-widest text-white/40 mt-0.5">
-                  ⣿
-                </span>
-              )}
+            <div className="w-8 sm:w-11 shrink-0 bg-[#131A2E] text-white flex items-center justify-center font-mono font-semibold text-sm sm:text-base select-none">
+              {idx + 1}
             </div>
 
             <div className="flex-1 min-w-0 p-2.5 sm:p-3.5">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="font-semibold tracking-tight text-sm sm:text-base truncate">
-                  {item.cliente}
-                </span>
-                <span className="font-mono font-semibold text-xs sm:text-sm whitespace-nowrap shrink-0">
-                  #{item.numero}
-                </span>
-              </div>
-
-              <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 font-mono">
-                {item.unidades} un
-              </p>
-
-              <div className="flex items-center gap-2 mt-1 sm:mt-1.5 flex-wrap">
-                {item.reimpressao && (
-                  <span className="text-[9px] sm:text-[10px] font-mono tracking-wider uppercase bg-[#FBF0D9] text-[#C79600] px-1.5 py-0.5 rounded-sm">
-                    reimpressão
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="font-semibold tracking-tight text-sm sm:text-base truncate block">
+                    {item.cliente}
                   </span>
-                )}
-                <span className="text-[9px] sm:text-[10px] text-[#6E6E68]">
-                  {item.artes} {item.artes === 1 ? 'arte' : 'artes'}
-                </span>
-                <span className="text-[9px] sm:text-[10px] text-[#6E6E68]">
-                  desde{' '}
-                  {new Date(item.desde).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                  })}
-                </span>
+
+                  <div className="flex items-center gap-2 mt-1 sm:mt-1.5 flex-wrap">
+                    {item.reimpressao && (
+                      <span className="text-[10px] sm:text-xs font-mono tracking-wider uppercase bg-[#FBF0D9] text-[#C79600] px-1.5 py-0.5 rounded-sm">
+                        reimpressão
+                      </span>
+                    )}
+                    <span className="text-[11px] sm:text-sm text-[#6E6E68]">
+                      {item.artes} {item.artes === 1 ? 'arte' : 'artes'}
+                    </span>
+                    <span className="text-[11px] sm:text-sm text-[#6E6E68]">
+                      desde{' '}
+                      {new Date(item.desde).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <div className="font-mono font-semibold text-xs sm:text-sm whitespace-nowrap">
+                    #{item.numero}
+                  </div>
+                  <div className="font-mono font-semibold text-xs sm:text-sm text-[#6E6E68] whitespace-nowrap">
+                    {item.unidades} un
+                  </div>
+                </div>
               </div>
 
               <Link
