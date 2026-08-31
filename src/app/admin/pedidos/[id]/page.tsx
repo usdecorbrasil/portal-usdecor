@@ -2,7 +2,10 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
-import { buscarMaxParcelas } from '@/app/actions/configuracoes'
+import {
+  buscarMaxParcelas,
+  buscarValorMinimoBoleto,
+} from '@/app/actions/configuracoes'
 import PainelAcoes from './painel-acoes'
 
 const brl = (v: number) =>
@@ -66,17 +69,17 @@ export default async function PedidoAdminPage({
   const supabase = await createClient()
 
   const camposItens = dono
-    ? `id, produto_id, sku, nome, preco_unitario, metros_por_unidade,
-       quantidade_pedida, quantidade_faturada, metros_total, subtotal`
-    : `id, produto_id, sku, nome, metros_por_unidade,
-       quantidade_pedida, quantidade_faturada, metros_total`
+    ? `id, produto_id, sku, nome, preco_unitario,
+       quantidade_pedida, quantidade_faturada`
+    : `id, produto_id, sku, nome,
+       quantidade_pedida, quantidade_faturada`
 
   const camposFinanceiros = dono ? `total,` : ''
 
   const { data: pedido } = await supabase
     .from('pedidos')
     .select(`
-      id, numero, notas, created_at,
+      id, numero, notas, created_at, metragem_impressa,
       cancelado_em, cancelado_motivo,
       forma_pagamento, parcelas_solicitadas, cliente_id,
       ${camposFinanceiros}
@@ -100,6 +103,7 @@ export default async function PedidoAdminPage({
   if (!pedido) notFound()
 
   const maxParcelas = await buscarMaxParcelas()
+  const valorMinimoBoleto = await buscarValorMinimoBoleto()
 
   const p = pedido as any
   const cliente = p.clientes as {
@@ -154,7 +158,9 @@ export default async function PedidoAdminPage({
   const cancelado = !!p.cancelado_em
   const aguardando = atual === 'aguardando'
   const reimpressoes = hist.filter((h: any) => h.reimpressao_motivo).length
-  const metrosTotal = itens.reduce((a, i) => a + Number(i.metros_total), 0)
+  // A metragem real vem do romaneio, não da soma dos itens
+  const metrosTotal =
+    p.metragem_impressa != null ? Number(p.metragem_impressa) : 0
   const unidadesTotal = itens.reduce(
     (a, i) => a + Number(i.quantidade_faturada),
     0
@@ -338,15 +344,20 @@ export default async function PedidoAdminPage({
       )}
 
       <div className="mt-6 border-t-2 border-[#131A2E] pt-4">
+        <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
+          <span className="font-semibold tracking-tight">Quantidade total</span>
+          <strong className="font-mono text-2xl">{unidadesTotal} un</strong>
+        </div>
+
         {antesDoEstampando ? (
-          <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
-            <span className="font-semibold tracking-tight">Quantidade total</span>
-            <strong className="font-mono text-2xl">{unidadesTotal} un</strong>
-          </div>
+          <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
+            O valor deste pedido é definido ao finalizar a estampa, com a
+            metragem realmente impressa.
+          </p>
         ) : (
           <>
-            <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
-              <span>Metragem total</span>
+            <div className="flex justify-between items-baseline text-sm text-[#6E6E68] mt-2">
+              <span>Metragem impressa</span>
               <span className="font-mono">{brl(metrosTotal)} m</span>
             </div>
             {dono && (
@@ -376,7 +387,11 @@ export default async function PedidoAdminPage({
           parcelasSolicitadas={p.parcelas_solicitadas}
           parcelasAtuais={parcelas.length}
           maxParcelas={maxParcelas}
+          valorMinimoBoleto={valorMinimoBoleto}
           precoCliente={dono ? Number(cliente.preco_metro) : 0}
+          metragemImpressa={
+            p.metragem_impressa != null ? Number(p.metragem_impressa) : null
+          }
           solicitacao={
             aberta
               ? {
@@ -394,7 +409,6 @@ export default async function PedidoAdminPage({
             pedida: i.quantidade_pedida,
             faturada: i.quantidade_faturada,
             precoMetro: dono ? Number(i.preco_unitario) : 0,
-            metrosPorUnidade: Number(i.metros_por_unidade),
             imagemUrl: urls.get(i.produto_id) ?? null,
           }))}
         />

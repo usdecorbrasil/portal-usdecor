@@ -34,10 +34,9 @@ export default async function DashboardPage() {
   const { data: pedidos } = await supabase
     .from('pedidos')
     .select(`
-      id, numero, total, created_at, cancelado_em,
+      id, numero, total, created_at, cancelado_em, metragem_impressa,
       clientes(id, razao_social),
       pedido_status_historico(status, created_at),
-      pedido_itens(metros_total),
       pedido_solicitacoes(id, status)
     `)
     .order('created_at', { ascending: false })
@@ -53,10 +52,8 @@ export default async function DashboardPage() {
       id: p.id,
       numero: p.numero,
       total: Number(p.total),
-      metros: (p.pedido_itens ?? []).reduce(
-        (a: number, i: any) => a + Number(i.metros_total),
-        0
-      ),
+      // Metragem real, informada no romaneio ao finalizar a estampa
+      metros: p.metragem_impressa != null ? Number(p.metragem_impressa) : 0,
       clienteId: p.clientes?.id ?? '',
       cliente: p.clientes?.razao_social ?? '—',
       status: hist[0]?.status ?? 'aguardando',

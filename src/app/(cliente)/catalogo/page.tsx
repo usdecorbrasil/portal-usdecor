@@ -14,7 +14,7 @@ export default async function CatalogoPage() {
 
   const { data: produtos } = await supabase
     .from('produtos')
-    .select('id, catalogo_id, sku, nome, preco, metros_por_unidade, imagem_path')
+    .select('id, catalogo_id, sku, nome, imagem_path')
     .order('ordem')
     .order('sku')
 
@@ -103,8 +103,6 @@ export default async function CatalogoPage() {
                       id: p.id,
                       sku: p.sku,
                       nome: p.nome,
-                      precoMetro: Number(p.preco),
-                      metrosPorUnidade: Number(p.metros_por_unidade),
                       catalogoId: p.catalogo_id,
                     }}
                     imagemUrl={

@@ -19,7 +19,7 @@ export default async function FilaPage() {
     .select(`
       id, numero, ordem_fila, fila_reimpressao,
       clientes(razao_social),
-      pedido_itens(metros_total),
+      pedido_itens(quantidade_faturada),
       pedido_status_historico(status, created_at)
     `)
     .not('ordem_fila', 'is', null)
@@ -39,8 +39,8 @@ export default async function FilaPage() {
       id: p.id,
       numero: p.numero,
       cliente: p.clientes?.razao_social ?? '—',
-      metros: (p.pedido_itens ?? []).reduce(
-        (a: number, i: any) => a + Number(i.metros_total),
+      unidades: (p.pedido_itens ?? []).reduce(
+        (a: number, i: any) => a + Number(i.quantidade_faturada),
         0
       ),
       artes: (p.pedido_itens ?? []).length,
@@ -49,7 +49,7 @@ export default async function FilaPage() {
     }
   })
 
-  const metrosTotal = itens.reduce((a, i) => a + i.metros, 0)
+  const unidadesTotal = itens.reduce((a, i) => a + i.unidades, 0)
   const reimpressoes = itens.filter((i) => i.reimpressao).length
 
   return (
@@ -59,7 +59,7 @@ export default async function FilaPage() {
       </h1>
       <p className="text-sm text-[#6E6E68] mt-1 mb-6">
         {itens.length} {itens.length === 1 ? 'pedido' : 'pedidos'} ·{' '}
-        <span className="font-mono">{brl(metrosTotal)} m</span> a estampar
+        <span className="font-mono">{unidadesTotal} un</span> a estampar
         {reimpressoes > 0 && (
           <>
             {' · '}

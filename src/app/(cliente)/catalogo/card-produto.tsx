@@ -9,8 +9,6 @@ type Produto = {
   id: string
   sku: string
   nome: string
-  precoMetro: number
-  metrosPorUnidade: number
   catalogoId: string
 }
 
@@ -42,8 +40,6 @@ export default function CardProduto({
         produtoId: produto.id,
         sku: produto.sku,
         nome: produto.nome,
-        precoMetro: produto.precoMetro,
-        metrosPorUnidade: produto.metrosPorUnidade,
         imagemUrl,
       },
       qtd

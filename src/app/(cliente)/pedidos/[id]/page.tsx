@@ -56,10 +56,10 @@ export default async function DetalhePedidoPage({
     .from('pedidos')
     .select(`
       id, numero, total, notas, created_at, cancelado_em, cancelado_motivo,
-      forma_pagamento, parcelas_solicitadas,
+      forma_pagamento, parcelas_solicitadas, metragem_impressa,
       pedido_itens(
-        id, produto_id, sku, nome, metros_por_unidade,
-        quantidade_pedida, quantidade_faturada, metros_total
+        id, produto_id, sku, nome,
+        quantidade_pedida, quantidade_faturada
       ),
       pedido_status_historico(status, created_at),
       pedido_ajustes(motivo, created_at),
@@ -131,7 +131,13 @@ export default async function DetalhePedidoPage({
     !aguardando &&
     !['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(atual)
 
-  const metrosTotal = itens.reduce((a, i) => a + Number(i.metros_total), 0)
+  const unidadesTotal = itens.reduce(
+    (a, i) => a + Number(i.quantidade_faturada),
+    0
+  )
+  // Metragem real, informada ao finalizar a estampa
+  const metrosTotal =
+    p.metragem_impressa != null ? Number(p.metragem_impressa) : null
   const temAjuste = itens.some(
     (i) => i.quantidade_faturada !== i.quantidade_pedida
   )
@@ -332,22 +338,21 @@ export default async function DetalhePedidoPage({
                 <div className="font-semibold tracking-tight text-sm mt-0.5">
                   {i.nome}
                 </div>
-                <div className="text-xs text-[#6E6E68] mt-0.5">
-                  {mudou && (
-                    <s className="opacity-60 mr-1">{i.quantidade_pedida}</s>
-                  )}
-                  <span className={mudou ? 'text-[#B00063] font-semibold' : ''}>
-                    {i.quantidade_faturada} un
-                  </span>{' '}
-                  ·{' '}
-                  {Number(i.metros_por_unidade).toFixed(2).replace('.', ',')} m/un
-                </div>
               </div>
 
               <div className="text-right whitespace-nowrap">
-                <div className="text-sm font-semibold text-[#131A2E] font-mono">
-                  {brl(Number(i.metros_total))} m
-                </div>
+                {mudou && (
+                  <s className="text-xs text-[#6E6E68] opacity-60 mr-1">
+                    {i.quantidade_pedida}
+                  </s>
+                )}
+                <span
+                  className={`text-sm font-semibold font-mono ${
+                    mudou ? 'text-[#B00063]' : 'text-[#131A2E]'
+                  }`}
+                >
+                  {i.quantidade_faturada} un
+                </span>
               </div>
             </div>
           )
@@ -368,9 +373,17 @@ export default async function DetalhePedidoPage({
 
       <div className="mt-6 border-t-2 border-[#131A2E] pt-4">
         <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
-          <span>Metragem total</span>
-          <span className="font-mono">{brl(metrosTotal)} m</span>
+          <span className="font-semibold tracking-tight">Quantidade total</span>
+          <strong className="font-mono text-2xl">{unidadesTotal} un</strong>
         </div>
+
+        {metrosTotal !== null && (
+          <div className="flex justify-between items-baseline text-sm text-[#6E6E68] mt-2">
+            <span>Metragem impressa</span>
+            <span className="font-mono">{brl(metrosTotal)} m</span>
+          </div>
+        )}
+
         {liberadoValor ? (
           <div className="flex justify-between items-baseline mt-2">
             <span className="font-semibold tracking-tight">TOTAL</span>
@@ -379,8 +392,9 @@ export default async function DetalhePedidoPage({
             </strong>
           </div>
         ) : (
-          <p className="text-xs text-[#6E6E68] mt-2">
-            O valor total será informado quando o pedido estiver pronto.
+          <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
+            O valor será informado após finalizar a estampa, com base na
+            metragem realmente impressa.
           </p>
         )}
       </div>

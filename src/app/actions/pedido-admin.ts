@@ -67,7 +67,7 @@ export async function buscarCatalogo(clienteId: string) {
   const { data } = await supabase
     .from('produtos')
     .select(`
-      id, sku, nome, preco, metros_por_unidade, imagem_path,
+      id, sku, nome, largura, altura, imagem_path,
       catalogos!inner(id, nome, ativo)
     `)
     .eq('cliente_id', clienteId)
@@ -98,8 +98,8 @@ export async function buscarCatalogo(clienteId: string) {
     id: p.id,
     sku: p.sku,
     nome: p.nome,
-    precoMetro: Number(p.preco),
-    metrosPorUnidade: Number(p.metros_por_unidade),
+    largura: p.largura != null ? Number(p.largura) : null,
+    altura: p.altura != null ? Number(p.altura) : null,
     catalogo: p.catalogos?.nome ?? '',
     imagemUrl: p.imagem_path ? urls.get(p.imagem_path) ?? null : null,
   }))

@@ -11,7 +11,7 @@ export type ItemFila = {
   id: string
   numero: number
   cliente: string
-  metros: number
+  unidades: number
   artes: number
   reimpressao: boolean
   desde: string
@@ -262,7 +262,7 @@ export default function ListaFila({
               </div>
 
               <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 font-mono">
-                {brl(item.metros)} m
+                {item.unidades} un
               </p>
 
               <div className="flex items-center gap-2 mt-1 sm:mt-1.5 flex-wrap">

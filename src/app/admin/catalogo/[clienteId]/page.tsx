@@ -44,7 +44,7 @@ export default async function CatalogoPage({
 
   const { data: produtos } = await supabase
     .from('produtos')
-    .select('id, sku, nome, metros_por_unidade, ativo, imagem_path, catalogo_id')
+    .select('id, sku, nome, largura, altura, ativo, imagem_path, catalogo_id')
     .eq('catalogo_id', catalogoId)
     .order('ativo', { ascending: false })
     .order('sku')
@@ -148,7 +148,8 @@ export default async function CatalogoPage({
               id: p.id,
               sku: p.sku,
               nome: p.nome,
-              metrosPorUnidade: Number(p.metros_por_unidade),
+              largura: p.largura != null ? Number(p.largura) : null,
+              altura: p.altura != null ? Number(p.altura) : null,
               ativo: p.ativo,
               catalogoId: p.catalogo_id,
             }}

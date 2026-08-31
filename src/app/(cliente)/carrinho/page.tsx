@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useCarrinho, subtotalItem } from '@/lib/carrinho/contexto'
+import { useCarrinho } from '@/lib/carrinho/contexto'
 import { criarPedido, verificarPodeParcelar } from '@/app/actions/pedidos'
 import { buscarMaxParcelas } from '@/app/actions/configuracoes'
 
@@ -21,8 +21,7 @@ type Categoria = (typeof CATEGORIAS)[number]['value']
 export default function CarrinhoPage() {
   const {
     itens,
-    totalValor,
-    totalMetros,
+    totalUnidades,
     definir,
     remover,
     limpar,
@@ -222,7 +221,7 @@ export default function CarrinhoPage() {
                 </div>
 
                 <div className="text-xs text-[#6E6E68] font-mono">
-                  {brl(i.quantidade * i.metrosPorUnidade)} m
+                  {i.quantidade} un
                 </div>
               </div>
             )}
@@ -320,12 +319,13 @@ export default function CarrinhoPage() {
       </div>
 
       <div className="mt-6 border-t-2 border-[#131A2E] pt-4 space-y-2">
-        <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
-          <span>Metragem total</span>
-          <span className="font-mono">{brl(totalMetros)} m</span>
+        <div className="flex justify-between items-baseline">
+          <span className="font-semibold tracking-tight">Quantidade total</span>
+          <strong className="font-mono text-2xl">{totalUnidades} un</strong>
         </div>
         <p className="text-xs text-[#6E6E68]">
-          O valor do pedido será informado assim que ele estiver pronto.
+          O valor do pedido será informado após finalizar a estampa, com base na
+          metragem realmente impressa.
         </p>
       </div>
 

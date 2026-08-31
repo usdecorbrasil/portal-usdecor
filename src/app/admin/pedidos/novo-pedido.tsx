@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { criarPedidoAdmin, buscarCatalogo } from '@/app/actions/pedido-admin'
+import { formatarMedidas } from '@/app/admin/catalogo/[clienteId]/card-arte'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -13,8 +14,8 @@ type Arte = {
   id: string
   sku: string
   nome: string
-  precoMetro: number
-  metrosPorUnidade: number
+  largura: number | null
+  altura: number | null
   catalogo: string
   imagemUrl: string | null
 }
@@ -35,14 +36,7 @@ export default function NovoPedido({ clientes }: { clientes: Cliente[] }) {
     clientes.find((c) => c.id === clienteId)?.razao_social ?? ''
 
   const escolhidas = artes.filter((a) => (qtds[a.id] ?? 0) > 0)
-  const total = escolhidas.reduce(
-    (s, a) => s + (qtds[a.id] ?? 0) * a.metrosPorUnidade * a.precoMetro,
-    0
-  )
-  const metros = escolhidas.reduce(
-    (s, a) => s + (qtds[a.id] ?? 0) * a.metrosPorUnidade,
-    0
-  )
+  const unidades = escolhidas.reduce((s, a) => s + (qtds[a.id] ?? 0), 0)
 
   const filtradas = busca.trim()
     ? artes.filter(
@@ -179,7 +173,7 @@ export default function NovoPedido({ clientes }: { clientes: Cliente[] }) {
           <div className="mt-3 space-y-2 max-h-96 overflow-y-auto pr-1">
             {filtradas.map((a) => {
               const q = qtds[a.id] ?? 0
-              const unitario = a.precoMetro * a.metrosPorUnidade
+              const medidas = formatarMedidas(a.largura, a.altura)
 
               return (
                 <div
@@ -205,10 +199,11 @@ export default function NovoPedido({ clientes }: { clientes: Cliente[] }) {
                     <div className="font-semibold tracking-tight text-sm truncate">
                       {a.nome}
                     </div>
-                    <div className="text-[10px] text-[#6E6E68] font-mono">
-                      R$ {brl(unitario)}/un ·{' '}
-                      {a.metrosPorUnidade.toFixed(2).replace('.', ',')} m/un
-                    </div>
+                    {medidas && (
+                      <div className="text-[10px] text-[#6E6E68] font-mono">
+                        {medidas}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex border border-[#DDDCD5] rounded-sm overflow-hidden shrink-0">
@@ -280,14 +275,19 @@ export default function NovoPedido({ clientes }: { clientes: Cliente[] }) {
             <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
               <span>
                 {escolhidas.length}{' '}
-                {escolhidas.length === 1 ? 'arte' : 'artes'} ·{' '}
-                <span className="font-mono">{brl(metros)} m</span>
+                {escolhidas.length === 1 ? 'arte' : 'artes'}
               </span>
             </div>
             <div className="flex justify-between items-baseline mt-1">
-              <span className="font-semibold tracking-tight">TOTAL</span>
-              <strong className="font-mono text-xl">R$ {brl(total)}</strong>
+              <span className="font-semibold tracking-tight">
+                QUANTIDADE TOTAL
+              </span>
+              <strong className="font-mono text-xl">{unidades} un</strong>
             </div>
+            <p className="text-xs text-[#6E6E68] mt-2">
+              O valor é definido após finalizar a estampa, pela metragem
+              realmente impressa.
+            </p>
           </div>
         </>
       )}

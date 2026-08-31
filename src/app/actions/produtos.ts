@@ -5,16 +5,21 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const numeroBr = (campo: string) =>
-  z.string().transform((v) => Number(String(v).replace(',', '.')))
-    .refine((v) => !isNaN(v) && v > 0, `${campo} inválido`)
+/** Medida opcional, só referência — não entra em nenhum cálculo de valor */
+const medidaBr = (campo: string) =>
+  z.string().trim()
+    .transform((v) => (v === '' ? null : Number(v.replace(',', '.'))))
+    .refine(
+      (v) => v === null || (!isNaN(v) && v > 0 && v <= 1000),
+      `${campo} inválida`
+    )
 
 const camposBase = {
   sku: z.string().trim().toUpperCase()
         .regex(/^[A-Z0-9._-]{1,60}$/, 'SKU aceita letras, números, ponto, hífen e sublinhado'),
   nome: z.string().trim().min(1).max(200),
-  metros_por_unidade: numeroBr('Metros por unidade')
-        .refine((v) => v <= 1000, 'Metros por unidade acima do limite'),
+  largura: medidaBr('Largura'),
+  altura: medidaBr('Altura'),
 }
 
 const schemaCriar = z.object({
@@ -48,7 +53,8 @@ function lerCampos(formData: FormData) {
   return {
     sku: formData.get('sku'),
     nome: formData.get('nome'),
-    metros_por_unidade: formData.get('metros_por_unidade'),
+    largura: formData.get('largura') ?? '',
+    altura: formData.get('altura') ?? '',
   }
 }
 

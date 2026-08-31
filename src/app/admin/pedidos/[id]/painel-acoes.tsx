@@ -60,7 +60,6 @@ type Item = {
   pedida: number
   faturada: number
   precoMetro: number
-  metrosPorUnidade: number
   imagemUrl: string | null
 }
 
@@ -68,8 +67,8 @@ type Arte = {
   id: string
   sku: string
   nome: string
-  precoMetro: number
-  metrosPorUnidade: number
+  largura: number | null
+  altura: number | null
   catalogo: string
   imagemUrl: string | null
 }
@@ -102,8 +101,10 @@ export default function PainelAcoes({
   parcelasSolicitadas,
   parcelasAtuais,
   maxParcelas,
+  valorMinimoBoleto,
   solicitacao,
   precoCliente,
+  metragemImpressa,
   itens,
 }: {
   pedidoId: string
@@ -119,8 +120,10 @@ export default function PainelAcoes({
   parcelasSolicitadas: number | null
   parcelasAtuais: number
   maxParcelas: number
+  valorMinimoBoleto: number
   solicitacao: Solicitacao | null
   precoCliente: number
+  metragemImpressa: number | null
   itens: Item[]
 }) {
   const [tela, setTela] = useState<Tela>(null)
@@ -225,7 +228,7 @@ export default function PainelAcoes({
       <TelaPreco
         precoAtual={precoAtual}
         precoCliente={precoCliente}
-        itens={itens}
+        metragemImpressa={metragemImpressa}
         pendente={pendente}
         erro={erro}
         onVoltar={() => {
@@ -675,6 +678,17 @@ export default function PainelAcoes({
             para={statusPendente}
             pendente={pendente}
             erro={erro}
+            avisoBoleto={
+              // Só o dono vê valores. O aviso aparece ao fechar a produção,
+              // quando a metragem (e portanto o valor) já não muda mais.
+              statusPendente === 'pronto' &&
+              podeCancelarOuAjustar &&
+              formaPagamento.startsWith('boleto') &&
+              total > 0 &&
+              total < valorMinimoBoleto
+                ? { total, minimo: valorMinimoBoleto }
+                : null
+            }
             onCancelar={() => {
               setErro('')
               setStatusPendente(null)
@@ -1035,6 +1049,7 @@ function ModalConfirmarStatus({
   para,
   pendente,
   erro,
+  avisoBoleto,
   onCancelar,
   onConfirmar,
 }: {
@@ -1042,6 +1057,7 @@ function ModalConfirmarStatus({
   para: string
   pendente: boolean
   erro: string
+  avisoBoleto: { total: number; minimo: number } | null
   onCancelar: () => void
   onConfirmar: () => void
 }) {
@@ -1081,6 +1097,18 @@ function ModalConfirmarStatus({
           </strong>
           .
         </p>
+
+        {avisoBoleto && (
+          <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
+            <strong className="block text-[10px] tracking-widest mb-1">
+              ATENÇÃO
+            </strong>
+            Com a metragem impressa, o pedido ficou em{' '}
+            <strong>R$ {brl(avisoBoleto.total)}</strong>, abaixo do mínimo de{' '}
+            <strong>R$ {brl(avisoBoleto.minimo)}</strong> para boleto. Combine a
+            cobrança com o cliente antes de seguir.
+          </div>
+        )}
 
         {erro && <p className="text-sm text-[#B00063] mt-3">{erro}</p>}
 
@@ -1306,7 +1334,7 @@ function TelaFormaPagamento({
 function TelaPreco({
   precoAtual,
   precoCliente,
-  itens,
+  metragemImpressa,
   pendente,
   erro,
   onVoltar,
@@ -1314,7 +1342,7 @@ function TelaPreco({
 }: {
   precoAtual: number
   precoCliente: number
-  itens: Item[]
+  metragemImpressa: number | null
   pendente: boolean
   erro: string
   onVoltar: () => void
@@ -1329,10 +1357,9 @@ function TelaPreco({
   const novo = Number(valor.replace(',', '.'))
   const valido = !isNaN(novo) && novo > 0
 
-  const metrosTotal = itens.reduce(
-    (a, i) => a + i.faturada * i.metrosPorUnidade,
-    0
-  )
+  // O valor do pedido só existe depois que a metragem real é informada
+  // no romaneio, ao finalizar a estampa.
+  const metrosTotal = metragemImpressa ?? 0
   const totalAtual = metrosTotal * precoAtual
   const totalNovo = valido ? metrosTotal * novo : 0
   const diferenca = totalNovo - totalAtual
@@ -1430,27 +1457,39 @@ function TelaPreco({
       )}
 
       <div className="mt-4 pt-4 border-t-2 border-[#131A2E]">
-        <div className="flex justify-between items-baseline text-xs text-[#6E6E68]">
-          <span>{brl(metrosTotal)} m no pedido</span>
-          <span className="font-mono">era R$ {brl(totalAtual)}</span>
-        </div>
-        <div className="flex justify-between items-baseline mt-1.5">
-          <span className="font-semibold tracking-tight text-sm">NOVO TOTAL</span>
-          <div className="text-right">
-            <div className="font-mono font-semibold text-xl">
-              R$ {brl(totalNovo)}
+        {metragemImpressa === null ? (
+          <p className="text-xs text-[#6E6E68] leading-relaxed">
+            O valor deste pedido ainda não existe — ele é calculado ao
+            finalizar a estampa, com a metragem realmente impressa. O preço
+            definido aqui será usado nesse cálculo.
+          </p>
+        ) : (
+          <>
+            <div className="flex justify-between items-baseline text-xs text-[#6E6E68]">
+              <span>{brl(metrosTotal)} m impressos</span>
+              <span className="font-mono">era R$ {brl(totalAtual)}</span>
             </div>
-            {valido && diferenca !== 0 && (
-              <div
-                className={`text-[10px] font-mono ${
-                  diferenca > 0 ? 'text-[#2E7D4F]' : 'text-[#B00063]'
-                }`}
-              >
-                {diferenca > 0 ? '+' : '−'}R$ {brl(Math.abs(diferenca))}
+            <div className="flex justify-between items-baseline mt-1.5">
+              <span className="font-semibold tracking-tight text-sm">
+                NOVO TOTAL
+              </span>
+              <div className="text-right">
+                <div className="font-mono font-semibold text-xl">
+                  R$ {brl(totalNovo)}
+                </div>
+                {valido && diferenca !== 0 && (
+                  <div
+                    className={`text-[10px] font-mono ${
+                      diferenca > 0 ? 'text-[#2E7D4F]' : 'text-[#B00063]'
+                    }`}
+                  >
+                    {diferenca > 0 ? '+' : '−'}R$ {brl(Math.abs(diferenca))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 mt-4">
@@ -1530,19 +1569,14 @@ function TelaAjuste({
     setCarregandoCatalogo(false)
   }
 
-  const novoTotal =
-    itens.reduce((a, i) => a + (qtds[i.id] ?? 0) * i.metrosPorUnidade * i.precoMetro, 0) +
-    novosEscolhidos.reduce(
-      (a, n) => a + (novosQtds[n.id] ?? 0) * n.metrosPorUnidade * n.precoMetro,
-      0
-    )
-  const totalAtual = itens.reduce(
-    (a, i) => a + i.faturada * i.metrosPorUnidade * i.precoMetro,
-    0
-  )
+  // Quantidade não define mais valor: o total sai da metragem impressa,
+  // informada ao finalizar a estampa.
+  const novasUnidades =
+    itens.reduce((a, i) => a + (qtds[i.id] ?? 0), 0) +
+    novosEscolhidos.reduce((a, n) => a + (novosQtds[n.id] ?? 0), 0)
+  const unidadesAtuais = itens.reduce((a, i) => a + i.faturada, 0)
   const alterou =
     itens.some((i) => (qtds[i.id] ?? 0) !== i.faturada) || novosEscolhidos.length > 0
-  const subiu = novoTotal > totalAtual
 
   function salvar() {
     if (!alterou) {
@@ -1587,7 +1621,6 @@ function TelaAjuste({
         {itens.map((i) => {
           const q = qtds[i.id] ?? 0
           const dif = q - i.faturada
-          const metros = q * i.metrosPorUnidade
 
           return (
             <div key={i.id} className="border border-[#DDDCD5] rounded-sm p-3">
@@ -1605,9 +1638,6 @@ function TelaAjuste({
                   <div className="text-xs font-mono text-[#131A2E]">{i.sku}</div>
                   <div className="font-semibold tracking-tight text-sm mt-0.5">
                     {i.nome}
-                  </div>
-                  <div className="text-[10px] font-mono text-[#6E6E68] mt-1">
-                    {i.metrosPorUnidade.toFixed(2).replace('.', ',')} m/un
                   </div>
                 </div>
               </div>
@@ -1676,8 +1706,7 @@ function TelaAjuste({
                 </div>
               </div>
 
-              <div className="flex justify-between items-baseline text-[10px] font-mono text-[#6E6E68] mt-2 pt-2 border-t border-[#DDDCD5]">
-                <span>{brl(metros)} m</span>
+              <div className="flex justify-end items-baseline text-[10px] font-mono text-[#6E6E68] mt-2 pt-2 border-t border-[#DDDCD5]">
                 {dif === 0 ? (
                   <span>sem alteração</span>
                 ) : (
@@ -1840,30 +1869,27 @@ function TelaAjuste({
         </p>
       </div>
 
-      {subiu && (
-        <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
-          O valor do pedido vai <strong>aumentar</strong>. Confirme com o
-          cliente antes de salvar.
-        </div>
-      )}
-
       {(aviso || erro) && (
         <p className="text-sm text-[#B00063] mt-3">{aviso || erro}</p>
       )}
 
       <div className="flex justify-between items-baseline mt-4 pt-4 border-t-2 border-[#131A2E]">
-        <span className="font-semibold tracking-tight text-sm">NOVO TOTAL</span>
+        <span className="font-semibold tracking-tight text-sm">
+          NOVA QUANTIDADE
+        </span>
         <div className="text-right">
           <div className="font-mono font-semibold text-xl">
-            R$ {brl(novoTotal)}
+            {novasUnidades} un
           </div>
-          {novoTotal !== totalAtual && (
+          {novasUnidades !== unidadesAtuais && (
             <div
               className={`text-[10px] font-mono ${
-                subiu ? 'text-[#2E7D4F]' : 'text-[#B00063]'
+                novasUnidades > unidadesAtuais
+                  ? 'text-[#2E7D4F]'
+                  : 'text-[#B00063]'
               }`}
             >
-              era R$ {brl(totalAtual)}
+              eram {unidadesAtuais} un
             </div>
           )}
         </div>

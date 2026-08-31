@@ -137,13 +137,13 @@ export default function FormularioProduto({
           </select>
         </div>
 
-        <Campo
-          nome="metros_por_unidade"
-          rotulo="METROS POR UNIDADE"
-          obrigatorio
-          placeholder="1,40"
-          dica="Comprimento de cada repetição da estampa"
-        />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Campo nome="largura" rotulo="LARGURA (M)" placeholder="1,40" />
+          <Campo nome="altura" rotulo="ALTURA (M)" placeholder="0,90" />
+        </div>
+        <p className="text-xs text-[#6E6E68] -mt-2">
+          Opcional, apenas referência da arte — não entra no cálculo do valor.
+        </p>
 
         <div>
           <label

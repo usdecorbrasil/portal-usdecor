@@ -28,8 +28,8 @@ export default async function PedidosPage() {
   const { data: pedidos } = await supabase
     .from('pedidos')
     .select(`
-      id, numero, total, created_at, cancelado_em,
-      pedido_itens(metros_total),
+      id, numero, total, created_at, cancelado_em, metragem_impressa,
+      pedido_itens(quantidade_faturada),
       pedido_status_historico(status, created_at)
     `)
     .order('created_at', { ascending: false })
@@ -56,10 +56,12 @@ export default async function PedidosPage() {
           const etapa = ETAPAS[atual] ?? ETAPAS.recebido
           const cancelado = !!p.cancelado_em
           const liberadoValor = ORDEM.indexOf(atual) >= ORDEM.indexOf('pronto')
-          const metros = (p.pedido_itens ?? []).reduce(
-            (a: number, i: any) => a + Number(i.metros_total),
+          const unidades = (p.pedido_itens ?? []).reduce(
+            (a: number, i: any) => a + Number(i.quantidade_faturada),
             0
           )
+          const metros =
+            p.metragem_impressa != null ? Number(p.metragem_impressa) : null
 
           return (
             <Link
@@ -85,8 +87,13 @@ export default async function PedidosPage() {
 
                 <div className="text-right">
                   <div className="font-mono font-semibold whitespace-nowrap">
-                    {brl(metros)} m
+                    {unidades} un
                   </div>
+                  {metros !== null && (
+                    <div className="text-xs text-[#6E6E68] font-mono whitespace-nowrap">
+                      {brl(metros)} m
+                    </div>
+                  )}
                   {liberadoValor && (
                     <div className="text-xs text-[#6E6E68] font-mono whitespace-nowrap">
                       R$ {brl(Number(p.total))}

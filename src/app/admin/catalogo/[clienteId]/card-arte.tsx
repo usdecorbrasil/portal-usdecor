@@ -9,9 +9,22 @@ type Produto = {
   id: string
   sku: string
   nome: string
-  metrosPorUnidade: number
+  largura: number | null
+  altura: number | null
   ativo: boolean
   catalogoId: string
+}
+
+/** Medidas são só referência — não entram em nenhum cálculo de valor */
+export function formatarMedidas(
+  largura: number | null,
+  altura: number | null
+) {
+  const fmt = (v: number) => v.toFixed(2).replace('.', ',')
+  if (largura != null && altura != null) return `${fmt(largura)} × ${fmt(altura)} m`
+  if (largura != null) return `${fmt(largura)} m de largura`
+  if (altura != null) return `${fmt(altura)} m de altura`
+  return null
 }
 
 export default function CardArte({
@@ -83,9 +96,11 @@ export default function CardArte({
             />
           )}
 
-          <div className="mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] text-[10px] sm:text-xs text-[#6E6E68] font-mono">
-            {produto.metrosPorUnidade.toFixed(2).replace('.', ',')} m por unidade
-          </div>
+          {formatarMedidas(produto.largura, produto.altura) && (
+            <div className="mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] text-[10px] sm:text-xs text-[#6E6E68] font-mono">
+              {formatarMedidas(produto.largura, produto.altura)}
+            </div>
+          )}
 
           {podeEditar ? (
             <div className="mt-2 sm:mt-3">

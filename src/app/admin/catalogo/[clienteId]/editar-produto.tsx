@@ -10,7 +10,8 @@ type Produto = {
   id: string
   sku: string
   nome: string
-  metrosPorUnidade: number
+  largura: number | null
+  altura: number | null
   catalogoId: string
 }
 
@@ -132,24 +133,51 @@ export default function EditarProduto({
           </div>
 
           <div>
-            <label
-              htmlFor="ed-metros"
-              className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-            >
-              METROS POR UNIDADE
-            </label>
-            <input
-              id="ed-metros"
-              name="metros_por_unidade"
-              required
-              inputMode="decimal"
-              defaultValue={produto.metrosPorUnidade
-                .toFixed(2)
-                .replace('.', ',')}
-              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="ed-largura"
+                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+                >
+                  LARGURA (M)
+                </label>
+                <input
+                  id="ed-largura"
+                  name="largura"
+                  inputMode="decimal"
+                  placeholder="1,40"
+                  defaultValue={
+                    produto.largura != null
+                      ? produto.largura.toFixed(2).replace('.', ',')
+                      : ''
+                  }
+                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="ed-altura"
+                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+                >
+                  ALTURA (M)
+                </label>
+                <input
+                  id="ed-altura"
+                  name="altura"
+                  inputMode="decimal"
+                  placeholder="0,90"
+                  defaultValue={
+                    produto.altura != null
+                      ? produto.altura.toFixed(2).replace('.', ',')
+                      : ''
+                  }
+                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
+                />
+              </div>
+            </div>
             <p className="text-xs text-[#6E6E68] mt-1">
-              Comprimento de cada repetição da estampa
+              Opcional, apenas referência da arte — não entra no cálculo do
+              valor.
             </p>
           </div>
 

@@ -8,12 +8,14 @@ import {
   type ReactNode,
 } from 'react'
 
+/**
+ * O carrinho não carrega valores: o preço do pedido só é definido quando a
+ * metragem real é informada no romaneio, ao finalizar a estampa.
+ */
 export type ItemCarrinho = {
   produtoId: string
   sku: string
   nome: string
-  precoMetro: number
-  metrosPorUnidade: number
   imagemUrl: string | null
   quantidade: number
 }
@@ -21,8 +23,6 @@ export type ItemCarrinho = {
 type Contexto = {
   itens: ItemCarrinho[]
   totalUnidades: number
-  totalMetros: number
-  totalValor: number
   adicionar: (item: Omit<ItemCarrinho, 'quantidade'>, qtd: number) => void
   definir: (produtoId: string, qtd: number) => void
   remover: (produtoId: string) => void
@@ -32,16 +32,6 @@ type Contexto = {
 }
 
 const CarrinhoContexto = createContext<Contexto | null>(null)
-
-/** Valor de um item: metros × preço por metro, arredondado uma vez só */
-export function subtotalItem(i: ItemCarrinho) {
-  return Math.round(i.quantidade * i.metrosPorUnidade * i.precoMetro * 100) / 100
-}
-
-/** Preço por unidade exibido ao cliente */
-export function precoUnidade(precoMetro: number, metrosPorUnidade: number) {
-  return Math.round(precoMetro * metrosPorUnidade * 100) / 100
-}
 
 export function CarrinhoProvider({ children }: { children: ReactNode }) {
   const [itens, setItens] = useState<ItemCarrinho[]>([])
@@ -108,16 +98,12 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
   }
 
   const totalUnidades = itens.reduce((a, i) => a + i.quantidade, 0)
-  const totalMetros = itens.reduce((a, i) => a + i.quantidade * i.metrosPorUnidade, 0)
-  const totalValor = itens.reduce((a, i) => a + subtotalItem(i), 0)
 
   return (
     <CarrinhoContexto.Provider
       value={{
         itens,
         totalUnidades,
-        totalMetros,
-        totalValor,
         adicionar,
         definir,
         remover,
