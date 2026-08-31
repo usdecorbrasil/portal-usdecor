@@ -31,17 +31,15 @@ export default function ListaFila({
   const [pendente, iniciar] = useTransition()
   const listaRef = useRef(lista)
   listaRef.current = lista
+  const arrastandoRef = useRef<string | null>(null)
+  arrastandoRef.current = arrastando
 
-  // Em toque/caneta, exige pressionar e segurar antes de iniciar o arraste,
-  // pra não atrapalhar o scroll normal da lista. No mouse, arrasta na hora.
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Em toque/caneta, exige tocar e segurar parado antes de assumir que é
+  // arraste — pra não atrapalhar o gesto normal de rolar a lista.
   const pressTimer = useRef<number | null>(null)
-  const pressInfo = useRef<{
-    id: string
-    x: number
-    y: number
-    pointerId: number
-    el: HTMLElement
-  } | null>(null)
+  const pressInfo = useRef<{ id: string; x: number; y: number } | null>(null)
 
   function cancelarPressPendente() {
     if (pressTimer.current !== null) {
@@ -50,21 +48,6 @@ export default function ListaFila({
     }
     pressInfo.current = null
   }
-
-  // Enquanto um card está sendo arrastado, trava o scroll da página inteira.
-  // touch-action sozinho não é confiável em todo navegador pra impedir o
-  // scroll nativo assim que o arraste começa em pleno gesto de toque.
-  useEffect(() => {
-    if (!arrastando) return
-    const overflowAnterior = document.body.style.overflow
-    const touchActionAnterior = document.body.style.touchAction
-    document.body.style.overflow = 'hidden'
-    document.body.style.touchAction = 'none'
-    return () => {
-      document.body.style.overflow = overflowAnterior
-      document.body.style.touchAction = touchActionAnterior
-    }
-  }, [arrastando])
 
   function commitReorder(novaLista: ItemFila[], movidoId: string) {
     const pos = novaLista.findIndex((i) => i.id === movidoId)
@@ -81,51 +64,15 @@ export default function ListaFila({
     })
   }
 
-  function aoPointerDown(e: React.PointerEvent, id: string) {
-    if (!podeReordenar) return
-    if ((e.target as HTMLElement).closest('a, button')) return
-
-    const el = e.currentTarget as HTMLElement
-
-    if (e.pointerType === 'mouse') {
-      el.setPointerCapture(e.pointerId)
-      setArrastando(id)
-      return
-    }
-
-    // toque/caneta: aguarda um toque e segura antes de assumir que é arraste
-    cancelarPressPendente()
-    pressInfo.current = { id, x: e.clientX, y: e.clientY, pointerId: e.pointerId, el }
-    pressTimer.current = window.setTimeout(() => {
-      if (!pressInfo.current) return
-      pressInfo.current.el.setPointerCapture(pressInfo.current.pointerId)
-      setArrastando(pressInfo.current.id)
-      pressInfo.current = null
-    }, 350)
-  }
-
-  function aoPointerMove(e: React.PointerEvent) {
-    if (pressInfo.current) {
-      const dx = e.clientX - pressInfo.current.x
-      const dy = e.clientY - pressInfo.current.y
-      if (Math.hypot(dx, dy) > 10) cancelarPressPendente()
-      return
-    }
-
-    if (!arrastando) return
-    e.preventDefault()
-
-    const alvo = document.elementFromPoint(e.clientX, e.clientY)
-    const cartao = alvo?.closest('[data-item-id]') as HTMLElement | null
-    const destinoId = cartao?.dataset.itemId
-    if (!destinoId) return
+  function moverPara(destinoId: string) {
+    const idArrastado = arrastandoRef.current
+    if (!idArrastado) return
 
     setSobre(destinoId)
-
-    if (destinoId === arrastando) return
+    if (destinoId === idArrastado) return
 
     const atual = listaRef.current
-    const origem = atual.findIndex((i) => i.id === arrastando)
+    const origem = atual.findIndex((i) => i.id === idArrastado)
     const destino = atual.findIndex((i) => i.id === destinoId)
     if (origem < 0 || destino < 0 || origem === destino) return
 
@@ -135,14 +82,106 @@ export default function ListaFila({
     setLista(nova)
   }
 
-  function aoPointerUp() {
-    cancelarPressPendente()
-    if (!arrastando) return
-    const id = arrastando
+  function finalizarArraste() {
+    const id = arrastandoRef.current
+    if (!id) return
     setArrastando(null)
     setSobre(null)
     commitReorder(listaRef.current, id)
   }
+
+  // Arraste por mouse: usa Pointer Events normalmente, sem conflito de scroll.
+  function aoPointerDown(e: React.PointerEvent, id: string) {
+    if (!podeReordenar || e.pointerType !== 'mouse') return
+    if ((e.target as HTMLElement).closest('a, button')) return
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    setArrastando(id)
+  }
+
+  function aoPointerMove(e: React.PointerEvent) {
+    if (!arrastando || e.pointerType !== 'mouse') return
+    const alvo = document.elementFromPoint(e.clientX, e.clientY)
+    const cartao = alvo?.closest('[data-item-id]') as HTMLElement | null
+    if (cartao?.dataset.itemId) moverPara(cartao.dataset.itemId)
+  }
+
+  function aoPointerUp(e: React.PointerEvent) {
+    if (e.pointerType !== 'mouse') return
+    finalizarArraste()
+  }
+
+  // Arraste por toque/caneta: eventos nativos com preventDefault não-passivo,
+  // já que Pointer Events não bloqueiam o scroll nativo do iOS de forma
+  // confiável no meio do gesto.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !podeReordenar) return
+
+    function aoTocar(e: TouchEvent) {
+      const alvo = e.target as HTMLElement
+      if (alvo.closest('a, button')) return
+      const cartao = alvo.closest('[data-item-id]') as HTMLElement | null
+      const id = cartao?.dataset.itemId
+      if (!id) return
+
+      const t = e.touches[0]
+      cancelarPressPendente()
+      pressInfo.current = { id, x: t.clientX, y: t.clientY }
+      pressTimer.current = window.setTimeout(() => {
+        if (!pressInfo.current) return
+        setArrastando(pressInfo.current.id)
+        pressInfo.current = null
+      }, 350)
+    }
+
+    function aoMoverToque(e: TouchEvent) {
+      const t = e.touches[0]
+      if (!t) return
+
+      if (pressInfo.current) {
+        const dx = t.clientX - pressInfo.current.x
+        const dy = t.clientY - pressInfo.current.y
+        if (Math.hypot(dx, dy) > 10) cancelarPressPendente()
+        return
+      }
+
+      if (!arrastandoRef.current) return
+      e.preventDefault()
+
+      const alvo = document.elementFromPoint(t.clientX, t.clientY)
+      const cartao = alvo?.closest('[data-item-id]') as HTMLElement | null
+      if (cartao?.dataset.itemId) moverPara(cartao.dataset.itemId)
+    }
+
+    function aoSoltarToque() {
+      cancelarPressPendente()
+      finalizarArraste()
+    }
+
+    container.addEventListener('touchstart', aoTocar, { passive: true })
+    container.addEventListener('touchmove', aoMoverToque, { passive: false })
+    container.addEventListener('touchend', aoSoltarToque)
+    container.addEventListener('touchcancel', aoSoltarToque)
+
+    return () => {
+      container.removeEventListener('touchstart', aoTocar)
+      container.removeEventListener('touchmove', aoMoverToque)
+      container.removeEventListener('touchend', aoSoltarToque)
+      container.removeEventListener('touchcancel', aoSoltarToque)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [podeReordenar])
+
+  // Trava o scroll da página inteira enquanto arrasta (reforço extra além
+  // do preventDefault — ajuda em navegadores onde touch-action é lento).
+  useEffect(() => {
+    if (!arrastando) return
+    const overflowAnterior = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = overflowAnterior
+    }
+  }, [arrastando])
 
   function mover(id: string, direcao: -1 | 1) {
     const pos = lista.findIndex((i) => i.id === id)
@@ -175,7 +214,10 @@ export default function ListaFila({
         </p>
       )}
 
-      <div className={`space-y-1.5 sm:space-y-2 ${pendente ? 'opacity-60' : ''}`}>
+      <div
+        ref={containerRef}
+        className={`space-y-1.5 sm:space-y-2 ${pendente ? 'opacity-60' : ''}`}
+      >
         {lista.map((item, idx) => (
           <div
             key={item.id}
@@ -187,7 +229,7 @@ export default function ListaFila({
             style={
               podeReordenar
                 ? {
-                    touchAction: arrastando === item.id ? 'none' : 'pan-y',
+                    touchAction: 'pan-y',
                     cursor: arrastando === item.id ? 'grabbing' : 'grab',
                   }
                 : undefined
