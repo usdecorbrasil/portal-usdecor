@@ -35,7 +35,7 @@ export default async function AdminLayout({
         { href: '/admin/dashboard', label: 'Dashboard' },
         { href: '/admin/pedidos', label: 'Pedidos' },
         { href: '/admin/fila', label: 'Fila de impressão' },
-        { href: '/admin/recebimento', label: 'Financeiro' },
+        { href: '/admin/financeiro/boletos', label: 'Financeiro' },
         { href: '/admin/clientes', label: 'Clientes' },
         { href: '/admin/catalogo', label: 'Catálogos' },
         { href: '/admin/configuracoes', label: 'Configurações' },

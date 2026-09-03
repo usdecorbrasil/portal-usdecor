@@ -1,18 +1,10 @@
-import { redirect } from 'next/navigation'
-import { lerPerfil } from '@/lib/auth/perfil'
 import { buscarAguardandoRecebimento } from '@/app/actions/clientes'
 import FiltroStatus from './filtro-status'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export default async function RecebimentoPage() {
-  const perfil = await lerPerfil()
-
-  if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) {
-    redirect('/')
-  }
-
+export default async function BoletosPage() {
   const parcelas = await buscarAguardandoRecebimento()
   const pendentes = parcelas.filter((p) => !p.pagoEm)
   const vencidas = parcelas.filter((p) => p.vencida)
@@ -21,10 +13,7 @@ export default async function RecebimentoPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Financeiro
-      </h1>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-6">
+      <p className="text-sm text-[#6E6E68] mb-6">
         {pendentes.length} cobrança{pendentes.length !== 1 ? 's' : ''} em
         aberto
         {pendentes.length > 0 && (
