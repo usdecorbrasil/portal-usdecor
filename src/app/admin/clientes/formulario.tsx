@@ -52,6 +52,7 @@ export default function FormularioCliente() {
             nome="preco_metro"
             rotulo="PREÇO POR METRO"
             obrigatorio
+            numerico
             placeholder="8,86"
             dica="Vale para todas as artes deste cliente"
           />
@@ -103,6 +104,7 @@ function Campo({
   obrigatorio = false,
   placeholder,
   dica,
+  numerico = false,
 }: {
   nome: string
   rotulo: string
@@ -110,6 +112,7 @@ function Campo({
   obrigatorio?: boolean
   placeholder?: string
   dica?: string
+  numerico?: boolean
 }) {
   return (
     <div>
@@ -126,6 +129,7 @@ function Campo({
         type={tipo}
         required={obrigatorio}
         placeholder={placeholder}
+        inputMode={numerico ? 'decimal' : undefined}
         className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
       />
       {dica && <p className="text-xs text-[#6E6E68] mt-1">{dica}</p>}

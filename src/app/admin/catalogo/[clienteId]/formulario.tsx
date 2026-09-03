@@ -138,8 +138,8 @@ export default function FormularioProduto({
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <Campo nome="largura" rotulo="LARGURA (M)" placeholder="1,40" />
-          <Campo nome="altura" rotulo="ALTURA (M)" placeholder="0,90" />
+          <Campo nome="largura" rotulo="LARGURA (M)" numerico placeholder="1,40" />
+          <Campo nome="altura" rotulo="ALTURA (M)" numerico placeholder="0,90" />
         </div>
         <p className="text-xs text-[#6E6E68] -mt-2">
           Opcional, apenas referência da arte — não entra no cálculo do valor.
@@ -227,12 +227,14 @@ function Campo({
   obrigatorio = false,
   placeholder,
   dica,
+  numerico = false,
 }: {
   nome: string
   rotulo: string
   obrigatorio?: boolean
   placeholder?: string
   dica?: string
+  numerico?: boolean
 }) {
   return (
     <div>
@@ -248,6 +250,7 @@ function Campo({
         name={nome}
         required={obrigatorio}
         placeholder={placeholder}
+        inputMode={numerico ? 'decimal' : undefined}
         className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
       />
       {dica && <p className="text-xs text-[#6E6E68] mt-1">{dica}</p>}
