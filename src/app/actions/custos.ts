@@ -24,12 +24,18 @@ async function exigirFinanceiro() {
 export async function buscarCustos(): Promise<Custos> {
   const supabase = await createClient()
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('custos_producao')
     .select('papel_por_metro, tinta_por_litro, consumo_ml_por_metro, atualizado_em')
     .order('atualizado_em', { ascending: false })
     .limit(1)
     .maybeSingle()
+
+  // Sem isso, uma falha de leitura viraria "custo zero" na tela — o que
+  // silenciosamente distorce a apuração de lucro.
+  if (error) {
+    throw new Error(`Não foi possível ler os custos de produção: ${error.message}`)
+  }
 
   return {
     papelPorMetro: data ? Number(data.papel_por_metro) : 0,

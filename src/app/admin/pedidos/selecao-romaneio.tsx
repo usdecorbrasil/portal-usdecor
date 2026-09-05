@@ -143,11 +143,11 @@ export default function SelecaoRomaneio({
 
               <div className="p-3 sm:p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs sm:text-sm font-mono text-[#6E6E68] whitespace-nowrap">
-                      #{p.numero}
-                    </div>
-                    <span className="font-semibold tracking-tight text-base sm:text-lg truncate block">
+                  <div className="min-w-0 flex-1 flex items-baseline gap-1.5">
+                    <span className="text-xs sm:text-sm font-mono text-[#6E6E68] whitespace-nowrap shrink-0">
+                      {p.numero} ·
+                    </span>
+                    <span className="font-semibold tracking-tight text-base sm:text-lg truncate">
                       {p.cliente}
                     </span>
                   </div>
