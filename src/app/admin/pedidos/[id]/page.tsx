@@ -76,7 +76,9 @@ export default async function PedidoAdminPage({
 
   const camposFinanceiros = dono ? `total,` : ''
 
-  const { data: pedido } = await supabase
+  // As configurações não dependem do pedido: buscar em paralelo
+  const [{ data: pedido }, maxParcelas, valorMinimoBoleto] = await Promise.all([
+    supabase
     .from('pedidos')
     .select(`
       id, numero, notas, created_at, metragem_impressa,
@@ -98,12 +100,12 @@ export default async function PedidoAdminPage({
       pedido_parcelas(numero, valor, vencimento, pago_em)
     `)
     .eq('id', id)
-    .single()
+    .single(),
+    buscarMaxParcelas(),
+    buscarValorMinimoBoleto(),
+  ])
 
   if (!pedido) notFound()
-
-  const maxParcelas = await buscarMaxParcelas()
-  const valorMinimoBoleto = await buscarValorMinimoBoleto()
 
   const p = pedido as any
   const cliente = p.clientes as {

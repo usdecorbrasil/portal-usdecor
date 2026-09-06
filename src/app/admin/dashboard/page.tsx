@@ -31,7 +31,9 @@ export default async function DashboardPage() {
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
   const inicioMesAnterior = new Date(agora.getFullYear(), agora.getMonth() - 1, 1)
 
-  const { data: pedidos } = await supabase
+  // A contagem de clientes não depende dos pedidos: busca junto
+  const [{ data: pedidos }, { count: clientesAtivos }] = await Promise.all([
+    supabase
     .from('pedidos')
     .select(`
       id, numero, total, created_at, cancelado_em, metragem_impressa,
@@ -39,7 +41,12 @@ export default async function DashboardPage() {
       pedido_status_historico(status, created_at),
       pedido_solicitacoes(id, status)
     `)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false }),
+    supabase
+      .from('clientes')
+      .select('*', { count: 'exact', head: true })
+      .eq('ativo', true),
+  ])
 
   const lista = ((pedidos ?? []) as any[]).map((p) => {
     const hist = (p.pedido_status_historico ?? [])
@@ -110,11 +117,6 @@ export default async function DashboardPage() {
     .slice(0, 5)
 
   const maiorValor = ranking[0]?.total ?? 1
-
-  const { count: clientesAtivos } = await supabase
-    .from('clientes')
-    .select('*', { count: 'exact', head: true })
-    .eq('ativo', true)
 
   return (
     <div>

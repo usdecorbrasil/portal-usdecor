@@ -14,20 +14,23 @@ export default async function ClientesPage() {
 
   const supabase = await createClient()
 
-  const { data: clientes } = await supabase
-    .from('clientes')
-    .select('id, razao_social, cnpj, email, preco_metro, limite_credito, ativo')
-    .eq('arquivado', false)
-    .order('ativo', { ascending: false })
-    .order('razao_social')
-
-  const { data: arquivados } = await supabase
-    .from('clientes')
-    .select('id, razao_social, cnpj, email, preco_metro, limite_credito, ativo')
-    .eq('arquivado', true)
-    .order('razao_social')
-
-  const resumoPagamentos = await buscarResumoPagamentos()
+  // Consultas independentes: em paralelo o tempo é o da mais lenta,
+  // não a soma das três
+  const [{ data: clientes }, { data: arquivados }, resumoPagamentos] =
+    await Promise.all([
+      supabase
+        .from('clientes')
+        .select('id, razao_social, cnpj, email, preco_metro, limite_credito, ativo')
+        .eq('arquivado', false)
+        .order('ativo', { ascending: false })
+        .order('razao_social'),
+      supabase
+        .from('clientes')
+        .select('id, razao_social, cnpj, email, preco_metro, limite_credito, ativo')
+        .eq('arquivado', true)
+        .order('razao_social'),
+      buscarResumoPagamentos(),
+    ])
 
   const semPreco = (clientes ?? []).filter((c) => Number(c.preco_metro) <= 0)
 

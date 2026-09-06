@@ -168,25 +168,27 @@ export default async function PedidosAdminPage({
 
   const dono = !!perfil?.veValores
 
-  const { data: pedidos } = await supabase
-    .from('pedidos')
-    .select(`
-      id, numero, total, cliente_id, created_at, cancelado_em, metragem_impressa,
-      clientes(razao_social),
-      pedido_status_historico(status, created_at),
-      pedido_itens(quantidade_faturada),
-      pedido_solicitacoes(id, status)
-    `)
-    .is('cancelado_em', null)
-    .order('created_at', { ascending: false })
-
-  const { data: clientes } = dono
-    ? await supabase
-        .from('clientes')
-        .select('id, razao_social')
-        .eq('ativo', true)
-        .order('razao_social')
-    : { data: null }
+  // Pedidos e lista de clientes não dependem um do outro
+  const [{ data: pedidos }, { data: clientes }] = await Promise.all([
+    supabase
+      .from('pedidos')
+      .select(`
+        id, numero, total, cliente_id, created_at, cancelado_em, metragem_impressa,
+        clientes(razao_social),
+        pedido_status_historico(status, created_at),
+        pedido_itens(quantidade_faturada),
+        pedido_solicitacoes(id, status)
+      `)
+      .is('cancelado_em', null)
+      .order('created_at', { ascending: false }),
+    dono
+      ? supabase
+          .from('clientes')
+          .select('id, razao_social')
+          .eq('ativo', true)
+          .order('razao_social')
+      : Promise.resolve({ data: null }),
+  ])
 
   const agora = Date.now()
 
