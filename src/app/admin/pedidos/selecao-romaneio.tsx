@@ -50,7 +50,7 @@ export default function SelecaoRomaneio({
 
   function gerarRomaneio() {
     if (selecionados.size === 0) return
-    window.open(`/api/romaneio?ids=${Array.from(selecionados).join(',')}`, '_blank')
+    window.open(`/admin/romaneio?ids=${Array.from(selecionados).join(',')}`, '_blank')
   }
 
   return (

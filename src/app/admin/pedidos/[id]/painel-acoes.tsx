@@ -191,7 +191,7 @@ export default function PainelAcoes({
       }
 
       setStatusPendente(null)
-      window.open(`/api/romaneio/${pedidoId}`, '_blank')
+      window.open(`/admin/romaneio?ids=${pedidoId}`, '_blank')
     })
   }
 
@@ -544,7 +544,7 @@ export default function PainelAcoes({
             <button
               type="button"
               onClick={() =>
-                window.open(`/api/romaneio/${pedidoId}`, '_blank')
+                window.open(`/admin/romaneio?ids=${pedidoId}`, '_blank')
               }
               className="shrink-0 bg-[#131A2E] text-white text-xs font-semibold tracking-wide rounded-sm px-3 py-2.5"
             >
