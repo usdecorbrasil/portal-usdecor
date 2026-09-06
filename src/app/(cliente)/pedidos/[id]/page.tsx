@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import BotaoVoltar from '@/components/botao-voltar'
 import { createClient } from '@/lib/supabase/server'
 import AcoesCliente from './acoes-cliente'
 
@@ -144,12 +145,7 @@ export default async function DetalhePedidoPage({
 
   return (
     <div>
-      <Link
-        href="/pedidos"
-        className="text-xs tracking-widest text-[#6E6E68] hover:text-[#131A2E]"
-      >
-        ← PEDIDOS
-      </Link>
+      <BotaoVoltar href="/pedidos" rotulo="PEDIDOS" />
 
       <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] mt-3">
         Pedido #{p.numero}

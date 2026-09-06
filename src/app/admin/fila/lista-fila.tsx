@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { reordenarFila } from '@/app/actions/fila'
 
 const brl = (v: number) =>
@@ -35,6 +35,18 @@ export default function ListaFila({
   arrastandoRef.current = arrastando
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+
+  // Tocar no card abre o pedido, mas só se o gesto não virou arraste
+  const houveArraste = useRef(false)
+
+  function abrirPedido(id: string) {
+    if (houveArraste.current) {
+      houveArraste.current = false
+      return
+    }
+    router.push(`/admin/pedidos/${id}`)
+  }
 
   // Em toque/caneta, exige tocar e segurar parado antes de assumir que é
   // arraste — pra não atrapalhar o gesto normal de rolar a lista.
@@ -80,6 +92,7 @@ export default function ListaFila({
     const [movido] = nova.splice(origem, 1)
     nova.splice(destino, 0, movido)
     setLista(nova)
+    houveArraste.current = true
   }
 
   function finalizarArraste() {
@@ -130,6 +143,8 @@ export default function ListaFila({
       pressTimer.current = window.setTimeout(() => {
         if (!pressInfo.current) return
         setArrastando(pressInfo.current.id)
+        // Segurou para arrastar: o toque não deve abrir o pedido ao soltar
+        houveArraste.current = true
         pressInfo.current = null
       }, 350)
     }
@@ -226,13 +241,18 @@ export default function ListaFila({
             onPointerMove={aoPointerMove}
             onPointerUp={aoPointerUp}
             onPointerCancel={aoPointerUp}
+            onClick={(e) => {
+              // As setas de reordenar ficam dentro do card
+              if ((e.target as HTMLElement).closest('button')) return
+              abrirPedido(item.id)
+            }}
             style={
               podeReordenar
                 ? {
                     touchAction: 'pan-y',
                     cursor: arrastando === item.id ? 'grabbing' : 'grab',
                   }
-                : undefined
+                : { cursor: 'pointer' }
             }
             className={`bg-white border rounded-sm flex items-stretch overflow-hidden transition-colors select-none ${
               sobre === item.id && arrastando && arrastando !== item.id
@@ -272,22 +292,18 @@ export default function ListaFila({
                   </div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <div className="font-mono font-semibold text-xs sm:text-sm whitespace-nowrap">
-                    #{item.numero}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-right">
+                    <div className="font-mono font-semibold text-xs sm:text-sm whitespace-nowrap">
+                      #{item.numero}
+                    </div>
+                    <div className="font-mono font-semibold text-xs sm:text-sm text-[#6E6E68] whitespace-nowrap">
+                      {item.unidades} un
+                    </div>
                   </div>
-                  <div className="font-mono font-semibold text-xs sm:text-sm text-[#6E6E68] whitespace-nowrap">
-                    {item.unidades} un
-                  </div>
+                  <span className="text-[#DDDCD5] text-lg leading-none">›</span>
                 </div>
               </div>
-
-              <Link
-                href={`/admin/pedidos/${item.id}`}
-                className="inline-block cursor-pointer text-[9px] sm:text-[10px] tracking-widest text-[#B00063] mt-1.5 sm:mt-2"
-              >
-                ABRIR PEDIDO →
-              </Link>
             </div>
 
             {podeReordenar && (

@@ -443,9 +443,9 @@ export default async function PedidosAdminPage({
                           )}
                         </div>
 
-                        <div className="p-3 sm:p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1 flex items-baseline gap-1.5">
+                        <div className="p-2.5 sm:p-3 flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-1.5">
                               <span className="text-xs sm:text-sm font-mono text-[#6E6E68] whitespace-nowrap shrink-0">
                                 {p.numero} ·
                               </span>
@@ -453,37 +453,37 @@ export default async function PedidosAdminPage({
                                 {p.cliente}
                               </span>
                             </div>
-
-                            <div className="text-right shrink-0 text-xs sm:text-sm font-mono text-[#6E6E68]">
-                              {!p.liberadoMetragem && (
-                                <div className="whitespace-nowrap">{p.unidades} un</div>
-                              )}
-                              {p.liberadoMetragem && !dono && (
-                                <div className="whitespace-nowrap">
-                                  {brl(p.metragemImpressa ?? 0)} m
-                                </div>
-                              )}
-                              {p.liberadoMetragem && dono && (
-                                <>
-                                  <div className="whitespace-nowrap">{p.unidades} un</div>
-                                  <div className="font-bold text-[#131A2E] whitespace-nowrap">
-                                    R$ {brl(p.total)}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-3 mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] text-[9px] sm:text-[10px] font-mono tracking-[0.11em] text-[#6E6E68]">
-                            <span>
+                            <div className="text-[9px] sm:text-[10px] font-mono tracking-[0.11em] text-[#6E6E68]">
                               ENTROU{' '}
                               {new Date(p.entrada).toLocaleDateString('pt-BR', {
                                 day: '2-digit',
                                 month: '2-digit',
                               })}
-                            </span>
-                            <span className="text-[#B00063] font-semibold">abrir →</span>
+                            </div>
                           </div>
+
+                          <div className="text-right shrink-0 text-xs sm:text-sm font-mono text-[#6E6E68]">
+                            {!p.liberadoMetragem && (
+                              <div className="whitespace-nowrap">{p.unidades} un</div>
+                            )}
+                            {p.liberadoMetragem && !dono && (
+                              <div className="whitespace-nowrap">
+                                {brl(p.metragemImpressa ?? 0)} m
+                              </div>
+                            )}
+                            {p.liberadoMetragem && dono && (
+                              <>
+                                <div className="whitespace-nowrap">{p.unidades} un</div>
+                                <div className="font-bold text-[#131A2E] whitespace-nowrap">
+                                  R$ {brl(p.total)}
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          <span className="text-[#DDDCD5] shrink-0 text-lg leading-none">
+                            ›
+                          </span>
                         </div>
                       </Link>
                     )

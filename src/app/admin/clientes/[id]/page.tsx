@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
-import Link from 'next/link'
+import BotaoVoltar from '@/components/botao-voltar'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { buscarResumoPagamentos } from '@/app/actions/clientes'
@@ -38,12 +38,7 @@ export default async function ClienteDetalhePage({
 
   return (
     <div>
-      <Link
-        href="/admin/clientes"
-        className="text-xs tracking-widest text-[#6E6E68] hover:text-[#131A2E]"
-      >
-        ← CLIENTES
-      </Link>
+      <BotaoVoltar href="/admin/clientes" rotulo="CLIENTES" />
 
       <DetalheCliente
         cliente={{

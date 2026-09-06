@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+import BotaoVoltar from '@/components/botao-voltar'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import FormularioProduto from './formulario'
@@ -67,12 +68,7 @@ export default async function CatalogoPage({
 
   return (
     <div>
-      <Link
-        href="/admin/catalogo"
-        className="text-xs tracking-widest text-[#6E6E68] hover:text-[#131A2E]"
-      >
-        ← CATÁLOGOS
-      </Link>
+      <BotaoVoltar href="/admin/catalogo" rotulo="CATÁLOGOS" />
 
       <p className="text-sm text-[#6E6E68] mt-3">{cliente.razao_social}</p>
 

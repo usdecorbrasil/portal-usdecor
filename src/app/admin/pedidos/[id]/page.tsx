@@ -1,5 +1,5 @@
-import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+import BotaoVoltar from '@/components/botao-voltar'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import {
@@ -211,12 +211,7 @@ export default async function PedidoAdminPage({
 
   return (
     <div>
-      <Link
-        href="/admin/pedidos"
-        className="text-xs tracking-widest text-[#6E6E68] hover:text-[#131A2E]"
-      >
-        ← PEDIDOS
-      </Link>
+      <BotaoVoltar href="/admin/pedidos" rotulo="PEDIDOS" />
 
       <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] mt-3">
         Pedido #{p.numero}
