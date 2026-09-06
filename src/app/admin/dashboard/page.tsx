@@ -41,6 +41,8 @@ export default async function DashboardPage() {
       pedido_status_historico(status, created_at),
       pedido_solicitacoes(id, status)
     `)
+    // Cancelados eram trazidos e descartados aqui mesmo: filtra no banco
+    .is('cancelado_em', null)
     .order('created_at', { ascending: false }),
     supabase
       .from('clientes')
