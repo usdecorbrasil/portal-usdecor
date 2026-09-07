@@ -5,6 +5,7 @@ import NovoPedido from './novo-pedido'
 import FiltroCliente from './filtro-cliente'
 import FiltroData from './filtro-data'
 import SelecaoRomaneio from './selecao-romaneio'
+import FiltrosRecolhiveis from '@/components/filtros-recolhiveis'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -302,7 +303,9 @@ export default async function PedidosAdminPage({
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
+      <FiltrosRecolhiveis
+        temFiltroAtivo={!!clienteFiltro || !!dataDe || !!dataAte}
+      >
         {dono && clientes && clientes.length > 0 && (
           <FiltroCliente
             clientes={clientes}
@@ -317,7 +320,7 @@ export default async function PedidosAdminPage({
           deAtual={dataDe}
           ateAtual={dataAte}
         />
-      </div>
+      </FiltrosRecolhiveis>
 
       {(aguardando > 0 || solicitacoes > 0) && (
         <div className="space-y-2 mb-5">

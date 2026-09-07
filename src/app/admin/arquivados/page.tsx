@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import FiltroData from '../pedidos/filtro-data'
+import FiltrosRecolhiveis from '@/components/filtros-recolhiveis'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -85,13 +86,13 @@ export default async function ArquivadosPage({
         {cancelados.length} cancelado{cancelados.length === 1 ? '' : 's'}
       </p>
 
-      <div className="mb-6">
+      <FiltrosRecolhiveis temFiltroAtivo={!!dataDe || !!dataAte}>
         <FiltroData
           rota="/admin/arquivados"
           deAtual={dataDe}
           ateAtual={dataAte}
         />
-      </div>
+      </FiltrosRecolhiveis>
 
       {fechados.length > 0 && (
         <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mb-6 flex items-baseline justify-between gap-3">
