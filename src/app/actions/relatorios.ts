@@ -43,8 +43,27 @@ export type LinhaAjuste = {
   data: string
 }
 
+export type LinhaParcela = {
+  pedidoId: string
+  numero: number
+  cliente: string
+  parcela: string
+  valor: number
+  vencimento: string
+  pagoEm: string | null
+  situacao: 'paga' | 'vencida' | 'aberta'
+}
+
 export type Relatorio = {
   pedidos: LinhaPedido[]
+  parcelas: LinhaParcela[]
+  resumoParcelas: {
+    total: number
+    recebido: number
+    aReceber: number
+    vencido: number
+    qtdVencidas: number
+  }
   porStatus: { status: string; label: string; quantidade: number; total: number }[]
   porCliente: LinhaCliente[]
   artes: LinhaArte[]
@@ -97,10 +116,59 @@ export async function gerarRelatorio(filtros: {
     consulta = consulta.eq('cliente_id', filtros.clienteId)
   }
 
-  const { data: brutos, error } = await consulta
+  // Parcelas são filtradas por vencimento: é a data que importa na cobrança
+  let consultaParcelas = supabase
+    .from('pedido_parcelas')
+    .select(`
+      numero, valor, vencimento, pago_em,
+      pedidos!inner(id, numero, cliente_id, cancelado_em, clientes(razao_social))
+    `)
+    .gte('vencimento', filtros.de)
+    .lte('vencimento', filtros.ate)
+    .is('pedidos.cancelado_em', null)
+    .order('vencimento')
+
+  if (filtros.clienteId) {
+    consultaParcelas = consultaParcelas.eq('pedidos.cliente_id', filtros.clienteId)
+  }
+
+  const [{ data: brutos, error }, { data: brutasParcelas }] = await Promise.all([
+    consulta,
+    consultaParcelas,
+  ])
 
   if (error) {
     throw new Error(`Não foi possível gerar o relatório: ${error.message}`)
+  }
+
+  const inicioHoje = new Date(new Date().toDateString())
+
+  const parcelas: LinhaParcela[] = ((brutasParcelas ?? []) as any[]).map((p) => {
+    const vencida = !p.pago_em && new Date(p.vencimento) < inicioHoje
+    return {
+      pedidoId: p.pedidos?.id ?? '',
+      numero: Number(p.pedidos?.numero ?? 0),
+      cliente: p.pedidos?.clientes?.razao_social ?? '—',
+      parcela: String(p.numero),
+      valor: Number(p.valor),
+      vencimento: p.vencimento as string,
+      pagoEm: (p.pago_em as string) ?? null,
+      situacao: p.pago_em ? 'paga' : vencida ? 'vencida' : 'aberta',
+    }
+  })
+
+  const resumoParcelas = {
+    total: parcelas.reduce((a, p) => a + p.valor, 0),
+    recebido: parcelas
+      .filter((p) => p.situacao === 'paga')
+      .reduce((a, p) => a + p.valor, 0),
+    aReceber: parcelas
+      .filter((p) => p.situacao !== 'paga')
+      .reduce((a, p) => a + p.valor, 0),
+    vencido: parcelas
+      .filter((p) => p.situacao === 'vencida')
+      .reduce((a, p) => a + p.valor, 0),
+    qtdVencidas: parcelas.filter((p) => p.situacao === 'vencida').length,
   }
 
   const todos = ((brutos ?? []) as any[]).map((p) => {
@@ -205,6 +273,9 @@ export async function gerarRelatorio(filtros: {
   }
 
   return {
+    parcelas,
+    resumoParcelas,
+
     pedidos: filtrados.map((p) => ({
       id: p.id,
       numero: p.numero,

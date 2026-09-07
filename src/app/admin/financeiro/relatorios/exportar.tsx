@@ -1,6 +1,7 @@
 'use client'
 
 import type { Relatorio } from '@/app/actions/relatorios'
+import type { TipoRelatorio } from './seletor-tipo'
 
 /** Excel em pt-BR espera ponto e vírgula como separador */
 function paraCsv(linhas: (string | number)[][]) {
@@ -38,9 +39,11 @@ const num = (v: number) => v.toFixed(2).replace('.', ',')
 export default function Exportar({
   relatorio,
   periodo,
+  tipo,
 }: {
   relatorio: Relatorio
   periodo: string
+  tipo: TipoRelatorio
 }) {
   function pedidos() {
     baixar(
@@ -103,23 +106,58 @@ export default function Exportar({
     )
   }
 
+  function parcelas() {
+    baixar(
+      `boletos-${periodo}.csv`,
+      paraCsv([
+        ['Pedido', 'Cliente', 'Parcela', 'Vencimento', 'Valor', 'Situação', 'Pago em'],
+        ...relatorio.parcelas.map((p) => [
+          p.numero,
+          p.cliente,
+          p.parcela,
+          dataBr(p.vencimento + 'T00:00:00'),
+          num(p.valor),
+          p.situacao,
+          p.pagoEm ? dataBr(p.pagoEm) : '',
+        ]),
+      ])
+    )
+  }
+
   const botao =
     'border border-[#DDDCD5] rounded-sm px-3 py-2 text-xs font-semibold tracking-wide text-[#6E6E68] hover:border-[#131A2E] hover:text-[#131A2E]'
 
+  // Só o CSV da divisão aberta: exportar tudo confundiria mais que ajudar
   return (
     <div className="flex flex-wrap gap-2">
-      <button onClick={pedidos} className={botao}>
-        CSV · PEDIDOS
-      </button>
-      <button onClick={porCliente} className={botao}>
-        CSV · POR CLIENTE
-      </button>
-      <button onClick={artes} className={botao}>
-        CSV · ARTES
-      </button>
-      {relatorio.ajustes.length > 0 && (
-        <button onClick={ajustes} className={botao}>
-          CSV · AJUSTES
+      {tipo === 'pedidos' && (
+        <>
+          <button onClick={pedidos} className={botao}>
+            CSV · PEDIDOS
+          </button>
+          {relatorio.ajustes.length > 0 && (
+            <button onClick={ajustes} className={botao}>
+              CSV · AJUSTES
+            </button>
+          )}
+        </>
+      )}
+
+      {tipo === 'financeiro' && (
+        <button onClick={parcelas} className={botao}>
+          CSV · BOLETOS
+        </button>
+      )}
+
+      {tipo === 'clientes' && (
+        <button onClick={porCliente} className={botao}>
+          CSV · POR CLIENTE
+        </button>
+      )}
+
+      {tipo === 'sku' && (
+        <button onClick={artes} className={botao}>
+          CSV · ARTES
         </button>
       )}
     </div>

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { gerarRelatorio } from '@/app/actions/relatorios'
 import FiltrosRelatorio from './filtros'
 import Exportar from './exportar'
+import SeletorTipo, { type TipoRelatorio } from './seletor-tipo'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -24,11 +25,13 @@ export default async function RelatoriosPage({
     ate?: string
     status?: string
     cliente?: string
+    tipo?: string
   }>
 }) {
-  const { de, ate, status, cliente } = await searchParams
+  const { de, ate, status, cliente, tipo } = await searchParams
   const dataDe = de ?? inicioDoMes()
   const dataAte = ate ?? hoje()
+  const aba = (tipo ?? 'pedidos') as TipoRelatorio
 
   const supabase = await createClient()
 
@@ -57,34 +60,124 @@ export default async function RelatoriosPage({
         clienteId={cliente}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
-        <Cartao rotulo="PEDIDOS" valor={String(r.pedidos)} />
-        <Cartao rotulo="FATURAMENTO" valor={`R$ ${brl(r.faturamento)}`} />
-        <Cartao rotulo="METRAGEM" valor={`${brl(r.metragem)} m`} />
-        <Cartao rotulo="TICKET MÉDIO" valor={`R$ ${brl(r.ticketMedio)}`} />
-        <Cartao rotulo="UNIDADES" valor={String(r.unidades)} />
-        <Cartao
-          rotulo="REIMPRESSÕES"
-          valor={String(r.reimpressoes)}
-          alerta={r.reimpressoes > 0}
-        />
-        <Cartao
-          rotulo="CANCELADOS"
-          valor={String(r.cancelados)}
-          alerta={r.cancelados > 0}
-        />
-        <Cartao
-          rotulo="VALOR CANCELADO"
-          valor={`R$ ${brl(r.valorCancelado)}`}
-          alerta={r.valorCancelado > 0}
-        />
-      </div>
-
       <div className="mt-5">
-        <Exportar relatorio={relatorio} periodo={periodo} />
+        <SeletorTipo
+          atual={aba}
+          parametros={{ de: dataDe, ate: dataAte, status, cliente }}
+        />
       </div>
 
-      {relatorio.pedidos.length === 0 ? (
+      <div className="mt-4">
+        <Exportar relatorio={relatorio} periodo={periodo} tipo={aba} />
+      </div>
+
+      {aba === 'financeiro' && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+            <Cartao
+              rotulo="FATURAMENTO"
+              valor={`R$ ${brl(r.faturamento)}`}
+            />
+            <Cartao
+              rotulo="RECEBIDO"
+              valor={`R$ ${brl(relatorio.resumoParcelas.recebido)}`}
+            />
+            <Cartao
+              rotulo="A RECEBER"
+              valor={`R$ ${brl(relatorio.resumoParcelas.aReceber)}`}
+            />
+            <Cartao
+              rotulo="VENCIDO"
+              valor={`R$ ${brl(relatorio.resumoParcelas.vencido)}`}
+              alerta={relatorio.resumoParcelas.vencido > 0}
+            />
+          </div>
+
+          <Titulo>
+            PARCELAS COM VENCIMENTO NO PERÍODO ({relatorio.parcelas.length})
+          </Titulo>
+
+          {relatorio.parcelas.length === 0 ? (
+            <p className="text-sm text-[#6E6E68] border border-dashed border-[#DDDCD5] rounded-sm py-12 text-center">
+              Nenhuma parcela vence neste período.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {relatorio.parcelas.map((p, i) => (
+                <Link
+                  key={i}
+                  href={`/admin/pedidos/${p.pedidoId}`}
+                  className="flex items-center gap-3 bg-white border border-[#DDDCD5] rounded-sm px-3 py-2.5 hover:border-[#131A2E]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-mono text-xs text-[#6E6E68] shrink-0">
+                        {p.numero} ·
+                      </span>
+                      <span className="text-sm font-semibold truncate">
+                        {p.cliente}
+                      </span>
+                    </div>
+                    <span className="text-xs text-[#6E6E68]">
+                      parcela {p.parcela} · venc.{' '}
+                      {new Date(p.vencimento + 'T00:00:00').toLocaleDateString(
+                        'pt-BR'
+                      )}
+                    </span>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-mono font-bold text-sm">
+                      R$ {brl(p.valor)}
+                    </div>
+                    <span
+                      className={`text-[10px] font-mono uppercase tracking-wider ${
+                        p.situacao === 'paga'
+                          ? 'text-[#2E7D4F]'
+                          : p.situacao === 'vencida'
+                          ? 'text-[#B00063]'
+                          : 'text-[#6E6E68]'
+                      }`}
+                    >
+                      {p.situacao === 'paga'
+                        ? 'paga'
+                        : p.situacao === 'vencida'
+                        ? 'vencida'
+                        : 'em aberto'}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {aba !== 'financeiro' && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+          <Cartao rotulo="PEDIDOS" valor={String(r.pedidos)} />
+          <Cartao rotulo="FATURAMENTO" valor={`R$ ${brl(r.faturamento)}`} />
+          <Cartao rotulo="METRAGEM" valor={`${brl(r.metragem)} m`} />
+          <Cartao rotulo="TICKET MÉDIO" valor={`R$ ${brl(r.ticketMedio)}`} />
+          <Cartao rotulo="UNIDADES" valor={String(r.unidades)} />
+          <Cartao
+            rotulo="REIMPRESSÕES"
+            valor={String(r.reimpressoes)}
+            alerta={r.reimpressoes > 0}
+          />
+          <Cartao
+            rotulo="CANCELADOS"
+            valor={String(r.cancelados)}
+            alerta={r.cancelados > 0}
+          />
+          <Cartao
+            rotulo="VALOR CANCELADO"
+            valor={`R$ ${brl(r.valorCancelado)}`}
+            alerta={r.valorCancelado > 0}
+          />
+        </div>
+      )}
+
+      {aba !== 'financeiro' && relatorio.pedidos.length === 0 ? (
         <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center mt-6">
           <p className="text-sm text-[#6E6E68]">
             Nenhum pedido no período com esses filtros.
@@ -92,6 +185,8 @@ export default async function RelatoriosPage({
         </div>
       ) : (
         <>
+          {aba === 'pedidos' && (
+          <>
           <Titulo>POR STATUS</Titulo>
           <div className="space-y-1.5">
             {relatorio.porStatus.map((s) => (
@@ -110,6 +205,11 @@ export default async function RelatoriosPage({
             ))}
           </div>
 
+          </>
+          )}
+
+          {aba === 'clientes' && (
+          <>
           <Titulo>POR CLIENTE</Titulo>
           <div className="space-y-1.5">
             {relatorio.porCliente.map((c) => (
@@ -131,7 +231,10 @@ export default async function RelatoriosPage({
             ))}
           </div>
 
-          {relatorio.artes.length > 0 && (
+          </>
+          )}
+
+          {aba === 'sku' && relatorio.artes.length > 0 && (
             <>
               <Titulo>ARTES MAIS PEDIDAS</Titulo>
               <div className="space-y-1.5">
@@ -155,7 +258,7 @@ export default async function RelatoriosPage({
             </>
           )}
 
-          {relatorio.ajustes.length > 0 && (
+          {aba === 'pedidos' && relatorio.ajustes.length > 0 && (
             <>
               <Titulo>AJUSTES DE QUANTIDADE</Titulo>
               <div className="space-y-1.5">
@@ -182,6 +285,8 @@ export default async function RelatoriosPage({
             </>
           )}
 
+          {aba === 'pedidos' && (
+          <>
           <Titulo>PEDIDOS</Titulo>
           <div className="space-y-1.5">
             {relatorio.pedidos.map((p) => (
@@ -221,6 +326,8 @@ export default async function RelatoriosPage({
               </Link>
             ))}
           </div>
+          </>
+          )}
         </>
       )}
     </div>
