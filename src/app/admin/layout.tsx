@@ -49,7 +49,7 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-[#F2F1ED]">
       <header className="bg-white border-b border-[#DDDCD5]">
-        <div className="max-w-5xl mx-auto px-5 py-3 flex items-center gap-4">
+        <div className="max-w-5xl mx-auto px-5 py-3 flex items-center gap-3 sm:gap-4 flex-wrap">
           <Image
             src="/logo-horizontal.png"
             alt="Bello Tecido"
@@ -59,7 +59,11 @@ export default async function AdminLayout({
             className="h-8 w-auto shrink-0"
           />
 
-          <BuscaHeader />
+          {/* No celular a busca ganha a própria linha: espremida ao lado do
+              logo, o campo e a lista de resultados ficavam ilegíveis */}
+          <div className="order-last w-full sm:order-none sm:w-auto sm:flex-1 sm:max-w-xs">
+            <BuscaHeader />
+          </div>
 
           <div className="flex items-center gap-3 shrink-0 ml-auto">
             <span

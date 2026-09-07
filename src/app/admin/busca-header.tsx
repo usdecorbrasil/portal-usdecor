@@ -56,7 +56,9 @@ export default function BuscaHeader() {
       resultado.artes.length > 0)
 
   return (
-    <div ref={caixa} className="relative flex-1 max-w-xs">
+    // A largura é definida pelo cabeçalho: linha inteira no celular,
+    // ao lado do logo no desktop
+    <div ref={caixa} className="relative w-full">
       <input
         type="search"
         value={termo}
