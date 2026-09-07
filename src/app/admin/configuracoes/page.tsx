@@ -5,7 +5,9 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import Equipe from './equipe'
 import ConfigValorMinimoBoleto from './config-valor-minimo'
 import ConfigMaxParcelas from './config-max-parcelas'
+import IntegracaoBling from './integracao-bling'
 import { buscarValorMinimoBoleto, buscarMaxParcelas } from '@/app/actions/configuracoes'
+import { lerEstadoBling } from '@/lib/bling/cliente'
 
 export default async function ConfiguracoesPage() {
   const perfil = await lerPerfil()
@@ -38,9 +40,10 @@ export default async function ConfiguracoesPage() {
     (usuarios?.users ?? []).map((u) => [u.id, u.email ?? ''])
   )
 
-  const [valorMinimoBoleto, maxParcelas] = await Promise.all([
+  const [valorMinimoBoleto, maxParcelas, estadoBling] = await Promise.all([
     buscarValorMinimoBoleto(),
     buscarMaxParcelas(),
+    lerEstadoBling(),
   ])
 
   return (
@@ -85,19 +88,7 @@ export default async function ConfiguracoesPage() {
           INTEGRAÇÕES
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
-        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="font-semibold tracking-tight text-sm">Bling</h3>
-              <p className="text-xs text-[#6E6E68] mt-1">
-                Conecte para sincronizar pedidos, boletos e notas fiscais.
-              </p>
-            </div>
-            <a href="/api/bling/conectar" className="bg-[#131A2E] text-white rounded-sm px-4 py-2 text-xs font-semibold tracking-wide whitespace-nowrap">
-              CONECTAR
-            </a>
-          </div>
-        </div>
+        <IntegracaoBling estado={estadoBling} />
       </div>
     </div>
   )
