@@ -15,7 +15,9 @@ export default function Abas({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="mt-4">
-      <div className="flex gap-1 overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
+      {/* Sem sangria lateral: as abas precisam terminar onde o painel
+          termina, senão passam da borda e a última fica fora da tela */}
+      <div className="flex gap-0.5 sm:gap-1">
         {ABAS.map((a) => {
           const ativa = caminho.startsWith(a.href)
 
@@ -24,7 +26,8 @@ export default function Abas({ children }: { children: React.ReactNode }) {
               key={a.href}
               href={a.href}
               className={
-                'shrink-0 border-2 border-b-0 rounded-t-lg px-4 py-2 text-sm whitespace-nowrap relative -mb-0.5 ' +
+                'min-w-0 flex-1 text-center border-2 border-b-0 rounded-t-lg ' +
+                'px-1.5 sm:px-4 py-2 text-xs sm:text-sm truncate relative -mb-0.5 ' +
                 (ativa
                   ? 'bg-[#F2F1ED] border-[#131A2E] text-[#131A2E] font-semibold z-10'
                   : 'bg-[#E4E3DD] border-[#DDDCD5] text-[#6E6E68] hover:text-[#131A2E]')
