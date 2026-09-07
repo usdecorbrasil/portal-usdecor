@@ -8,33 +8,40 @@ import { useState } from 'react'
  */
 export default function FiltrosRecolhiveis({
   temFiltroAtivo = false,
+  acoes,
   children,
 }: {
   temFiltroAtivo?: boolean
+  /** Ações da tela, na mesma linha do botão de filtros */
+  acoes?: React.ReactNode
   children: React.ReactNode
 }) {
   const [aberto, setAberto] = useState(temFiltroAtivo)
 
   return (
     <div className="mb-4">
-      <button
-        onClick={() => setAberto((v) => !v)}
-        className={`inline-flex items-center gap-2 border rounded-sm px-3 py-2 text-xs font-semibold tracking-wide ${
-          temFiltroAtivo
-            ? 'bg-[#131A2E] text-white border-[#131A2E]'
-            : 'bg-white text-[#6E6E68] border-[#DDDCD5] hover:border-[#131A2E] hover:text-[#131A2E]'
-        }`}
-      >
-        FILTROS
-        {temFiltroAtivo && <span className="text-[10px]">• ativo</span>}
-        <span
-          className={`text-[10px] transition-transform ${
-            aberto ? 'rotate-180' : ''
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setAberto((v) => !v)}
+          className={`inline-flex items-center gap-2 border rounded-sm px-3 py-2 text-xs font-semibold tracking-wide ${
+            temFiltroAtivo
+              ? 'bg-[#131A2E] text-white border-[#131A2E]'
+              : 'bg-white text-[#6E6E68] border-[#DDDCD5] hover:border-[#131A2E] hover:text-[#131A2E]'
           }`}
         >
-          ▾
-        </span>
-      </button>
+          FILTROS
+          {temFiltroAtivo && <span className="text-[10px]">• ativo</span>}
+          <span
+            className={`text-[10px] transition-transform ${
+              aberto ? 'rotate-180' : ''
+            }`}
+          >
+            ▾
+          </span>
+        </button>
+
+        {acoes}
+      </div>
 
       {aberto && (
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 mt-3">

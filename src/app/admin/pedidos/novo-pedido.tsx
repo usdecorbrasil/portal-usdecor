@@ -100,15 +100,16 @@ export default function NovoPedido({ clientes }: { clientes: Cliente[] }) {
     return (
       <button
         onClick={() => setAberto(true)}
-        className="w-full sm:w-auto bg-[#131A2E] text-white rounded-sm px-5 py-2.5 text-sm font-semibold tracking-wide mb-5"
+        className="bg-[#131A2E] text-white rounded-sm px-3 py-2 text-xs font-semibold tracking-wide"
       >
         + CRIAR PEDIDO
       </button>
     )
   }
 
+  // Aberto, o formulário sai da linha dos botões e ocupa a largura toda
   return (
-    <div className="bg-white border border-[#131A2E] rounded-sm p-5 mb-5">
+    <div className="w-full bg-white border border-[#131A2E] rounded-sm p-5 mt-3">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold tracking-tight">Novo pedido</h2>
         <button

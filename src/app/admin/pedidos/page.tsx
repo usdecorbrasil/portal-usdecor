@@ -305,6 +305,7 @@ export default async function PedidosAdminPage({
 
       <FiltrosRecolhiveis
         temFiltroAtivo={!!clienteFiltro || !!dataDe || !!dataAte}
+        acoes={dono ? <NovoPedido clientes={clientes ?? []} /> : null}
       >
         {dono && clientes && clientes.length > 0 && (
           <FiltroCliente
@@ -353,8 +354,6 @@ export default async function PedidosAdminPage({
           )}
         </div>
       )}
-
-      {dono && <NovoPedido clientes={clientes ?? []} />}
 
       {lista.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-4 -mx-5 px-5">
