@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { logout } from '../actions/auth'
 import { CarrinhoProvider } from '@/lib/carrinho/contexto'
@@ -42,14 +43,16 @@ export default async function ClienteLayout({
         <header className="bg-white border-b border-[#DDDCD5]">
           <div className="max-w-3xl mx-auto px-5 py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <Image
-                src="/logo-horizontal.png"
-                alt="Best Color Tecidos"
-                width={483}
-                height={120}
-                priority
-                className="h-7 w-auto"
-              />
+              <Link href="/catalogo" aria-label="Ir para o catálogo">
+                <Image
+                  src="/logo-horizontal.png"
+                  alt="Best Color Tecidos"
+                  width={483}
+                  height={120}
+                  priority
+                  className="h-7 w-auto"
+                />
+              </Link>
               <p className="text-xs text-[#6E6E68] mt-1 truncate">
                 {empresa.razao_social}
               </p>

@@ -50,14 +50,17 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-[#F2F1ED]">
       <header className="bg-white border-b border-[#DDDCD5]">
         <div className="max-w-5xl mx-auto px-5 py-3 flex items-center gap-3 sm:gap-4 flex-wrap">
-          <Image
-            src="/logo-horizontal.png"
-            alt="Best Color Tecidos"
-            width={483}
-            height={120}
-            priority
-            className="h-8 w-auto shrink-0"
-          />
+          {/* Leva à primeira aba do papel: funcionário não acessa o Dashboard */}
+          <Link href={abas[0].href} aria-label="Página inicial" className="shrink-0">
+            <Image
+              src="/logo-horizontal.png"
+              alt="Best Color Tecidos"
+              width={483}
+              height={120}
+              priority
+              className="h-8 w-auto"
+            />
+          </Link>
 
           {/* No celular a busca ganha a própria linha: espremida ao lado do
               logo, o campo e a lista de resultados ficavam ilegíveis */}
