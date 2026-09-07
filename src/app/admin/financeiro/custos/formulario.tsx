@@ -121,7 +121,7 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
 
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-3">
         <h2 className="font-semibold tracking-tight text-sm mb-4">
-          Calandra / sublimação
+          Calandra
         </h2>
 
         <label
@@ -141,7 +141,7 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
           className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 text-sm font-mono outline-none focus:border-[#131A2E]"
         />
         <p className="text-xs text-[#6E6E68] mt-2">
-          Energia, manutenção e mão de obra da calandra por metro sublimado.
+          Energia, manutenção e mão de obra da calandra por metro.
         </p>
       </div>
 
@@ -166,7 +166,7 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
             <span className="font-mono">R$ {brl(tintaMetro)}</span>
           </div>
           <div className="flex justify-between items-baseline text-[#6E6E68]">
-            <span>Calandra / sublimação</span>
+            <span>Calandra</span>
             <span className="font-mono">
               R$ {brl(valido ? calandraNum : 0)}
             </span>
