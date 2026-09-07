@@ -6,4 +6,4 @@ if (!process.env.RESEND_API_KEY) {
 
 export const resend = new Resend(process.env.RESEND_API_KEY)
 
-export const REMETENTE = `Bello Tecido <${process.env.RESEND_FROM ?? 'onboarding@resend.dev'}>`
+export const REMETENTE = `Best Color Tecidos <${process.env.RESEND_FROM ?? 'onboarding@resend.dev'}>`

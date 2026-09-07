@@ -10,5 +10,6 @@ export type Custos = {
   papelPorMetro: number
   tintaPorLitro: number
   consumoMlPorMetro: number
+  calandraPorMetro: number
   atualizadoEm: string | null
 }

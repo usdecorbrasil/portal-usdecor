@@ -25,7 +25,11 @@ export default async function CatalogosPage() {
   // Envios de arte que ainda não foram processados
   const { data: envios } = await supabase
     .from('envios_arte')
-    .select('id, cliente_id, link, observacoes, situacao, created_at, clientes(razao_social)')
+    .select(`
+      id, cliente_id, link, observacoes, situacao, created_at,
+      clientes(razao_social),
+      envio_arte_arquivos(nome, tamanho_bytes)
+    `)
     .in('situacao', ['recebido', 'em_analise'])
     .order('created_at', { ascending: false })
 
@@ -48,6 +52,10 @@ export default async function CatalogosPage() {
           observacoes: e.observacoes,
           situacao: e.situacao,
           criadoEm: e.created_at,
+          arquivos: (e.envio_arte_arquivos ?? []).map((a: any) => ({
+            nome: a.nome,
+            tamanhoBytes: Number(a.tamanho_bytes),
+          })),
         }))}
       />
 

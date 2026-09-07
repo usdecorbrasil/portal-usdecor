@@ -122,7 +122,7 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
   await enviarEmail({
     tipo: 'convite_acesso',
     destinatario: dados.email,
-    assunto: 'Seu acesso ao portal Bello Tecido',
+    assunto: 'Seu acesso ao portal Best Color Tecidos',
     html: templateConviteAcesso({
       nome: dados.contato || dados.razao_social,
       email: dados.email,

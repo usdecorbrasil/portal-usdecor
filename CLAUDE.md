@@ -1,4 +1,4 @@
-# Portal Bello Tecido — Contexto do Projeto
+# Portal Best Color Tecidos — Contexto do Projeto
 
 Portal web B2B para clientes de uma empresa de estamparia por sublimação. Cada cliente
 acessa uma área restrita, vê apenas o próprio catálogo/preços, monta pedido em carrinho
@@ -137,14 +137,29 @@ primeiro acesso, recuperação de senha).
 
 ## Pendências conhecidas (checar status atual antes de assumir resolvido)
 
-- Domínio para envio de e-mails via Resend.
+- Domínio para envio de e-mails via Resend. **Bloqueia todo o ciclo de cobrança**: sem
+  domínio verificado, o Resend só envia para o próprio endereço cadastrado, então nenhum
+  cliente recebe confirmação, aviso de produção ou boleto.
 - Gerar credenciais OAuth do Bling / abrir Bling Conta / habilitar boletos.
 - Definir prazo padrão de vencimento do boleto.
 - Criar produto genérico de estampa no Bling.
 - Definir gateway de pagamento para cartão de crédito/débito.
-- Bug: erro de teto de 50% ainda aparecendo ao ajustar quantidade mesmo após remoção da
-  trava — suspeita de função/trigger duplicada ou resíduo de schema antigo
-  (`ajustar_quantidade_item`).
+- **Limpeza dos anexos de envio de arte não existe.** O campo
+  `envios_arte.arquivos_expiram_em` já é preenchido com hoje + 25 dias ao marcar como
+  cadastrado, mas nada apaga os arquivos do bucket `envios-arte` depois disso. Falta uma
+  rotina agendada (Vercel Cron → rota protegida por segredo, diária). Sem ela o
+  armazenamento cresce indefinidamente.
+- **Integração com o Bling existe só no OAuth** (`/api/bling/conectar` e `/callback`).
+  Não cria pedido de venda, nem sincroniza NF, expedição, entrega ou baixa financeira.
+  Consequência: o pedido não passa de "Pedido pronto" — `admin_lancar_status` só aceita
+  impressao/estampando/corte_costura/pronto, e o único caminho para "fechado" é dar baixa
+  em todas as parcelas.
+- **E-mails: 3 dos 14 gatilhos** implementados (`convite_acesso`, `pedido_recebido`,
+  `em_producao`). Falta o de "Pedido pronto" com a cobrança, que é o que fecha o ciclo
+  comercial, além de NF emitida, cancelamentos, ajuste de quantidade, artes rejeitadas,
+  recuperação de senha e todos os avisos internos à equipe.
+- Pedidos estampados antes da migração de custos não têm custo gravado e aparecem na
+  Apuração com lucro igual à receita inteira.
 
 ## Custo estimado
 

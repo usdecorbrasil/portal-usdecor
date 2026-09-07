@@ -85,7 +85,7 @@ export async function criarMembro(
   await enviarEmail({
     tipo: 'convite_acesso',
     destinatario: email,
-    assunto: 'Seu acesso ao portal Bello Tecido',
+    assunto: 'Seu acesso ao portal Best Color Tecidos',
     html: templateConviteAcesso({
       nome,
       email,

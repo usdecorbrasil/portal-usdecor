@@ -61,11 +61,19 @@ export default function FormularioProduto({
 
     setReduzida(r.arquivo)
     setPreview(URL.createObjectURL(r.arquivo))
-    setInfo(
+
+    const tamanho =
       original > 1024
-        ? `${(original / 1024).toFixed(1)} MB → ${r.kb} KB · ${r.largura}×${r.altura}px`
-        : `${original} KB → ${r.kb} KB · ${r.largura}×${r.altura}px`
-    )
+        ? `${(original / 1024).toFixed(1)} MB → ${r.kb} KB`
+        : `${original} KB → ${r.kb} KB`
+    const origemPdf =
+      r.paginasPdf && r.paginasPdf > 1
+        ? ` · PDF: 1ª de ${r.paginasPdf} páginas`
+        : r.paginasPdf
+        ? ' · a partir do PDF'
+        : ''
+
+    setInfo(`${tamanho} · ${r.largura}×${r.altura}px${origemPdf}`)
   }
 
   function aoEnviar(dados: FormData) {
@@ -167,7 +175,7 @@ export default function FormularioProduto({
                 id="imagem"
                 name="imagem"
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 onChange={aoEscolher}
                 className="block w-full text-sm text-[#6E6E68] file:mr-3 file:rounded-sm file:border file:border-[#DDDCD5] file:bg-white file:px-3 file:py-2 file:text-xs file:font-semibold file:tracking-wide"
               />

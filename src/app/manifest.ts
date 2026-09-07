@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Bello Tecido — Portal de Pedidos',
-    short_name: 'Bello Tecido',
-    description: 'Portal de pedidos B2B da Bello Tecido',
+    name: 'Best Color Tecidos — Portal de Pedidos',
+    short_name: 'Best Color Tecidos',
+    description: 'Portal de pedidos B2B da Best Color Tecidos',
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait-primary',

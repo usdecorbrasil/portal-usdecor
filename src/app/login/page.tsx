@@ -56,7 +56,7 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <Image
           src="/logo-horizontal.png"
-          alt="Bello Tecido"
+          alt="Best Color Tecidos"
           width={483}
           height={120}
           priority
@@ -130,7 +130,7 @@ function LoginForm() {
         </p>
 
         <p className="text-xs text-[#6E6E68] mt-6 leading-relaxed text-center">
-          O acesso é criado pela Bello Tecido. Se você ainda não tem login,
+          O acesso é criado pela Best Color Tecidos. Se você ainda não tem login,
           entre em contato conosco.
         </p>
       </div>

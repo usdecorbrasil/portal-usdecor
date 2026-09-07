@@ -26,7 +26,9 @@ export async function buscarCustos(): Promise<Custos> {
 
   const { data, error } = await supabase
     .from('custos_producao')
-    .select('papel_por_metro, tinta_por_litro, consumo_ml_por_metro, atualizado_em')
+    .select(
+      'papel_por_metro, tinta_por_litro, consumo_ml_por_metro, calandra_por_metro, atualizado_em'
+    )
     .order('atualizado_em', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -41,6 +43,7 @@ export async function buscarCustos(): Promise<Custos> {
     papelPorMetro: data ? Number(data.papel_por_metro) : 0,
     tintaPorLitro: data ? Number(data.tinta_por_litro) : 0,
     consumoMlPorMetro: data ? Number(data.consumo_ml_por_metro) : 0,
+    calandraPorMetro: data ? Number(data.calandra_por_metro) : 0,
     atualizadoEm: data?.atualizado_em ?? null,
   }
 }
@@ -49,6 +52,7 @@ export async function atualizarCustos(dados: {
   papelPorMetro: number
   tintaPorLitro: number
   consumoMlPorMetro: number
+  calandraPorMetro: number
 }): Promise<Resultado> {
   if (!(await exigirFinanceiro())) return { ok: false, erro: 'Acesso negado.' }
 
@@ -56,6 +60,7 @@ export async function atualizarCustos(dados: {
     papelPorMetro: z.number().min(0, 'Custo do papel inválido').max(100000),
     tintaPorLitro: z.number().min(0, 'Custo da tinta inválido').max(100000),
     consumoMlPorMetro: z.number().min(0, 'Consumo inválido').max(100000),
+    calandraPorMetro: z.number().min(0, 'Custo de calandra inválido').max(100000),
   }).safeParse(dados)
 
   if (!parsed.success) {
@@ -68,6 +73,7 @@ export async function atualizarCustos(dados: {
     p_papel_por_metro: parsed.data.papelPorMetro,
     p_tinta_por_litro: parsed.data.tintaPorLitro,
     p_consumo_ml_por_metro: parsed.data.consumoMlPorMetro,
+    p_calandra_por_metro: parsed.data.calandraPorMetro,
   })
 
   if (error) return { ok: false, erro: error.message }
@@ -102,7 +108,7 @@ export async function apurarPeriodo(
     .from('pedidos')
     .select(`
       id, numero, total, metragem_impressa, romaneio_gerado_em,
-      custo_papel_por_metro, custo_tinta_por_metro,
+      custo_papel_por_metro, custo_tinta_por_metro, custo_calandra_por_metro,
       clientes(razao_social)
     `)
     .not('metragem_impressa', 'is', null)
@@ -115,7 +121,9 @@ export async function apurarPeriodo(
     const metragem = Number(p.metragem_impressa)
     const receita = Number(p.total)
     const custoMetro =
-      Number(p.custo_papel_por_metro ?? 0) + Number(p.custo_tinta_por_metro ?? 0)
+      Number(p.custo_papel_por_metro ?? 0) +
+      Number(p.custo_tinta_por_metro ?? 0) +
+      Number(p.custo_calandra_por_metro ?? 0)
     const custo = Math.round(metragem * custoMetro * 100) / 100
 
     return {

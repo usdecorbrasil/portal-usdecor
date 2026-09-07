@@ -52,7 +52,7 @@ export default async function AdminLayout({
         <div className="max-w-5xl mx-auto px-5 py-3 flex items-center gap-3 sm:gap-4 flex-wrap">
           <Image
             src="/logo-horizontal.png"
-            alt="Bello Tecido"
+            alt="Best Color Tecidos"
             width={483}
             height={120}
             priority

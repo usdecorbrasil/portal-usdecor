@@ -14,6 +14,7 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
   const [papel, setPapel] = useState(paraTexto(custos.papelPorMetro))
   const [tinta, setTinta] = useState(paraTexto(custos.tintaPorLitro))
   const [consumo, setConsumo] = useState(paraTexto(custos.consumoMlPorMetro))
+  const [calandra, setCalandra] = useState(paraTexto(custos.calandraPorMetro))
   const [aviso, setAviso] = useState('')
   const [salvo, setSalvo] = useState(false)
   const [pendente, iniciar] = useTransition()
@@ -21,12 +22,14 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
   const papelNum = paraNumero(papel)
   const tintaNum = paraNumero(tinta)
   const consumoNum = paraNumero(consumo)
+  const calandraNum = paraNumero(calandra)
   const valido =
-    !isNaN(papelNum) && !isNaN(tintaNum) && !isNaN(consumoNum) &&
-    papelNum >= 0 && tintaNum >= 0 && consumoNum >= 0
+    [papelNum, tintaNum, consumoNum, calandraNum].every(
+      (v) => !isNaN(v) && v >= 0
+    )
 
   const tintaMetro = valido ? custoTintaPorMetro(tintaNum, consumoNum) : 0
-  const totalMetro = valido ? papelNum + tintaMetro : 0
+  const totalMetro = valido ? papelNum + tintaMetro + calandraNum : 0
 
   function salvar() {
     if (!valido) return setAviso('Informe valores numéricos válidos.')
@@ -38,6 +41,7 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
         papelPorMetro: papelNum,
         tintaPorLitro: tintaNum,
         consumoMlPorMetro: consumoNum,
+        calandraPorMetro: calandraNum,
       })
       if (!r.ok) return setAviso(r.erro)
       setSalvo(true)
@@ -115,6 +119,32 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
         </p>
       </div>
 
+      <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-3">
+        <h2 className="font-semibold tracking-tight text-sm mb-4">
+          Calandra / sublimação
+        </h2>
+
+        <label
+          htmlFor="calandra"
+          className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+        >
+          CUSTO POR METRO (R$)
+        </label>
+        <input
+          id="calandra"
+          inputMode="decimal"
+          value={calandra}
+          onChange={(e) => {
+            setCalandra(e.target.value)
+            setAviso('')
+          }}
+          className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 text-sm font-mono outline-none focus:border-[#131A2E]"
+        />
+        <p className="text-xs text-[#6E6E68] mt-2">
+          Energia, manutenção e mão de obra da calandra por metro sublimado.
+        </p>
+      </div>
+
       <div className="bg-white border-2 border-[#131A2E] rounded-sm p-4 mt-3">
         <h2 className="font-semibold tracking-tight text-sm">
           Custo por metro impresso
@@ -134,6 +164,12 @@ export default function FormularioCustos({ custos }: { custos: Custos }) {
               </span>
             </span>
             <span className="font-mono">R$ {brl(tintaMetro)}</span>
+          </div>
+          <div className="flex justify-between items-baseline text-[#6E6E68]">
+            <span>Calandra / sublimação</span>
+            <span className="font-mono">
+              R$ {brl(valido ? calandraNum : 0)}
+            </span>
           </div>
         </div>
 

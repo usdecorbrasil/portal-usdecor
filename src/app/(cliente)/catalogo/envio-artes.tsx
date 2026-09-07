@@ -1,9 +1,13 @@
 'use client'
 
-import { useActionState, useState } from 'react'
-import { enviarArtes } from '@/app/actions/artes'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { abrirEnvio, finalizarEnvio } from '@/app/actions/artes'
+import { createClient } from '@/lib/supabase/client'
 
-const EMAIL_BELLO = 'bellotecido@gmail.com'
+const TAMANHO_MAX_MB = 50
+
+const EMAIL_ARTES = 'bestcolortecidos@gmail.com'
 
 type Envio = {
   id: string
@@ -23,12 +27,107 @@ const SITUACOES: Record<string, { rotulo: string; cor: string }> = {
 
 export default function EnvioArtes({ envios }: { envios: Envio[] }) {
   const [aberto, setAberto] = useState(false)
-  const [estado, acao, pendente] = useActionState(enviarArtes, null)
   const [copiado, setCopiado] = useState(false)
+  const [link, setLink] = useState('')
+  const [observacoes, setObservacoes] = useState('')
+  const [arquivos, setArquivos] = useState<File[]>([])
+  const [erro, setErro] = useState('')
+  const [sucesso, setSucesso] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+  const [progresso, setProgresso] = useState('')
+  const router = useRouter()
+
+  function escolherArquivos(e: React.ChangeEvent<HTMLInputElement>) {
+    const lista = Array.from(e.target.files ?? [])
+    const grande = lista.find((f) => f.size > TAMANHO_MAX_MB * 1024 * 1024)
+
+    if (grande) {
+      setErro(
+        `"${grande.name}" tem mais de ${TAMANHO_MAX_MB} MB. ` +
+          'Envie por link ou reduza o arquivo.'
+      )
+      return
+    }
+
+    setErro('')
+    setArquivos(lista)
+  }
+
+  async function enviar() {
+    if (!link.trim() && arquivos.length === 0) {
+      return setErro('Anexe os arquivos ou informe o link.')
+    }
+
+    setErro('')
+    setEnviando(true)
+    setProgresso('')
+
+    try {
+      const r = await abrirEnvio({ link: link.trim() || undefined, observacoes })
+      if (!r.ok) {
+        setEnviando(false)
+        return setErro(r.erro)
+      }
+
+      // Os arquivos vão direto do navegador para o Storage: a Vercel
+      // limita o corpo de requisição a 4,5 MB e não daria conta.
+      if (arquivos.length > 0) {
+        const supabase = createClient()
+
+        for (let i = 0; i < arquivos.length; i++) {
+          const arquivo = arquivos[i]
+          setProgresso(`Enviando ${i + 1} de ${arquivos.length}...`)
+
+          const caminho = `${r.clienteId}/${r.envioId}/${arquivo.name}`
+
+          const { error: erroUpload } = await supabase.storage
+            .from('envios-arte')
+            .upload(caminho, arquivo, { upsert: true })
+
+          if (erroUpload) {
+            setEnviando(false)
+            setProgresso('')
+            return setErro(
+              `Falha ao enviar "${arquivo.name}": ${erroUpload.message}`
+            )
+          }
+
+          const { error: erroRegistro } = await supabase
+            .from('envio_arte_arquivos')
+            .insert({
+              envio_id: r.envioId,
+              nome: arquivo.name,
+              caminho,
+              tamanho_bytes: arquivo.size,
+            })
+
+          if (erroRegistro) {
+            setEnviando(false)
+            setProgresso('')
+            return setErro(`Falha ao registrar "${arquivo.name}".`)
+          }
+        }
+      }
+
+      await finalizarEnvio()
+
+      setEnviando(false)
+      setProgresso('')
+      setSucesso(true)
+      setLink('')
+      setObservacoes('')
+      setArquivos([])
+      router.refresh()
+    } catch {
+      setEnviando(false)
+      setProgresso('')
+      setErro('Não foi possível concluir o envio. Tente novamente.')
+    }
+  }
 
   async function copiarEmail() {
     try {
-      await navigator.clipboard.writeText(EMAIL_BELLO)
+      await navigator.clipboard.writeText(EMAIL_ARTES)
       setCopiado(true)
       setTimeout(() => setCopiado(false), 1800)
     } catch {
@@ -48,7 +147,7 @@ export default function EnvioArtes({ envios }: { envios: Envio[] }) {
           onClick={() => setAberto(true)}
           className="w-full sm:w-auto border border-[#131A2E] rounded-sm px-5 py-2.5 text-sm font-semibold tracking-wide"
         >
-          + ENVIAR LINK DE ARTES
+          + ENVIAR ARTES
         </button>
       ) : (
         <div className="bg-white border border-[#DDDCD5] rounded-sm p-5">
@@ -64,28 +163,13 @@ export default function EnvioArtes({ envios }: { envios: Envio[] }) {
           </div>
 
           <p className="text-xs text-[#6E6E68] leading-relaxed mb-3">
-            Envie o link dos arquivos por Google Drive, Dropbox, WeTransfer,
-            OneDrive ou serviço equivalente. Não é preciso subir os arquivos aqui.
+            Anexe os arquivos aqui ou, se forem muito grandes, envie o link de
+            Google Drive, Dropbox, WeTransfer ou serviço equivalente.
           </p>
 
           <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 text-xs leading-relaxed">
             <strong className="block text-[10px] tracking-widest mb-1.5">
-              1 · LIBERE O ACESSO
-            </strong>
-            O link precisa permitir download direto, sem pedir autorização. Se o
-            serviço exigir liberar por e-mail, use{' '}
-            <button
-              onClick={copiarEmail}
-              className="inline-flex items-center gap-1 font-mono font-semibold bg-white border border-[#C79600] rounded-sm px-1.5 py-0.5 align-baseline"
-            >
-              {EMAIL_BELLO}
-              {copiado && <span className="text-[#2E7D4F]">copiado</span>}
-            </button>
-          </div>
-
-          <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 text-xs leading-relaxed mt-2">
-            <strong className="block text-[10px] tracking-widest mb-1.5">
-              2 · NOMEIE PELO SKU
+              NOMEIE PELO SKU
             </strong>
             Cada arquivo salvo com o nome igual ao SKU do produto — por exemplo{' '}
             <span className="font-mono">AUR-1042.png</span>. Arquivos fora desse
@@ -94,25 +178,72 @@ export default function EnvioArtes({ envios }: { envios: Envio[] }) {
 
           <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 text-xs leading-relaxed mt-2">
             <strong className="block text-[10px] tracking-widest mb-1.5">
-              3 · ATENÇÃO AO PRAZO
+              SE USAR LINK, LIBERE O ACESSO
             </strong>
-            Links de serviços temporários, como o WeTransfer, expiram em poucos
-            dias. Avise se o seu tiver prazo curto.
+            O link precisa permitir download direto, sem pedir autorização. Se o
+            serviço exigir liberar por e-mail, use{' '}
+            <button
+              onClick={copiarEmail}
+              className="inline-flex items-center gap-1 font-mono font-semibold bg-white border border-[#C79600] rounded-sm px-1.5 py-0.5 align-baseline"
+            >
+              {EMAIL_ARTES}
+              {copiado && <span className="text-[#2E7D4F]">copiado</span>}
+            </button>
+            . Links do WeTransfer e afins expiram em poucos dias — avise se o seu
+            tiver prazo curto.
           </div>
 
-          <form action={acao} className="mt-4 space-y-4">
+          <div className="mt-4 space-y-4">
+            <div>
+              <label
+                htmlFor="arquivos"
+                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+              >
+                ARQUIVOS
+              </label>
+              <input
+                id="arquivos"
+                type="file"
+                multiple
+                onChange={escolherArquivos}
+                className="block w-full text-sm text-[#6E6E68] file:mr-3 file:rounded-sm file:border file:border-[#DDDCD5] file:bg-white file:px-3 file:py-2 file:text-xs file:font-semibold file:tracking-wide"
+              />
+              <p className="text-xs text-[#6E6E68] mt-1">
+                Até {TAMANHO_MAX_MB} MB por arquivo. Pode selecionar vários.
+              </p>
+
+              {arquivos.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {arquivos.map((a) => (
+                    <li
+                      key={a.name}
+                      className="flex items-center justify-between gap-2 text-xs bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-2.5 py-1.5"
+                    >
+                      <span className="truncate font-mono">{a.name}</span>
+                      <span className="text-[#6E6E68] shrink-0">
+                        {(a.size / 1024 / 1024).toFixed(1)} MB
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <div>
               <label
                 htmlFor="link"
                 className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
               >
-                LINK DOS ARQUIVOS<span className="text-[#B00063] ml-1">*</span>
+                LINK DOS ARQUIVOS{' '}
+                <span className="text-[#DDDCD5]">
+                  {arquivos.length > 0 ? 'opcional' : 'ou anexe acima'}
+                </span>
               </label>
               <input
                 id="link"
-                name="link"
                 type="url"
-                required
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
                 inputMode="url"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -130,32 +261,35 @@ export default function EnvioArtes({ envios }: { envios: Envio[] }) {
               </label>
               <textarea
                 id="observacoes"
-                name="observacoes"
                 rows={2}
                 maxLength={1000}
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
                 placeholder="Quantas artes, tecido pretendido, prazo do link, instruções"
                 className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 text-sm outline-none focus:border-[#131A2E] resize-y"
               />
             </div>
 
-            {estado && !estado.ok && (
-              <p className="text-sm text-[#B00063]">{estado.erro}</p>
+            {progresso && (
+              <p className="text-sm text-[#6E6E68]">{progresso}</p>
             )}
 
-            {estado?.ok && (
+            {erro && <p className="text-sm text-[#B00063]">{erro}</p>}
+
+            {sucesso && (
               <p className="text-sm text-[#2E7D4F]">
-                Link enviado. A equipe da Bello Tecido foi notificada.
+                Envio recebido. A equipe da Best Color Tecidos foi notificada.
               </p>
             )}
 
             <button
-              type="submit"
-              disabled={pendente}
+              onClick={enviar}
+              disabled={enviando}
               className="bg-[#131A2E] text-white rounded-sm px-5 py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
             >
-              {pendente ? 'ENVIANDO...' : 'ENVIAR LINK'}
+              {enviando ? 'ENVIANDO...' : 'ENVIAR'}
             </button>
-          </form>
+          </div>
         </div>
       )}
 
@@ -186,7 +320,7 @@ export default function EnvioArtes({ envios }: { envios: Envio[] }) {
                 )}
                 {e.resposta && (
                   <p className="text-xs mt-2 pt-2 border-t border-[#DDDCD5] leading-relaxed">
-                    <strong>Bello Tecido:</strong> {e.resposta}
+                    <strong>Best Color Tecidos:</strong> {e.resposta}
                   </p>
                 )}
               </div>

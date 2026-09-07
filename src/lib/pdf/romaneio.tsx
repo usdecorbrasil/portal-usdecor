@@ -123,7 +123,7 @@ export function RomaneioDocumento({ pedidos }: { pedidos: DadosRomaneio[] }) {
       {pedidos.map((p) => (
         <Page key={p.numero} size="A4" style={styles.page}>
           <View style={styles.header}>
-            <Text style={styles.logoTexto}>Bello Tecido</Text>
+            <Text style={styles.logoTexto}>Best Color Tecidos</Text>
             <View>
               <Text style={styles.tituloRomaneio}>ROMANEIO DE CALANDRA</Text>
               <Text style={styles.numeroGrande}>#{p.numero}</Text>

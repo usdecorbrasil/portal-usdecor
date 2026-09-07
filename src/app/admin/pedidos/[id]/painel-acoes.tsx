@@ -2046,7 +2046,7 @@ function TelaReimpressao({
             <div className="grid grid-cols-2 gap-2">
               <OpcaoCusto
                 ativo={custo === 'interno'}
-                titulo="Bello Tecido"
+                titulo="Best Color Tecidos"
                 legenda="retrabalho interno"
                 onClick={() => setCusto('interno')}
               />

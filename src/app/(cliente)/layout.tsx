@@ -44,7 +44,7 @@ export default async function ClienteLayout({
             <div className="min-w-0">
               <Image
                 src="/logo-horizontal.png"
-                alt="Bello Tecido"
+                alt="Best Color Tecidos"
                 width={483}
                 height={120}
                 priority

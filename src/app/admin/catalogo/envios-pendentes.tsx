@@ -1,15 +1,21 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { atualizarEnvio } from '@/app/actions/artes'
+import { atualizarEnvio, linksDownload } from '@/app/actions/artes'
+
+export type ArquivoEnvio = {
+  nome: string
+  tamanhoBytes: number
+}
 
 type Envio = {
   id: string
   cliente: string
-  link: string
+  link: string | null
   observacoes: string | null
   situacao: string
   criadoEm: string
+  arquivos: ArquivoEnvio[]
 }
 
 export default function EnviosPendentes({ envios }: { envios: Envio[] }) {
@@ -64,6 +70,40 @@ function CardEnvio({ envio }: { envio: Envio }) {
     })
   }
 
+  /**
+   * Baixa os anexos e marca como cadastrado numa ação só — separar os dois
+   * passos abriria espaço para cadastrar sem ter baixado.
+   */
+  function baixarECadastrar() {
+    setErro('')
+    iniciar(async () => {
+      if (envio.arquivos.length > 0) {
+        const links = await linksDownload(envio.id)
+
+        if (links.length === 0) {
+          setErro('Não foi possível gerar os links de download.')
+          return
+        }
+
+        // Um clique por arquivo; o navegador pede permissão uma vez
+        // quando há vários
+        links.forEach((l, i) => {
+          setTimeout(() => {
+            const a = document.createElement('a')
+            a.href = l.url
+            a.download = l.nome
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+          }, i * 700)
+        })
+      }
+
+      const r = await atualizarEnvio(envio.id, 'cadastrado')
+      if (!r.ok) setErro(r.erro)
+    })
+  }
+
   return (
     <div className={classeCard}>
       <div className="flex items-baseline justify-between gap-3">
@@ -79,9 +119,27 @@ function CardEnvio({ envio }: { envio: Envio }) {
         {new Date(envio.criadoEm).toLocaleDateString('pt-BR')}
       </p>
 
-      <a href={envio.link} target="_blank" rel="noreferrer" className={classeLink}>
-        {envio.link}
-      </a>
+      {envio.link && (
+        <a href={envio.link} target="_blank" rel="noreferrer" className={classeLink}>
+          {envio.link}
+        </a>
+      )}
+
+      {envio.arquivos.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {envio.arquivos.map((a) => (
+            <li
+              key={a.nome}
+              className="flex items-center justify-between gap-2 text-xs bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-2.5 py-1.5"
+            >
+              <span className="truncate font-mono">{a.nome}</span>
+              <span className="text-[#6E6E68] shrink-0">
+                {(a.tamanhoBytes / 1024 / 1024).toFixed(1)} MB
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {envio.observacoes && (
         <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
@@ -141,11 +199,15 @@ function CardEnvio({ envio }: { envio: Envio }) {
             REENVIAR
           </button>
           <button
-            onClick={() => marcar('cadastrado')}
+            onClick={baixarECadastrar}
             disabled={pendente}
             className="bg-[#2E7D4F] text-white rounded-sm py-2 text-[10px] font-semibold tracking-wider disabled:opacity-50"
           >
-            {pendente ? '...' : 'CADASTRADO'}
+            {pendente
+              ? '...'
+              : envio.arquivos.length > 0
+              ? 'BAIXAR E CADASTRAR'
+              : 'CADASTRADO'}
           </button>
         </div>
       )}

@@ -24,7 +24,7 @@ export default function NovaSenhaPage() {
       <div className="w-full max-w-sm">
         <Image
           src="/logo-horizontal.png"
-          alt="Bello Tecido"
+          alt="Best Color Tecidos"
           width={483}
           height={120}
           priority
