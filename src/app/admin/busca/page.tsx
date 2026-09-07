@@ -21,9 +21,15 @@ export default async function BuscaPage({
   if (!perfil || perfil.papel === 'cliente') redirect('/')
 
   const termo = (q ?? '').trim()
+  // A tela cheia mostra bem mais que os 3 por segmento do menu suspenso
   const resultado = termo.length >= 2
-    ? await buscarGeral(termo)
-    : { pedidos: [], clientes: [], artes: [] }
+    ? await buscarGeral(termo, 30)
+    : {
+        pedidos: [],
+        clientes: [],
+        artes: [],
+        temMais: { pedidos: false, clientes: false, artes: false },
+      }
 
   const total =
     resultado.pedidos.length + resultado.clientes.length + resultado.artes.length
@@ -66,14 +72,23 @@ export default async function BuscaPage({
                 className="flex items-center gap-3 bg-white border border-[#DDDCD5] rounded-sm p-4 hover:border-[#131A2E]"
               >
                 <div className="flex-1 min-w-0">
-                  <span className="font-mono text-xs text-[#6E6E68]">
-                    #{p.numero}
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="font-mono text-xs text-[#6E6E68] shrink-0">
+                      {p.numero} ·
+                    </span>
+                    <h3 className="font-semibold tracking-tight truncate">
+                      {p.clienteNome}
+                    </h3>
+                  </div>
+                  <span
+                    className={`text-xs ${
+                      p.emAndamento ? 'text-[#B00063]' : 'text-[#6E6E68]'
+                    }`}
+                  >
+                    {p.statusLabel}
                   </span>
-                  <h3 className="font-semibold tracking-tight truncate">
-                    {p.clienteNome}
-                  </h3>
                 </div>
-                {p.total !== null && (
+                {p.total !== null && p.total > 0 && (
                   <span className="font-mono font-semibold text-sm shrink-0">
                     R$ {brl(p.total)}
                   </span>

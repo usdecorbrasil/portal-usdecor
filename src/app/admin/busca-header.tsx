@@ -8,6 +8,17 @@ import { buscarGeral, type ResultadoBusca } from '@/app/actions/busca'
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+function VerMais({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left px-2 py-1 text-[10px] font-semibold tracking-wide text-[#0090D8] hover:bg-[#FAFAF7] rounded-sm"
+    >
+      ver mais →
+    </button>
+  )
+}
+
 export default function BuscaHeader() {
   const [termo, setTermo] = useState('')
   const [aberto, setAberto] = useState(false)
@@ -91,19 +102,31 @@ export default function BuscaHeader() {
                   onClick={() => setAberto(false)}
                   className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm hover:bg-[#FAFAF7] rounded-sm"
                 >
-                  <span className="truncate">
-                    <span className="font-mono text-xs text-[#6E6E68]">
-                      #{p.numero}
-                    </span>{' '}
-                    {p.clienteNome}
+                  <span className="min-w-0 flex-1">
+                    <span className="truncate block">
+                      <span className="font-mono text-xs text-[#6E6E68]">
+                        {p.numero}
+                      </span>{' '}
+                      {p.clienteNome}
+                    </span>
+                    <span
+                      className={`text-[10px] ${
+                        p.emAndamento ? 'text-[#B00063]' : 'text-[#6E6E68]'
+                      }`}
+                    >
+                      {p.statusLabel}
+                    </span>
                   </span>
-                  {p.total !== null && (
+                  {p.total !== null && p.total > 0 && (
                     <span className="font-mono text-xs text-[#6E6E68] shrink-0">
                       R$ {brl(p.total)}
                     </span>
                   )}
                 </Link>
               ))}
+              {resultado.temMais.pedidos && (
+                <VerMais onClick={irParaResultados} />
+              )}
             </div>
           )}
 
@@ -122,6 +145,9 @@ export default function BuscaHeader() {
                   {c.razaoSocial}
                 </Link>
               ))}
+              {resultado.temMais.clientes && (
+                <VerMais onClick={irParaResultados} />
+              )}
             </div>
           )}
 
@@ -143,6 +169,9 @@ export default function BuscaHeader() {
                   {a.nome}
                 </Link>
               ))}
+              {resultado.temMais.artes && (
+                <VerMais onClick={irParaResultados} />
+              )}
             </div>
           )}
 
