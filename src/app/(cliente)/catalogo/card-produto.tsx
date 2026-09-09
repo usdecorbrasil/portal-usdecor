@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useCarrinho } from '@/lib/carrinho/contexto'
-import Visualizador from './visualizador'
+import Visualizador from '@/components/visualizador-imagem'
 import SeletorColecao, { type Colecao } from '@/components/seletor-colecao'
 
 type Produto = {

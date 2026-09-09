@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import BotaoAtivo from './botao-ativo'
 import EditarProduto from './editar-produto'
+import Visualizador from '@/components/visualizador-imagem'
 import SeletorColecao, { type Colecao } from '@/components/seletor-colecao'
 
 type Produto = {
@@ -39,6 +40,7 @@ export default function CardArte({
   podeEditar: boolean
 }) {
   const [editando, setEditando] = useState(false)
+  const [ampliada, setAmpliada] = useState(false)
 
   const nomeColecao =
     colecoes.find((c) => c.id === produto.catalogoId)?.nome ?? ''
@@ -51,13 +53,21 @@ export default function CardArte({
         }`}
       >
         {imagemUrl ? (
-          <img
-            src={imagemUrl}
-            alt={produto.nome}
-            loading="lazy"
-            decoding="async"
-            className={`w-full h-20 sm:h-32 object-cover ${produto.ativo ? '' : 'opacity-60'}`}
-          />
+          <button
+            onClick={() => setAmpliada(true)}
+            className="block w-full group"
+            aria-label={`Ampliar ${produto.nome}`}
+          >
+            <img
+              src={imagemUrl}
+              alt={produto.nome}
+              loading="lazy"
+              decoding="async"
+              className={`w-full h-20 sm:h-32 object-cover group-hover:opacity-85 transition-opacity ${
+                produto.ativo ? '' : 'opacity-60'
+              }`}
+            />
+          </button>
         ) : (
           <div className="w-full h-20 sm:h-32 bg-[#EEEDE7] flex items-center justify-center">
             <span className="text-[10px] sm:text-xs text-[#6E6E68]">sem imagem</span>
@@ -73,7 +83,7 @@ export default function CardArte({
             {podeEditar && (
               <button
                 onClick={() => setEditando(true)}
-                className="text-[10px] sm:text-xs tracking-widest text-[#6E6E68] hover:text-[#B00063] shrink-0"
+                className="shrink-0 border border-[#DDDCD5] rounded-sm px-2 py-1 text-[10px] sm:text-xs font-semibold tracking-widest text-[#6E6E68] hover:border-[#B00063] hover:text-[#B00063]"
               >
                 EDITAR
               </button>
@@ -119,6 +129,15 @@ export default function CardArte({
           )}
         </div>
       </div>
+
+      {ampliada && imagemUrl && (
+        <Visualizador
+          url={imagemUrl}
+          sku={produto.sku}
+          nome={produto.nome}
+          aoFechar={() => setAmpliada(false)}
+        />
+      )}
 
       {editando && (
         <EditarProduto
