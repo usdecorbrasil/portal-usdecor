@@ -58,6 +58,17 @@ function lerCampos(formData: FormData) {
   }
 }
 
+/**
+ * O navegador reduz a imagem e tenta gerar WebP, mas nem todos conseguem
+ * codificar nesse formato — quando não conseguem, devolvem PNG sem avisar.
+ * Por isso aceitamos os três formatos que a conversão pode produzir.
+ */
+const FORMATOS: Record<string, string> = {
+  'image/webp': 'webp',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+}
+
 function validarImagem(imagem: FormDataEntryValue | null, obrigatoria: boolean) {
   if (!(imagem instanceof File) || imagem.size === 0) {
     return obrigatoria ? 'Selecione a imagem da arte.' : null
@@ -65,7 +76,7 @@ function validarImagem(imagem: FormDataEntryValue | null, obrigatoria: boolean) 
   if (imagem.size > IMAGEM_MAX) {
     return 'Imagem acima do limite. Recarregue a página e tente de novo.'
   }
-  if (imagem.type !== 'image/webp') {
+  if (!FORMATOS[imagem.type]) {
     return 'Formato inesperado. Recarregue a página e tente de novo.'
   }
   return null
@@ -115,11 +126,12 @@ export async function criarProduto(
     return { ok: false, erro: 'Não foi possível cadastrar a arte.' }
   }
 
-  const caminho = `${dados.cliente_id}/${produto.id}.webp`
+  const arquivo = imagem as File
+  const caminho = `${dados.cliente_id}/${produto.id}.${FORMATOS[arquivo.type]}`
 
   const { error: erroUpload } = await admin.storage
     .from('artes')
-    .upload(caminho, imagem as File, { contentType: 'image/webp', upsert: true })
+    .upload(caminho, arquivo, { contentType: arquivo.type, upsert: true })
 
   if (erroUpload) {
     await admin.from('produtos').delete().eq('id', produto.id)
@@ -183,11 +195,16 @@ export async function editarProduto(
   }
 
   if (enviouImagem) {
-    const caminho = atual.imagem_path ?? `${atual.cliente_id}/${id}.webp`
+    const arquivo = imagem as File
+    // Reaproveita o caminho existente para não deixar o arquivo antigo órfão;
+    // o formato real vai no contentType, que é o que o navegador respeita
+    const caminho =
+      atual.imagem_path ??
+      `${atual.cliente_id}/${id}.${FORMATOS[arquivo.type]}`
 
     const { error: erroUpload } = await admin.storage
       .from('artes')
-      .upload(caminho, imagem as File, { contentType: 'image/webp', upsert: true })
+      .upload(caminho, arquivo, { contentType: arquivo.type, upsert: true })
 
     if (erroUpload) {
       return { ok: false, erro: 'Dados salvos, mas a imagem não pôde ser trocada.' }

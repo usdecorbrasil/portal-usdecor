@@ -43,6 +43,20 @@ function ehPdf(file: File) {
   )
 }
 
+/**
+ * Nem todo navegador codifica WebP no canvas. Quando não codifica, ele
+ * devolve PNG sem avisar — e PNG ignora o parâmetro de qualidade, o que
+ * obrigaria a encolher demais a imagem para caber no limite. Nesses casos
+ * JPEG é bem melhor: comprime forte e respeita a qualidade pedida.
+ */
+function formatoDeSaida(): string {
+  const teste = document.createElement('canvas')
+  teste.width = 1
+  teste.height = 1
+  const suportaWebp = teste.toDataURL('image/webp').startsWith('data:image/webp')
+  return suportaWebp ? 'image/webp' : 'image/jpeg'
+}
+
 export async function reduzirImagem(file: File): Promise<ResultadoReducao> {
   const pdf = ehPdf(file)
 
@@ -109,6 +123,8 @@ export async function reduzirImagem(file: File): Promise<ResultadoReducao> {
    * impressão. Então a busca não desiste: baixa a qualidade, depois reduz
    * as dimensões, e repete até caber — por maior que seja o original.
    */
+  const formato = formatoDeSaida()
+
   let blob: Blob | null = null
   let largura = 0
   let altura = 0
@@ -126,7 +142,7 @@ export async function reduzirImagem(file: File): Promise<ResultadoReducao> {
     }
 
     const atual = await new Promise<Blob | null>((resolve) =>
-      desenho.canvas.toBlob(resolve, 'image/webp', qualidade)
+      desenho.canvas.toBlob(resolve, formato, qualidade)
     )
 
     if (atual) {
