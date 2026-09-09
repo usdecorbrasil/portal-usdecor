@@ -137,10 +137,19 @@ primeiro acesso, recuperação de senha).
 
 ## Pendências conhecidas (checar status atual antes de assumir resolvido)
 
-- Domínio para envio de e-mails via Resend. **Bloqueia todo o ciclo de cobrança**: sem
-  domínio verificado, o Resend só envia para o próprio endereço cadastrado, então nenhum
-  cliente recebe confirmação, aviso de produção ou boleto.
-- Gerar credenciais OAuth do Bling / abrir Bling Conta / habilitar boletos.
+- **Registrar `bestcolortecidos.com.br`** — é o gargalo de duas frentes ao mesmo tempo:
+  - **E-mails**: sem domínio verificado no Resend, só é possível enviar para o próprio
+    endereço cadastrado. Nenhum cliente recebe confirmação, aviso de produção ou boleto.
+  - **Bling**: decidido esperar o domínio antes de conectar, para configurar o redirect
+    URI já no endereço definitivo em vez de refazer depois.
+- **Portal ficará em `portal.bestcolortecidos.com.br`** (subdomínio, não subpasta).
+  Subpasta exigiria proxy reverso no servidor do site institucional, com risco conhecido
+  em cookie de sessão, além de `basePath` no Next. Ao migrar, atualizar
+  `NEXT_PUBLIC_SITE_URL` e `BLING_REDIRECT_URI` no Vercel e a URL de retorno no Bling.
+- Conectar o Bling: a tabela `integracao_bling` está **vazia** — o OAuth nunca foi
+  concluído. O cliente de API com renovação de token já existe (`src/lib/bling/`), e
+  Configurações mostra o status e permite testar a conexão.
+- Abrir Bling Conta / habilitar boletos.
 - Definir prazo padrão de vencimento do boleto.
 - Criar produto genérico de estampa no Bling.
 - Definir gateway de pagamento para cartão de crédito/débito.
