@@ -17,6 +17,7 @@ export default function LoginPage() {
 function LoginForm() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
+  const [verSenha, setVerSenha] = useState(false)
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
   const router = useRouter()
@@ -98,15 +99,25 @@ function LoginForm() {
             >
               SENHA
             </label>
-            <input
-              id="senha"
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E]"
-            />
+            <div className="relative">
+              <input
+                id="senha"
+                type={verSenha ? 'text' : 'password'}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="w-full border border-[#DDDCD5] rounded-sm pl-3 pr-16 py-2.5 bg-white outline-none focus:border-[#131A2E]"
+              />
+              <button
+                type="button"
+                onClick={() => setVerSenha((v) => !v)}
+                aria-label={verSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold tracking-wider text-[#6E6E68] hover:text-[#131A2E] px-1.5 py-1"
+              >
+                {verSenha ? 'OCULTAR' : 'MOSTRAR'}
+              </button>
+            </div>
           </div>
 
           {erro && <p className="text-sm text-[#B00063]">{erro}</p>}
@@ -131,7 +142,16 @@ function LoginForm() {
 
         <p className="text-xs text-[#6E6E68] mt-6 leading-relaxed text-center">
           O acesso é criado pela Best Color Tecidos. Se você ainda não tem login,
-          entre em contato conosco.
+          entre em contato{' '}
+          <a
+            href="https://bestcolortecidos.com.br"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#B00063] hover:underline"
+          >
+            conosco
+          </a>
+          .
         </p>
       </div>
     </main>
