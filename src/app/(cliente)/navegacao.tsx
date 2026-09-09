@@ -8,6 +8,7 @@ const ABAS = [
   { href: '/catalogo', label: 'Catálogo' },
   { href: '/carrinho', label: 'Carrinho' },
   { href: '/pedidos', label: 'Pedidos' },
+  { href: '/conta', label: 'Minha conta' },
 ]
 
 export default function Navegacao() {
