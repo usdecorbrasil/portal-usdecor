@@ -163,6 +163,12 @@ primeiro acesso, recuperação de senha).
 - Conectar o Bling: a tabela `integracao_bling` está **vazia** — o OAuth nunca foi
   concluído. O cliente de API com renovação de token já existe (`src/lib/bling/`), e
   Configurações mostra o status e permite testar a conexão.
+- **Bling usa dois hosts** — `www.bling.com.br` só para OAuth (authorize/token) e
+  `api.bling.com.br` para as chamadas de recurso. Chamar recurso em `www` devolve
+  403 FORBIDDEN. Separado em `src/lib/bling/cliente.ts` (`BASE_OAUTH` / `BASE_API`).
+- **Migração JWT do Bling (a fazer)**: o portal recebe hoje token opaco, modelo que o
+  Bling está descontinuando. Para migrar, enviar o cabeçalho `enable-jwt: 1` no POST
+  para `/oauth/token` (tanto no callback quanto no refresh).
 - Abrir Bling Conta / habilitar boletos.
 - Definir prazo padrão de vencimento do boleto.
 - Criar produto genérico de estampa no Bling.

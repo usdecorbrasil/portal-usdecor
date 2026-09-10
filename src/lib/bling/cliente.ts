@@ -1,7 +1,13 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const BASE = 'https://www.bling.com.br/Api/v3'
+/**
+ * São dois hosts distintos, e trocá-los quebra a integração:
+ * o fluxo OAuth (authorize e token) fica em `www`, mas as chamadas de
+ * recurso só são aceitas em `api` — `www` responde 403 FORBIDDEN nelas.
+ */
+const BASE_OAUTH = 'https://www.bling.com.br/Api/v3'
+const BASE_API = 'https://api.bling.com.br/Api/v3'
 
 /** Renova alguns minutos antes de expirar, para não estourar no meio de uma chamada */
 const MARGEM_MS = 5 * 60 * 1000
@@ -64,7 +70,7 @@ async function tokenValido(): Promise<string | null> {
     `${process.env.BLING_CLIENT_ID}:${process.env.BLING_CLIENT_SECRET}`
   ).toString('base64')
 
-  const resposta = await fetch(`${BASE}/oauth/token`, {
+  const resposta = await fetch(`${BASE_OAUTH}/oauth/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -110,7 +116,7 @@ export async function chamarBling(
     }
   }
 
-  const resposta = await fetch(`${BASE}${caminho}`, {
+  const resposta = await fetch(`${BASE_API}${caminho}`, {
     ...opcoes,
     headers: {
       Accept: 'application/json',
