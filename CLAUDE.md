@@ -137,15 +137,29 @@ primeiro acesso, recuperação de senha).
 
 ## Pendências conhecidas (checar status atual antes de assumir resolvido)
 
-- **Registrar `bestcolortecidos.com.br`** — é o gargalo de duas frentes ao mesmo tempo:
+- **Registrar `bestcolortecidos.com.br`** — domínio já registrado no Registro.br.
+  Falta o acesso de edição de zona DNS (solicitado em 09/09/2026), que trava:
   - **E-mails**: sem domínio verificado no Resend, só é possível enviar para o próprio
     endereço cadastrado. Nenhum cliente recebe confirmação, aviso de produção ou boleto.
-  - **Bling**: decidido esperar o domínio antes de conectar, para configurar o redirect
-    URI já no endereço definitivo em vez de refazer depois.
+  - **Domínio do portal**: o CNAME `portal` → `cname.vercel-dns.com` não pode ser criado
+    enquanto o acesso à zona não sair.
+- **PENDÊNCIA ABERTA — migrar do `.vercel.app` para o domínio próprio.** Decidido em
+  09/09/2026 não esperar o DNS: o Bling foi configurado com o endereço provisório
+  `https://portal-bello-tecido.vercel.app/api/bling/callback` (o `.vercel.app` manteve
+  o nome antigo mesmo após o projeto ser renomeado para `portal-bestcolortecidos`).
+  Quando a zona DNS liberar, revisar **na ordem**:
+  1. Criar o CNAME `portal` no Registro.br e adicionar o domínio no Vercel.
+  2. Atualizar `NEXT_PUBLIC_SITE_URL` e `BLING_REDIRECT_URI` no Vercel para
+     `https://portal.bestcolortecidos.com.br...`.
+  3. Atualizar a URL de redirecionamento **no painel do Bling** — os dois textos
+     precisam ser idênticos, senão o OAuth falha com `token_falhou`
+     (a rota envia o valor na troca de token, `src/app/api/bling/callback/route.ts`).
+  4. Reconectar o Bling (o token atual continua válido, mas o fluxo de reconexão vai
+     usar o endereço novo).
+  5. Redeploy — variável de ambiente só passa a valer em build novo.
 - **Portal ficará em `portal.bestcolortecidos.com.br`** (subdomínio, não subpasta).
   Subpasta exigiria proxy reverso no servidor do site institucional, com risco conhecido
-  em cookie de sessão, além de `basePath` no Next. Ao migrar, atualizar
-  `NEXT_PUBLIC_SITE_URL` e `BLING_REDIRECT_URI` no Vercel e a URL de retorno no Bling.
+  em cookie de sessão, além de `basePath` no Next.
 - Conectar o Bling: a tabela `integracao_bling` está **vazia** — o OAuth nunca foi
   concluído. O cliente de API com renovação de token já existe (`src/lib/bling/`), e
   Configurações mostra o status e permite testar a conexão.
