@@ -212,7 +212,7 @@ export default function NovoPedido({ clientes }: { clientes: Cliente[] }) {
                       onClick={() =>
                         setQtds((x) => ({
                           ...x,
-                          [a.id]: Math.max(0, (x[a.id] ?? 0) - 5),
+                          [a.id]: Math.max(0, (x[a.id] ?? 0) - 1),
                         }))
                       }
                       aria-label="Diminuir"
@@ -235,7 +235,7 @@ export default function NovoPedido({ clientes }: { clientes: Cliente[] }) {
                     />
                     <button
                       onClick={() =>
-                        setQtds((x) => ({ ...x, [a.id]: (x[a.id] ?? 0) + 5 }))
+                        setQtds((x) => ({ ...x, [a.id]: (x[a.id] ?? 0) + 1 }))
                       }
                       aria-label="Aumentar"
                       className="w-7 h-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"

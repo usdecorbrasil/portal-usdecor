@@ -4,8 +4,9 @@ import BotaoVoltar from '@/components/botao-voltar'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import FormularioProduto from './formulario'
-import CardArte from './card-arte'
+import ListaArtes from './lista-artes'
 import BuscaPagina from '@/components/busca-pagina'
+import { ProvedorBusca } from '@/components/busca-contexto'
 import EditarColecao from '@/components/editar-colecao'
 
 const brl = (v: number) =>
@@ -68,7 +69,8 @@ export default async function CatalogoPage({
   const preco = Number(cliente.preco_metro)
 
   return (
-    <div>
+    <ProvedorBusca>
+      <div>
       <BotaoVoltar href="/admin/catalogo" rotulo="CATÁLOGOS" />
 
       <p className="text-sm text-[#6E6E68] mt-3">{cliente.razao_social}</p>
@@ -143,34 +145,21 @@ export default async function CatalogoPage({
         />
       )}
 
-      <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {produtos?.map((p) => (
-          <div key={p.id} data-busca={`${p.sku} ${p.nome}`}>
-            <CardArte
-              produto={{
-                id: p.id,
-                sku: p.sku,
-                nome: p.nome,
-                largura: p.largura != null ? Number(p.largura) : null,
-                altura: p.altura != null ? Number(p.altura) : null,
-                ativo: p.ativo,
-                catalogoId: p.catalogo_id,
-              }}
-              imagemUrl={p.imagem_path ? urls.get(p.imagem_path) ?? null : null}
-              colecoes={colecoes ?? []}
-              podeEditar={nivelAdmin}
-            />
-          </div>
-        ))}
-
-        {(!produtos || produtos.length === 0) && (
-          <div className="sm:col-span-2 lg:col-span-3 border border-dashed border-[#DDDCD5] rounded-sm py-12 text-center">
-            <p className="text-sm text-[#6E6E68]">
-              Nenhuma arte neste catálogo.
-            </p>
-          </div>
-        )}
+      <ListaArtes
+        artes={(produtos ?? []).map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          nome: p.nome,
+          largura: p.largura != null ? Number(p.largura) : null,
+          altura: p.altura != null ? Number(p.altura) : null,
+          ativo: p.ativo,
+          catalogoId: p.catalogo_id,
+          imagemUrl: p.imagem_path ? urls.get(p.imagem_path) ?? null : null,
+        }))}
+        colecoes={colecoes ?? []}
+        podeEditar={nivelAdmin}
+      />
       </div>
-    </div>
+    </ProvedorBusca>
   )
 }

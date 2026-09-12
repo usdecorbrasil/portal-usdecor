@@ -17,14 +17,11 @@ export default function CardProduto({
   imagemUrl,
   colecoes,
   prioridade = false,
-  dadosBusca,
 }: {
   produto: Produto
   imagemUrl: string | null
   colecoes: Colecao[]
   prioridade?: boolean
-  /** Texto comparado pela busca da página */
-  dadosBusca?: string
 }) {
   const { adicionar, itens } = useCarrinho()
   const noCarrinho = itens.find((i) => i.produtoId === produto.id)
@@ -52,10 +49,7 @@ export default function CardProduto({
   }
 
   return (
-    <div
-      data-busca={dadosBusca}
-      className="bg-white border border-[#DDDCD5] rounded-sm overflow-hidden flex flex-col"
-    >
+    <div className="bg-white border border-[#DDDCD5] rounded-sm overflow-hidden flex flex-col">
       {imagemUrl ? (
         <button
           onClick={() => setAmpliada(true)}
@@ -101,7 +95,7 @@ export default function CardProduto({
 
         <div className="flex border border-[#DDDCD5] rounded-sm overflow-hidden mt-auto pt-1.5 sm:pt-2">
           <button
-            onClick={() => ajustar(-5)}
+            onClick={() => ajustar(-1)}
             aria-label="Diminuir"
             className="w-7 h-7 sm:w-8 sm:h-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
           >
@@ -111,13 +105,12 @@ export default function CardProduto({
             type="number"
             inputMode="numeric"
             min={0}
-            step={5}
             value={qtd}
             onChange={(e) => setQtd(Math.max(0, parseInt(e.target.value) || 0))}
             className="flex-1 w-full text-center font-mono text-xs sm:text-sm outline-none min-w-0"
           />
           <button
-            onClick={() => ajustar(5)}
+            onClick={() => ajustar(1)}
             aria-label="Aumentar"
             className="w-7 h-7 sm:w-8 sm:h-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
           >

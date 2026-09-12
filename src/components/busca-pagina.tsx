@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { normalizar, useBusca } from './busca-contexto'
 
 /**
  * Busca que filtra a própria página, sem sair dela.
@@ -19,13 +20,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * - `data-busca-vazio` — só aparece quando a busca não encontrou nada
  */
 
-const normalizar = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-
 function escopoDaPagina(): HTMLElement {
   return document.querySelector('main') ?? document.body
 }
@@ -41,11 +35,19 @@ export default function BuscaPagina({
   const [encontrados, setEncontrados] = useState<number | null>(null)
   const campo = useRef<HTMLInputElement>(null)
 
+  // Com um ProvedorBusca em volta, quem filtra é a lista — ela enxerga a
+  // coleção inteira, e não só o que está renderizado nesta página
+  const busca = useBusca()
+  const controlado = !!busca
+  const definirTermoNoContexto = busca?.definirTermo
+
   // O filtro roda tanto na digitação quanto no observador; ler o termo de um
   // ref evita recriar o observador (e refazer tudo) a cada tecla
   const termoRef = useRef('')
 
   const aplicar = useCallback(() => {
+    if (controlado) return
+
     const escopo = escopoDaPagina()
     const termos = normalizar(termoRef.current).split(/\s+/).filter(Boolean)
     const filtrando = termos.length > 0
@@ -93,7 +95,7 @@ export default function BuscaPagina({
     })
 
     setEncontrados(filtrando ? visiveis : null)
-  }, [])
+  }, [controlado])
 
   // Filtra a cada mudança do termo
   useEffect(() => {
@@ -101,9 +103,16 @@ export default function BuscaPagina({
     aplicar()
   }, [termo, aplicar])
 
+  // Modo controlado: só publica o texto; a lista devolve quantos achou
+  useEffect(() => {
+    definirTermoNoContexto?.(termo)
+  }, [termo, definirTermoNoContexto])
+
   // A lista vem do servidor: depois de um router.refresh() os cartões voltam
   // sem o filtro aplicado, então é preciso reaplicar
   useEffect(() => {
+    if (controlado) return
+
     const escopo = escopoDaPagina()
     let agendado = 0
 
@@ -153,7 +162,9 @@ export default function BuscaPagina({
           }
         })
     }
-  }, [aplicar])
+  }, [aplicar, controlado])
+
+  const contagem = controlado ? busca?.encontrados ?? null : encontrados
 
   return (
     <div data-busca-ui className="relative w-full sm:w-64">
@@ -183,17 +194,17 @@ export default function BuscaPagina({
         placeholder={placeholder}
         className={
           'w-full border border-[#DDDCD5] rounded-sm pl-8 py-1.5 text-sm bg-white outline-none focus:border-[#131A2E] ' +
-          (encontrados !== null ? 'pr-36' : 'pr-8')
+          (contagem !== null ? 'pr-36' : 'pr-8')
         }
       />
 
       {/* Fica dentro da caixa do campo: posicionado abaixo dele, no celular
           o texto caía em cima da linha seguinte da página */}
-      {encontrados !== null && (
+      {contagem !== null && (
         <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[9px] font-mono tracking-wide text-[#6E6E68] pointer-events-none whitespace-nowrap">
-          {encontrados === 0
+          {contagem === 0
             ? 'NENHUM RESULTADO'
-            : encontrados + (encontrados === 1 ? ' RESULTADO' : ' RESULTADOS')}
+            : contagem + (contagem === 1 ? ' RESULTADO' : ' RESULTADOS')}
         </span>
       )}
 
