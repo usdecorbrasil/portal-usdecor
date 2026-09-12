@@ -91,7 +91,7 @@ export default function ListaCatalogo({
   }
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       {secoes.map(({ colecao, artes: daColecao }) => (
         <SecaoColecao
           key={colecao.id}
@@ -139,16 +139,16 @@ function SecaoColecao({
   return (
     <section ref={topo} className="scroll-mt-4">
       {mostrarTitulo && (
-        <div className="flex items-start justify-between gap-3 pb-3 mb-5 border-b-2 border-[#131A2E]">
+        <div className="flex items-center justify-between gap-3 pb-1.5 mb-3 border-b border-[#131A2E]">
           <div className="min-w-0">
-            <h2 className="text-xl font-bold tracking-tight text-[#131A2E]">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#131A2E]">
               {colecao.nome}
             </h2>
             {colecao.descricao && (
-              <p className="text-sm text-[#6E6E68] mt-1">{colecao.descricao}</p>
+              <p className="text-[11px] text-[#9B9A93]">{colecao.descricao}</p>
             )}
           </div>
-          <div className="pt-1.5 shrink-0">
+          <div className="shrink-0">
             <EditarColecao
               catalogoId={colecao.id}
               nomeAtual={colecao.nome}
@@ -159,7 +159,7 @@ function SecaoColecao({
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {visiveis.map((p, idx) => (
           <CardProduto
             key={p.id}

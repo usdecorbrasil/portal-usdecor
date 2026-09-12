@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import FiltroData from '../pedidos/filtro-data'
 import BuscaPagina from '@/components/busca-pagina'
+import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
 import FiltrosRecolhiveis from '@/components/filtros-recolhiveis'
 
 const brl = (v: number) =>
@@ -102,84 +103,91 @@ export default async function ArquivadosPage({
       </FiltrosRecolhiveis>
 
       {fechados.length > 0 && (
-        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mb-6 flex items-baseline justify-between gap-3">
-          <span className="text-xs tracking-widest text-[#6E6E68]">
-            TOTAL FATURADO
+        <div className="bg-white border border-[#E4E3DC] rounded-sm px-3 py-2 mb-4 flex items-baseline justify-between gap-3">
+          <span className="text-[9px] font-mono uppercase tracking-[0.14em] text-[#9B9A93]">
+            Total faturado
           </span>
-          <strong className="font-mono text-xl">R$ {brl(faturado)}</strong>
+          <strong className="font-mono text-base tabular-nums">
+            R$ {brl(faturado)}
+          </strong>
         </div>
       )}
 
-      <div className="space-y-2 sm:space-y-3">
-        {lista.map((p) => (
-          <Link
-            key={p.id}
-            href={`/admin/pedidos/${p.id}`}
-            data-busca={`${p.numero} ${p.cliente}`}
-            className="block bg-white border border-[#DDDCD5] rounded-sm p-3 sm:p-4 hover:border-[#131A2E]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="font-mono text-xs sm:text-sm text-[#6E6E68] whitespace-nowrap">
-                  #{p.numero}
-                </div>
-                <span className="font-semibold tracking-tight text-base sm:text-lg truncate block">
+      <div className={CAIXA}>
+        <div className={CABECALHO}>
+          <span className="w-1 shrink-0" aria-hidden />
+          <span className="w-9 shrink-0">Nº</span>
+          <span className="flex-1 min-w-0">Cliente</span>
+          <span className="w-14 shrink-0 text-right">Qtd</span>
+          <span className="w-20 shrink-0 text-right">Valor</span>
+          <span aria-hidden className="w-2 shrink-0" />
+        </div>
+
+        <div className={CORPO}>
+          {lista.map((p) => (
+            <Link
+              key={p.id}
+              href={`/admin/pedidos/${p.id}`}
+              data-busca={`${p.numero} ${p.cliente}`}
+              className="flex items-stretch bg-white hover:bg-[#FAFAF8]"
+            >
+              <span
+                aria-hidden
+                className={
+                  'w-1 shrink-0 ' +
+                  (p.cancelado ? 'bg-[#C495AC]' : 'bg-[#8CB399]')
+                }
+              />
+
+              <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5">
+                <span className={NUM + ' w-9 shrink-0 text-[#6E6E68]'}>
+                  {p.numero}
+                </span>
+
+                <span
+                  className={
+                    NOME +
+                    ' flex-1 min-w-0 ' +
+                    (p.cancelado ? 'line-through text-[#9B9A93]' : '')
+                  }
+                >
                   {p.cliente}
                 </span>
-              </div>
 
-              <div
-                className={`text-right shrink-0 text-xs sm:text-sm font-mono ${
-                  p.cancelado ? 'text-[#6E6E68] line-through' : 'text-[#6E6E68]'
-                }`}
-              >
-                {!p.liberadoMetragem && (
-                  <div className="whitespace-nowrap">{p.unidades} un</div>
+                {p.cancelado && (
+                  <span className={ETIQUETA + ' bg-[#F7EFF3] text-[#8A4F66]'}>
+                    cancelado
+                  </span>
                 )}
-                {p.liberadoMetragem && (
-                  <>
-                    <div className="whitespace-nowrap">{p.unidades} un</div>
-                    <div className="font-bold text-[#131A2E] whitespace-nowrap">
-                      R$ {brl(p.total)}
-                    </div>
-                  </>
-                )}
+
+                <span className={NUM + ' w-14 shrink-0 text-right text-[#6E6E68]'}>
+                  {p.unidades} un
+                </span>
+
+                <span
+                  className={
+                    NUM +
+                    ' w-20 shrink-0 text-right font-semibold ' +
+                    (p.cancelado ? 'text-[#9B9A93] line-through' : 'text-[#131A2E]')
+                  }
+                >
+                  {p.liberadoMetragem ? brl(p.total) : '—'}
+                </span>
+
+                <span className="text-[#DDDCD5] shrink-0 leading-none">›</span>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 mt-1.5 sm:mt-2">
-              <span
-                className={`text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-sm ${
-                  p.cancelado
-                    ? 'bg-[#EAE9E3] text-[#6E6E68]'
-                    : 'bg-[#E3F0E8] text-[#2E7D4F]'
-                }`}
-              >
-                {p.cancelado ? 'Cancelado' : 'Pedido fechado'}
-              </span>
-              <span className="text-[10px] sm:text-xs text-[#6E6E68]">
-                {new Date(p.encerrado).toLocaleDateString('pt-BR')}
-              </span>
-            </div>
-
-            {p.cancelado && p.motivo && (
-              <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-[#DDDCD5] leading-relaxed">
-                {p.motivo}
-              </p>
-            )}
-          </Link>
-        ))}
-
-        {lista.length === 0 && (
-          <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center">
-            <p className="text-sm text-[#6E6E68]">
-              {dataDe || dataAte
-                ? 'Nenhum pedido arquivado nesse período.'
-                : 'Nenhum pedido arquivado ainda.'}
-            </p>
-          </div>
-        )}
+            </Link>
+          ))}
+        </div>
       </div>
+
+      {lista.length === 0 && (
+        <div className={VAZIO}>
+          {dataDe || dataAte
+            ? 'Nenhum pedido arquivado nesse período.'
+            : 'Nenhum pedido arquivado ainda.'}
+        </div>
+      )}
     </div>
   )
 }

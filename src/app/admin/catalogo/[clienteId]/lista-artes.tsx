@@ -66,7 +66,7 @@ export default function ListaArtes({
 
   return (
     <div ref={topo} className="mt-8 scroll-mt-4">
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {visiveis.map((p) => (
           <CardArte
             key={p.id}
@@ -86,7 +86,7 @@ export default function ListaArtes({
         ))}
 
         {visiveis.length === 0 && (
-          <div className="sm:col-span-2 lg:col-span-3 border border-dashed border-[#DDDCD5] rounded-sm py-12 text-center">
+          <div className="col-span-2 sm:col-span-3 lg:col-span-4 border border-dashed border-[#DDDCD5] rounded-sm py-12 text-center">
             <p className="text-sm text-[#6E6E68]">
               {filtrando
                 ? 'Nenhuma arte deste catálogo bate com essa busca.'

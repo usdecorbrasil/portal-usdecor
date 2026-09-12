@@ -4,6 +4,7 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import NovoCatalogo from './novo-catalogo'
 import EnviosPendentes from './envios-pendentes'
 import BuscaPagina from '@/components/busca-pagina'
+import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME } from '@/components/estilo-lista'
 
 export default async function CatalogosPage() {
   const perfil = await lerPerfil()
@@ -68,33 +69,47 @@ export default async function CatalogosPage() {
 
       {nivelAdmin && <NovoCatalogo clientes={ativos} />}
 
-      <div className="mt-8 space-y-8">
+      <div className="mt-8 space-y-5">
         {clientes?.map((cliente) => {
           const meus = catalogos?.filter((k) => k.cliente_id === cliente.id) ?? []
 
           return (
             <section key={cliente.id} data-busca-grupo>
-              <div className="flex items-baseline justify-between gap-3 border-b-2 border-[#131A2E] pb-2 mb-3">
-                <h2 className="font-semibold tracking-tight">
+              <div className="flex items-center justify-between gap-3 px-2.5 py-1 border border-b-0 border-[#E4E3DC] bg-[#FCFCFA] rounded-t-sm">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6E6E68] truncate">
                   {cliente.razao_social}
                   {!cliente.ativo && (
-                    <span className="ml-2 text-xs font-normal text-[#6E6E68]">
+                    <span className="ml-1.5 font-normal normal-case tracking-normal text-[#9B9A93]">
                       inativo
                     </span>
                   )}
                 </h2>
-                <span className="text-xs text-[#6E6E68] whitespace-nowrap">
-                  {meus.length} coleç{meus.length === 1 ? 'ão' : 'ões'}
+                <span
+                  data-busca-contagem
+                  className="font-mono text-[11px] text-[#9B9A93] whitespace-nowrap tabular-nums"
+                >
+                  {meus.length}
                 </span>
               </div>
 
               {meus.length === 0 ? (
-                <p className="text-sm text-[#6E6E68] py-3">
+                <p className="text-xs text-[#6E6E68] border border-[#E4E3DC] rounded-b-sm px-2.5 py-3 bg-white">
                   Nenhuma coleção.
                   {nivelAdmin && ' Crie uma pelo botão acima.'}
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className={CAIXA + ' rounded-t-none'}>
+                  <div className={CABECALHO}>
+                    <span className="flex-1 min-w-0">Coleção</span>
+                    <span className="w-12 shrink-0 text-right">Artes</span>
+                    <span className="w-12 shrink-0 text-right">Ativas</span>
+                    <span className="w-16 shrink-0 text-right hidden sm:block">
+                      Aguard.
+                    </span>
+                    <span aria-hidden className="w-2 shrink-0" />
+                  </div>
+
+                  <div className={CORPO}>
                   {meus.map((k) => {
                     const artes = k.produtos ?? []
                     const artesAtivas = artes.filter((p) => p.ativo).length
@@ -105,42 +120,45 @@ export default async function CatalogosPage() {
                         key={k.id}
                         href={`/admin/catalogo/${k.id}`}
                         data-busca={`${cliente.razao_social} ${k.nome} ${k.descricao ?? ''}`}
-                        className="flex items-center gap-3 bg-white border border-[#DDDCD5] rounded-sm p-4 hover:border-[#131A2E]"
+                        className="flex items-center gap-2 px-2.5 py-1.5 bg-white hover:bg-[#FAFAF8]"
                       >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold tracking-tight">
-                              {k.nome}
-                            </h3>
+                        <span className="flex-1 min-w-0">
+                          <span className="flex items-center gap-1.5">
+                            <span className={NOME}>{k.nome}</span>
                             {!k.ativo && (
-                              <span className="text-xs bg-[#EAE9E3] text-[#6E6E68] px-1.5 py-0.5 rounded-sm">
+                              <span className={ETIQUETA + ' bg-[#EAE9E3] text-[#6E6E68]'}>
                                 arquivado
                               </span>
                             )}
-                          </div>
+                          </span>
                           {k.descricao && (
-                            <p className="text-xs text-[#6E6E68] mt-0.5">
+                            <span className="block text-[10px] text-[#9B9A93] truncate">
                               {k.descricao}
-                            </p>
+                            </span>
                           )}
-                          <div className="flex items-center gap-2 text-xs text-[#6E6E68] mt-1">
-                            <span>{artes.length} artes</span>
-                            <span className="w-1 h-1 rounded-full bg-[#DDDCD5]" />
-                            <span>{artesAtivas} ativas</span>
-                            {inativas > 0 && (
-                              <>
-                                <span className="w-1 h-1 rounded-full bg-[#DDDCD5]" />
-                                <span className="text-[#C79600]">
-                                  {inativas} aguardando
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[#DDDCD5]">›</span>
+                        </span>
+
+                        <span className={NUM + ' w-12 shrink-0 text-right text-[#6E6E68]'}>
+                          {artes.length}
+                        </span>
+                        <span className={NUM + ' w-12 shrink-0 text-right text-[#6E6E68]'}>
+                          {artesAtivas}
+                        </span>
+                        <span
+                          className={
+                            NUM +
+                            ' w-16 shrink-0 text-right hidden sm:block ' +
+                            (inativas > 0 ? 'text-[#C79600] font-semibold' : 'text-[#DDDCD5]')
+                          }
+                        >
+                          {inativas > 0 ? inativas : '—'}
+                        </span>
+
+                        <span className="text-[#DDDCD5] shrink-0 leading-none">›</span>
                       </Link>
                     )
                   })}
+                  </div>
                 </div>
               )}
             </section>

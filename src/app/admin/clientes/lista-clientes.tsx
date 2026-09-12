@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
 
 type Cliente = {
   id: string
@@ -43,69 +44,80 @@ export default function ListaClientes({
         </div>
       )}
 
-      <div className="space-y-1.5 sm:space-y-2">
-        {clientes.map((c) => (
-          <Link
-            key={c.id}
-            href={`/admin/clientes/${c.id}`}
-            data-busca={`${c.razao_social} ${c.cnpj} ${c.email}`}
-            className={`flex items-center gap-3 bg-white border rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E] ${
-              c.temAtraso ? 'border-[#B00063]' : 'border-[#DDDCD5]'
-            }`}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-semibold tracking-tight text-sm sm:text-base truncate">
-                  {c.razao_social}
-                </h2>
-                {!c.ativo && (
-                  <span className="text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#EAE9E3] text-[#6E6E68] shrink-0">
-                    inativo
+      <div className={CAIXA}>
+        <div className={CABECALHO}>
+          <span className="flex-1 min-w-0">Cliente</span>
+          <span className="w-32 shrink-0 hidden sm:block">CNPJ</span>
+          <span className="w-16 shrink-0 text-right">R$/m</span>
+          <span className="w-20 shrink-0 text-right hidden sm:block">Limite</span>
+          <span aria-hidden className="w-2 shrink-0" />
+        </div>
+
+        <div className={CORPO}>
+          {clientes.map((c) => (
+            <Link
+              key={c.id}
+              href={`/admin/clientes/${c.id}`}
+              data-busca={`${c.razao_social} ${c.cnpj} ${c.email}`}
+              className="flex items-stretch bg-white hover:bg-[#FAFAF8]"
+            >
+              {/* tarja: vermelha quando há boleto em atraso */}
+              <span
+                aria-hidden
+                className={
+                  'w-1 shrink-0 ' +
+                  (c.temAtraso ? 'bg-[#B00063]' : c.ativo ? 'bg-transparent' : 'bg-[#DDDCD5]')
+                }
+              />
+
+              <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className={NOME}>{c.razao_social}</span>
+                    {!c.ativo && (
+                      <span className={ETIQUETA + ' bg-[#EAE9E3] text-[#6E6E68]'}>
+                        inativo
+                      </span>
+                    )}
+                    {c.temAtraso && (
+                      <span className={ETIQUETA + ' bg-[#B00063] text-white'}>
+                        atraso
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-[#9B9A93] truncate block sm:hidden">
+                    {formatarCnpj(c.cnpj)}
                   </span>
-                )}
-                {c.temAtraso && (
-                  <span className="text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#B00063] text-white shrink-0">
-                    boleto em atraso
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 font-mono">
-                {formatarCnpj(c.cnpj)}
-              </p>
-              <p className="text-[10px] sm:text-xs text-[#6E6E68]">{c.email}</p>
-            </div>
+                </div>
 
-            <div className="text-right shrink-0">
-              <div className="flex items-baseline gap-1.5 justify-end">
-                <span className="text-[8px] sm:text-[9px] font-mono tracking-widest uppercase text-[#6E6E68]">
-                  R$/m
+                <span className={NUM + ' w-32 shrink-0 text-[#6E6E68] hidden sm:block'}>
+                  {formatarCnpj(c.cnpj)}
                 </span>
-                <span className="font-mono font-semibold text-xs sm:text-sm">
-                  {brl(c.preco_metro)}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-1.5 justify-end mt-0.5 sm:mt-1">
-                <span className="text-[9px] font-mono tracking-widest uppercase text-[#6E6E68]">
-                  limite
-                </span>
-                <span className="font-mono text-sm text-[#6E6E68]">
-                  {c.limite_credito > 0 ? `R$ ${brl(c.limite_credito)}` : '—'}
-                </span>
-              </div>
-            </div>
 
-            <span className="text-[#DDDCD5] shrink-0">›</span>
-          </Link>
-        ))}
+                <span
+                  className={
+                    NUM +
+                    ' w-16 shrink-0 text-right font-semibold ' +
+                    (c.preco_metro > 0 ? 'text-[#131A2E]' : 'text-[#C79600]')
+                  }
+                >
+                  {c.preco_metro > 0 ? brl(c.preco_metro) : '—'}
+                </span>
 
-        {clientes.length === 0 && (
-          <div className="border border-dashed border-[#DDDCD5] rounded-sm py-12 text-center">
-            <p className="text-sm text-[#6E6E68]">
-              Nenhum cliente cadastrado ainda.
-            </p>
-          </div>
-        )}
+                <span className={NUM + ' w-20 shrink-0 text-right text-[#6E6E68] hidden sm:block'}>
+                  {c.limite_credito > 0 ? brl(c.limite_credito) : '—'}
+                </span>
+
+                <span className="text-[#DDDCD5] shrink-0 leading-none">›</span>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
+
+      {clientes.length === 0 && (
+        <div className={VAZIO}>Nenhum cliente cadastrado ainda.</div>
+      )}
 
       {verArquivados && arquivados.length > 0 && (
         <div className="mt-6">
@@ -113,21 +125,23 @@ export default function ListaClientes({
             ARQUIVADOS
             <span className="flex-1 h-px bg-[#DDDCD5]" />
           </h3>
-          <div className="space-y-2">
-            {arquivados.map((c) => (
-              <div
-                key={c.id}
-                data-busca={`${c.razao_social} ${c.cnpj} ${c.email}`}
-                className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-4 opacity-70"
-              >
-                <h3 className="font-semibold tracking-tight truncate">
-                  {c.razao_social}
-                </h3>
-                <p className="text-xs text-[#6E6E68] mt-0.5 font-mono">
-                  {formatarCnpj(c.cnpj)}
-                </p>
-              </div>
-            ))}
+          <div className={CAIXA + ' opacity-70'}>
+            <div className={CORPO}>
+              {arquivados.map((c) => (
+                <div
+                  key={c.id}
+                  data-busca={`${c.razao_social} ${c.cnpj} ${c.email}`}
+                  className="flex items-center gap-2 px-2.5 py-1.5 bg-[#FAFAF7]"
+                >
+                  <span className={NOME + ' flex-1 min-w-0'}>
+                    {c.razao_social}
+                  </span>
+                  <span className={NUM + ' shrink-0 text-[#9B9A93]'}>
+                    {formatarCnpj(c.cnpj)}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

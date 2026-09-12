@@ -153,6 +153,33 @@ primeiro acesso, recuperação de senha).
   de resultados fica **dentro** da caixa do campo — posicionada abaixo dele, no celular
   caía em cima da linha seguinte.
 
+## Padrão visual das listas
+
+Decidido em 12/09/2026: as telas de lista deixaram de ser cartões espaçados e
+coloridos e passaram a ser **listas densas com cabeçalho de colunas**, com cara de
+sistema de gestão. A cor do estágio continua, mas como sinal (tarja lateral de 1px,
+etiqueta curta), não como fundo de bloco.
+
+O vocabulário está em `src/components/estilo-lista.ts` (`CAIXA`, `CABECALHO`, `CORPO`,
+`LINHA`, `NUM`, `NOME`, `ETIQUETA`, `TITULO_GRUPO`, `VAZIO`) — strings de classe, não
+componentes, porque cada tela tem colunas próprias; o que precisa ser igual é moldura,
+densidade e tipografia. Já aplicado em Pedidos, Fila de impressão, Clientes,
+Financeiro/Boletos, Arquivados, Catálogos e "Meus pedidos" do cliente. Nas grades de
+arte (catálogo), densidade veio de cartão menor e mais colunas, não de virar linha —
+ali a imagem é o conteúdo.
+
+## Catálogo paginado
+
+- Catálogo do cliente e detalhe do catálogo no admin mostram no máximo **24 artes por
+  página** (`POR_PAGINA` em `lista-catalogo.tsx` / `lista-artes.tsx`), com o paginador
+  de `src/components/paginacao.tsx`.
+- **A busca varre o catálogo inteiro, não a página aberta.** Para isso `BuscaPagina`
+  tem um modo controlado: com `ProvedorBusca` (`src/components/busca-contexto.tsx`) em
+  volta, ela só publica o texto e recebe de volta a contagem; quem filtra é a lista.
+  Sem provedor, segue filtrando o DOM por atributos como nas demais telas.
+- A página corrente fica guardada junto do termo que a produziu, então busca nova
+  recomeça da primeira página sem efeito nem setState em cascata.
+
 ## Painel do Dono — extras
 
 - **Aba Produção**: gestão operacional dos status.

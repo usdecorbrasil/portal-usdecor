@@ -63,11 +63,11 @@ export default function CardProduto({
             height={112}
             loading={prioridade ? 'eager' : 'lazy'}
             decoding="async"
-            className="w-full h-20 sm:h-28 object-cover group-hover:opacity-85 transition-opacity"
+            className="w-full h-20 sm:h-24 object-cover group-hover:opacity-85 transition-opacity"
           />
         </button>
       ) : (
-        <div className="w-full h-20 sm:h-28 bg-[#EEEDE7]" />
+        <div className="w-full h-20 sm:h-24 bg-[#EEEDE7]" />
       )}
 
       {ampliada && imagemUrl && (
@@ -79,11 +79,11 @@ export default function CardProduto({
         />
       )}
 
-      <div className="p-2 sm:p-3 flex flex-col flex-1">
+      <div className="p-2 flex flex-col flex-1">
         <div className="text-[9px] sm:text-[10px] font-mono text-[#131A2E] tracking-wide">
           {produto.sku}
         </div>
-        <h3 className="text-xs sm:text-sm font-semibold tracking-tight leading-tight mt-0.5">
+        <h3 className="text-xs font-semibold tracking-tight leading-tight mt-0.5">
           {produto.nome}
         </h3>
 
@@ -93,11 +93,11 @@ export default function CardProduto({
           colecoes={colecoes}
         />
 
-        <div className="flex border border-[#DDDCD5] rounded-sm overflow-hidden mt-auto pt-1.5 sm:pt-2">
+        <div className="flex border border-[#DDDCD5] rounded-sm overflow-hidden mt-auto pt-1.5">
           <button
             onClick={() => ajustar(-1)}
             aria-label="Diminuir"
-            className="w-7 h-7 sm:w-8 sm:h-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
+            className="w-7 h-7 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
           >
             −
           </button>
@@ -107,12 +107,12 @@ export default function CardProduto({
             min={0}
             value={qtd}
             onChange={(e) => setQtd(Math.max(0, parseInt(e.target.value) || 0))}
-            className="flex-1 w-full text-center font-mono text-xs sm:text-sm outline-none min-w-0"
+            className="flex-1 w-full text-center font-mono text-xs tabular-nums outline-none min-w-0"
           />
           <button
             onClick={() => ajustar(1)}
             aria-label="Aumentar"
-            className="w-7 h-7 sm:w-8 sm:h-8 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
+            className="w-7 h-7 bg-[#FAFAF8] text-[#6E6E68] active:bg-[#DDDCD5]"
           >
             +
           </button>
@@ -121,7 +121,7 @@ export default function CardProduto({
         <button
           onClick={adicionarAoCarrinho}
           disabled={qtd <= 0}
-          className={`mt-1.5 sm:mt-2 rounded-sm py-1.5 sm:py-2 text-[10px] sm:text-[11px] font-semibold tracking-wider text-white transition-colors disabled:opacity-40 ${
+          className={`mt-1.5 rounded-sm py-1.5 text-[10px] font-semibold tracking-wider text-white transition-colors disabled:opacity-40 ${
             feito ? 'bg-[#2E7D4F]' : 'bg-[#131A2E]'
           }`}
         >

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import BuscaPagina from '@/components/busca-pagina'
+import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, VAZIO } from '@/components/estilo-lista'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -50,83 +51,105 @@ export default async function PedidosPage() {
         Acompanhe a produção em tempo real
       </p>
 
-      <div className="space-y-3">
-        {pedidos?.map((p) => {
-          const hist = (p.pedido_status_historico ?? [])
-            .slice()
-            .sort(
-              (a, b) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      <div className={CAIXA}>
+        <div className={CABECALHO}>
+          <span className="w-1 shrink-0" aria-hidden />
+          <span className="w-9 shrink-0">Nº</span>
+          <span className="w-11 shrink-0">Data</span>
+          <span className="flex-1 min-w-0">Situação</span>
+          <span className="w-14 shrink-0 text-right">Qtd</span>
+          <span className="w-20 shrink-0 text-right">Valor</span>
+          <span aria-hidden className="w-2 shrink-0" />
+        </div>
+
+        <div className={CORPO}>
+          {pedidos?.map((p) => {
+            const hist = (p.pedido_status_historico ?? [])
+              .slice()
+              .sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )
+
+            const atual = hist[0]?.status ?? 'recebido'
+            const etapa = ETAPAS[atual] ?? ETAPAS.recebido
+            const cancelado = !!p.cancelado_em
+            const liberadoValor = ORDEM.indexOf(atual) >= ORDEM.indexOf('pronto')
+            const unidades = (p.pedido_itens ?? []).reduce(
+              (a: number, i: any) => a + Number(i.quantidade_faturada),
+              0
             )
+            const metros =
+              p.metragem_impressa != null ? Number(p.metragem_impressa) : null
 
-          const atual = hist[0]?.status ?? 'recebido'
-          const etapa = ETAPAS[atual] ?? ETAPAS.recebido
-          const cancelado = !!p.cancelado_em
-          const liberadoValor = ORDEM.indexOf(atual) >= ORDEM.indexOf('pronto')
-          const unidades = (p.pedido_itens ?? []).reduce(
-            (a: number, i: any) => a + Number(i.quantidade_faturada),
-            0
-          )
-          const metros =
-            p.metragem_impressa != null ? Number(p.metragem_impressa) : null
-
-          return (
-            <Link
-              key={p.id}
-              href={`/pedidos/${p.id}`}
-              data-busca={`${p.numero} ${etapa.label}`}
-              className="block bg-white border border-[#DDDCD5] rounded-sm p-4 hover:border-[#131A2E]"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-mono font-semibold">#{p.numero}</span>
-                <span className="text-xs text-[#6E6E68]">
-                  {new Date(p.created_at).toLocaleDateString('pt-BR')}
-                </span>
-              </div>
-
-              <div className="flex items-end justify-between gap-3 mt-2">
+            return (
+              <Link
+                key={p.id}
+                href={`/pedidos/${p.id}`}
+                data-busca={`${p.numero} ${etapa.label}`}
+                className="flex items-stretch bg-white hover:bg-[#FAFAF8]"
+              >
                 <span
-                  className={`text-xs px-2 py-1 rounded-sm ${
-                    cancelado ? 'bg-[#EAE9E3] text-[#6E6E68] line-through' : etapa.cor
-                  }`}
-                >
-                  {cancelado ? 'Cancelado' : etapa.label}
-                </span>
+                  aria-hidden
+                  className={
+                    'w-1 shrink-0 ' +
+                    (cancelado ? 'bg-[#DDDCD5]' : liberadoValor ? 'bg-[#8CB399]' : 'bg-[#C4A868]')
+                  }
+                />
 
-                <div className="text-right">
-                  <div className="font-mono font-semibold whitespace-nowrap">
-                    {unidades} un
-                  </div>
-                  {metros !== null && (
-                    <div className="text-xs text-[#6E6E68] font-mono whitespace-nowrap">
-                      {brl(metros)} m
-                    </div>
-                  )}
-                  {liberadoValor && (
-                    <div className="text-xs text-[#6E6E68] font-mono whitespace-nowrap">
-                      R$ {brl(Number(p.total))}
-                    </div>
-                  )}
+                <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5">
+                  <span className={NUM + ' w-9 shrink-0 text-[#6E6E68]'}>
+                    {p.numero}
+                  </span>
+
+                  <span className={NUM + ' w-11 shrink-0 text-[#9B9A93]'}>
+                    {new Date(p.created_at).toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                    })}
+                  </span>
+
+                  <span className="flex-1 min-w-0">
+                    <span
+                      className={
+                        ETIQUETA +
+                        ' ' +
+                        (cancelado
+                          ? 'bg-[#EAE9E3] text-[#6E6E68] line-through'
+                          : etapa.cor)
+                      }
+                    >
+                      {cancelado ? 'cancelado' : etapa.label}
+                    </span>
+                  </span>
+
+                  <span className={NUM + ' w-14 shrink-0 text-right text-[#6E6E68]'}>
+                    {metros !== null ? brl(metros) + ' m' : unidades + ' un'}
+                  </span>
+
+                  <span className={NUM + ' w-20 shrink-0 text-right font-semibold text-[#131A2E]'}>
+                    {liberadoValor ? 'R$ ' + brl(Number(p.total)) : '—'}
+                  </span>
+
+                  <span className="text-[#DDDCD5] shrink-0 leading-none">›</span>
                 </div>
-              </div>
-            </Link>
-          )
-        })}
-
-        {(!pedidos || pedidos.length === 0) && (
-          <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center">
-            <p className="text-sm text-[#6E6E68]">
-              Você ainda não fez nenhum pedido.
-            </p>
-            <Link
-              href="/catalogo"
-              className="inline-block mt-4 text-sm text-[#B00063] hover:underline"
-            >
-              Ir para o catálogo
-            </Link>
-          </div>
-        )}
+              </Link>
+            )
+          })}
+        </div>
       </div>
+
+      {(!pedidos || pedidos.length === 0) && (
+        <div className={VAZIO}>
+          <p>Você ainda não fez nenhum pedido.</p>
+          <Link
+            href="/catalogo"
+            className="inline-block mt-3 text-sm text-[#B00063] hover:underline"
+          >
+            Ir para o catálogo
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

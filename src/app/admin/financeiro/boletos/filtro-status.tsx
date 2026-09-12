@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME } from '@/components/estilo-lista'
 import { useMemo, useState } from 'react'
 
 type Parcela = {
@@ -97,85 +98,104 @@ export default function FiltroStatus({ parcelas }: { parcelas: Parcela[] }) {
           if (itens.length === 0) return null
 
           return (
-            <section key={status} data-busca-grupo>
-              <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-3 flex items-center gap-2">
-                {(ROTULOS_STATUS[status] ?? status).toUpperCase()}
-                <span className="flex-1 h-px bg-[#DDDCD5]" />
+            <section key={status} data-busca-grupo className="space-y-0">
+              <h2 className="flex items-center gap-2 px-2.5 py-1 border border-b-0 border-[#E4E3DC] bg-[#FCFCFA] rounded-t-sm text-[11px] font-bold uppercase tracking-[0.12em] text-[#6E6E68]">
+                {ROTULOS_STATUS[status] ?? status}
                 <span
                   data-busca-contagem
-                  className="font-mono normal-case tracking-normal text-[#131A2E]"
+                  className="font-mono font-semibold text-[11px] opacity-60"
                 >
                   {itens.length}
                 </span>
               </h2>
 
-              <div className="space-y-1.5 sm:space-y-2">
-                {itens.map((p) => {
-                  const paga = !!p.pagoEm
+              <div className={CAIXA + ' rounded-t-none'}>
+                <div className={CABECALHO}>
+                  <span className="w-1 shrink-0" aria-hidden />
+                  <span className="w-16 shrink-0">Nº</span>
+                  <span className="flex-1 min-w-0">Cliente</span>
+                  <span className="w-28 shrink-0 hidden sm:block">Forma</span>
+                  <span className="w-16 shrink-0 text-right">Venc.</span>
+                  <span className="w-20 shrink-0 text-right">Valor</span>
+                </div>
 
-                  return (
-                    <Link
-                      key={`${p.pedidoId}-${p.numeroParcela ?? 'unico'}`}
-                      href={`/admin/pedidos/${p.pedidoId}`}
-                      data-busca={`${p.numero} ${p.clienteNome}`}
-                      className={`flex items-center gap-3 rounded-sm p-2.5 sm:p-4 border ${
-                        p.vencida
-                          ? 'bg-[#FFF6FA] border-[#B00063] hover:border-[#B00063]'
-                          : paga
-                          ? 'bg-[#FAFAF7] border-[#DDDCD5] opacity-60 hover:opacity-100 hover:border-[#131A2E]'
-                          : 'bg-white border-[#DDDCD5] hover:border-[#131A2E]'
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className="font-mono text-[10px] sm:text-xs text-[#6E6E68]">
-                            #{p.numero}
+                <div className={CORPO}>
+                  {itens.map((p) => {
+                    const paga = !!p.pagoEm
+
+                    return (
+                      <Link
+                        key={`${p.pedidoId}-${p.numeroParcela ?? 'unico'}`}
+                        href={`/admin/pedidos/${p.pedidoId}`}
+                        data-busca={`${p.numero} ${p.clienteNome}`}
+                        className={
+                          'flex items-stretch hover:bg-[#FAFAF8] ' +
+                          (paga ? 'bg-[#FAFAF7] opacity-60 hover:opacity-100' : 'bg-white')
+                        }
+                      >
+                        <span
+                          aria-hidden
+                          className={
+                            'w-1 shrink-0 ' +
+                            (p.vencida
+                              ? 'bg-[#B00063]'
+                              : paga
+                              ? 'bg-[#8CB399]'
+                              : 'bg-transparent')
+                          }
+                        />
+
+                        <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5">
+                          <span className={NUM + ' w-16 shrink-0 text-[#6E6E68]'}>
+                            {p.numero}
                             {p.numeroParcela && p.totalParcelas
-                              ? ` · ${p.numeroParcela}/${p.totalParcelas}`
+                              ? ` ${p.numeroParcela}/${p.totalParcelas}`
                               : ''}
                           </span>
-                          <h3 className="font-semibold tracking-tight text-sm sm:text-base truncate">
+
+                          <span className={NOME + ' flex-1 min-w-0'}>
                             {p.clienteNome}
-                          </h3>
+                          </span>
+
                           {p.vencida && (
-                            <span className="text-[8px] sm:text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#B00063] text-white">
+                            <span className={ETIQUETA + ' bg-[#B00063] text-white'}>
                               vencida
                             </span>
                           )}
                           {paga && (
-                            <span className="text-[8px] sm:text-[9px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded-sm bg-[#E3F0E8] text-[#2E7D4F]">
+                            <span className={ETIQUETA + ' bg-[#E3F0E8] text-[#2E7D4F]'}>
                               pago
                             </span>
                           )}
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 sm:mt-1">
-                          {ROTULOS_PAGAMENTO[p.formaPagamento] ?? p.formaPagamento}
-                        </div>
-                      </div>
 
-                      <div className="text-right shrink-0">
-                        {p.vencimento && (
-                          <div
-                            className={`font-mono ${
-                              p.vencida
-                                ? 'text-xs sm:text-sm font-bold text-[#B00063]'
-                                : 'text-[10px] sm:text-xs font-semibold text-[#131A2E]'
-                            }`}
+                          <span className="w-28 shrink-0 text-[10px] text-[#9B9A93] truncate hidden sm:block">
+                            {ROTULOS_PAGAMENTO[p.formaPagamento] ?? p.formaPagamento}
+                          </span>
+
+                          <span
+                            className={
+                              NUM +
+                              ' w-16 shrink-0 text-right ' +
+                              (p.vencida ? 'font-bold text-[#B00063]' : 'text-[#6E6E68]')
+                            }
                           >
-                            venc. {dataBr(p.vencimento)}
-                          </div>
-                        )}
-                        <div
-                          className={`font-mono font-semibold text-xs sm:text-sm mt-0.5 sm:mt-1 ${
-                            p.vencida ? 'text-[#B00063]' : ''
-                          }`}
-                        >
-                          R$ {brl(p.valor)}
+                            {p.vencimento ? dataBr(p.vencimento) : '—'}
+                          </span>
+
+                          <span
+                            className={
+                              NUM +
+                              ' w-20 shrink-0 text-right font-semibold ' +
+                              (p.vencida ? 'text-[#B00063]' : 'text-[#131A2E]')
+                            }
+                          >
+                            {brl(p.valor)}
+                          </span>
                         </div>
-                      </div>
-                    </Link>
-                  )
-                })}
+                      </Link>
+                    )
+                  })}
+                </div>
               </div>
             </section>
           )

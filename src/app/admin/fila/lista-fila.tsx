@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { reordenarFila } from '@/app/actions/fila'
+import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME } from '@/components/estilo-lista'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -229,111 +230,110 @@ export default function ListaFila({
         </p>
       )}
 
-      <div
-        ref={containerRef}
-        className={`space-y-1.5 sm:space-y-2 ${pendente ? 'opacity-60' : ''}`}
-      >
-        {lista.map((item, idx) => (
-          <div
-            key={item.id}
-            data-item-id={item.id}
-            data-busca={`${item.numero} ${item.cliente}`}
-            onPointerDown={(e) => aoPointerDown(e, item.id)}
-            onPointerMove={aoPointerMove}
-            onPointerUp={aoPointerUp}
-            onPointerCancel={aoPointerUp}
-            onClick={(e) => {
-              // As setas de reordenar ficam dentro do card
-              if ((e.target as HTMLElement).closest('button')) return
-              abrirPedido(item.id)
-            }}
-            style={
-              podeReordenar
-                ? {
-                    touchAction: 'pan-y',
-                    cursor: arrastando === item.id ? 'grabbing' : 'grab',
-                  }
-                : { cursor: 'pointer' }
-            }
-            className={`bg-white border rounded-sm flex items-stretch overflow-hidden transition-colors select-none ${
-              sobre === item.id && arrastando && arrastando !== item.id
-                ? 'border-[#B00063] border-2'
-                : item.reimpressao
-                ? 'border-[#E8C36B]'
-                : 'border-[#DDDCD5]'
-            } ${arrastando === item.id ? 'opacity-50' : ''}`}
-          >
-            <div className="w-8 sm:w-11 shrink-0 bg-[#131A2E] text-white flex items-center justify-center font-mono font-semibold text-sm sm:text-base select-none">
-              {idx + 1}
-            </div>
+      <div className={CAIXA + (pendente ? ' opacity-60' : '')}>
+        <div className={CABECALHO}>
+          <span className="w-6 shrink-0 text-center">#</span>
+          <span className="w-9 shrink-0">Nº</span>
+          <span className="flex-1 min-w-0">Cliente</span>
+          <span className="w-11 shrink-0 text-right hidden sm:block">Desde</span>
+          <span className="w-12 shrink-0 text-right hidden sm:block">Artes</span>
+          <span className="w-14 shrink-0 text-right">Qtd</span>
+          {podeReordenar && <span aria-hidden className="w-7 shrink-0" />}
+        </div>
 
-            <div className="flex-1 min-w-0 p-2.5 sm:p-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <span className="font-semibold tracking-tight text-sm sm:text-base truncate block">
-                    {item.cliente}
+        <div ref={containerRef} className={CORPO}>
+          {lista.map((item, idx) => (
+            <div
+              key={item.id}
+              data-item-id={item.id}
+              data-busca={`${item.numero} ${item.cliente}`}
+              onPointerDown={(e) => aoPointerDown(e, item.id)}
+              onPointerMove={aoPointerMove}
+              onPointerUp={aoPointerUp}
+              onPointerCancel={aoPointerUp}
+              onClick={(e) => {
+                // As setas de reordenar ficam dentro da linha
+                if ((e.target as HTMLElement).closest('button')) return
+                abrirPedido(item.id)
+              }}
+              style={
+                podeReordenar
+                  ? {
+                      touchAction: 'pan-y',
+                      cursor: arrastando === item.id ? 'grabbing' : 'grab',
+                    }
+                  : { cursor: 'pointer' }
+              }
+              className={`flex items-stretch bg-white hover:bg-[#FAFAF8] transition-colors select-none ${
+                sobre === item.id && arrastando && arrastando !== item.id
+                  ? 'ring-1 ring-inset ring-[#B00063]'
+                  : ''
+              } ${arrastando === item.id ? 'opacity-50' : ''}`}
+            >
+              {/* a ordem de produção é o dado mais importante daqui */}
+              <div className="w-6 shrink-0 bg-[#131A2E] text-white flex items-center justify-center font-mono font-semibold text-[11px] tabular-nums">
+                {idx + 1}
+              </div>
+
+              <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5">
+                <span className={NUM + ' w-9 shrink-0 text-[#6E6E68]'}>
+                  {item.numero}
+                </span>
+
+                <span className={NOME + ' flex-1 min-w-0'}>{item.cliente}</span>
+
+                {item.reimpressao && (
+                  <span className={ETIQUETA + ' bg-[#FBF0D9] text-[#C79600]'}>
+                    reimpressão
                   </span>
+                )}
 
-                  <div className="flex items-center gap-2 mt-1 sm:mt-1.5 flex-wrap">
-                    {item.reimpressao && (
-                      <span className="text-[10px] sm:text-xs font-mono tracking-wider uppercase bg-[#FBF0D9] text-[#C79600] px-1.5 py-0.5 rounded-sm">
-                        reimpressão
-                      </span>
-                    )}
-                    <span className="text-[11px] sm:text-sm text-[#6E6E68]">
-                      {item.artes} {item.artes === 1 ? 'arte' : 'artes'}
-                    </span>
-                    <span className="text-[11px] sm:text-sm text-[#6E6E68]">
-                      desde{' '}
-                      {new Date(item.desde).toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                </div>
+                <span className={NUM + ' w-11 shrink-0 text-right text-[#9B9A93] hidden sm:block'}>
+                  {new Date(item.desde).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                  })}
+                </span>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-right">
-                    <div className="font-mono font-semibold text-xs sm:text-sm whitespace-nowrap">
-                      #{item.numero}
-                    </div>
-                    <div className="font-mono font-semibold text-xs sm:text-sm text-[#6E6E68] whitespace-nowrap">
-                      {item.unidades} un
-                    </div>
-                  </div>
-                  <span className="text-[#DDDCD5] text-lg leading-none">›</span>
-                </div>
+                <span className={NUM + ' w-12 shrink-0 text-right text-[#6E6E68] hidden sm:block'}>
+                  {item.artes}
+                </span>
+
+                <span className={NUM + ' w-14 shrink-0 text-right font-semibold'}>
+                  {item.unidades} un
+                </span>
+
+                <span className="text-[#DDDCD5] shrink-0 leading-none">›</span>
               </div>
+
+              {podeReordenar && (
+                <div className="w-7 shrink-0 border-l border-[#EFEEE8] flex flex-col">
+                  <button
+                    onClick={() => mover(item.id, -1)}
+                    disabled={idx === 0 || pendente}
+                    aria-label="Subir"
+                    className="flex-1 cursor-pointer text-[9px] text-[#6E6E68] hover:bg-[#F2F1ED] disabled:opacity-25 disabled:cursor-not-allowed"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => mover(item.id, 1)}
+                    disabled={idx === lista.length - 1 || pendente}
+                    aria-label="Descer"
+                    className="flex-1 cursor-pointer border-t border-[#EFEEE8] text-[9px] text-[#6E6E68] hover:bg-[#F2F1ED] disabled:opacity-25 disabled:cursor-not-allowed"
+                  >
+                    ▼
+                  </button>
+                </div>
+              )}
             </div>
-
-            {podeReordenar && (
-              <div className="w-7 sm:w-9 shrink-0 border-l border-[#DDDCD5] flex flex-col">
-                <button
-                  onClick={() => mover(item.id, -1)}
-                  disabled={idx === 0 || pendente}
-                  aria-label="Subir"
-                  className="flex-1 cursor-pointer text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 disabled:cursor-not-allowed text-sm"
-                >
-                  ▲
-                </button>
-                <button
-                  onClick={() => mover(item.id, 1)}
-                  disabled={idx === lista.length - 1 || pendente}
-                  aria-label="Descer"
-                  className="flex-1 cursor-pointer border-t border-[#DDDCD5] text-[#6E6E68] hover:bg-[#FAFAF8] disabled:opacity-25 disabled:cursor-not-allowed text-sm"
-                >
-                  ▼
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {podeReordenar && (
-        <p className="text-xs text-[#6E6E68] mt-4 leading-relaxed">
-          Toque e segure em qualquer parte do card para arrastar, ou use as
+        <p className="text-[11px] text-[#6E6E68] mt-3 leading-relaxed">
+          Toque e segure em qualquer parte da linha para arrastar, ou use as
           setas — mais prático no celular.
         </p>
       )}
