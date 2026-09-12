@@ -17,6 +17,7 @@ import {
   CORES_ESTAGIO,
   ROTULOS,
   destinosPermitidos,
+  motivoSemDestino,
   nivelUrgencia,
   sinal,
   sinalCurto,
@@ -253,10 +254,11 @@ export default function QuadroPedidos({
    */
   function aoPointerDown(e: React.PointerEvent, pedido: PedidoQuadro) {
     if (e.pointerType !== 'mouse' || e.button !== 0) return
-    if (!movivel(pedido)) return
+    if (!podeMover || pendente) return
     if ((e.target as HTMLElement).closest('button, input, label')) return
 
     const destinos = destinosPermitidos(pedido.status)
+    const motivo = motivoSemDestino(pedido.status)
     const largura = (e.currentTarget as HTMLElement).offsetWidth
     const partida = { x: e.clientX, y: e.clientY }
 
@@ -268,6 +270,15 @@ export default function QuadroPedidos({
         const dist = Math.hypot(ev.clientX - partida.x, ev.clientY - partida.y)
         if (dist < LIMIAR_MOUSE) return
         comecou = true
+
+        // Tentou arrastar algo que não se move: explica em vez de ignorar
+        if (motivo) {
+          houveArraste.current = true
+          setRecado(motivo)
+          desligar()
+          return
+        }
+
         comecarArraste({
           pedido,
           destinos,
@@ -288,12 +299,12 @@ export default function QuadroPedidos({
 
     function soltar() {
       desligar()
-      if (comecou) soltarArraste()
+      if (comecou && !motivo) soltarArraste()
     }
 
     function abortar() {
       desligar()
-      if (comecou) limparArraste()
+      if (comecou && !motivo) limparArraste()
     }
 
     document.addEventListener('pointermove', mover)
@@ -333,7 +344,7 @@ export default function QuadroPedidos({
       if (!pedido) return
 
       const destinos = destinosPermitidos(pedido.status)
-      if (destinos.length === 0) return
+      const motivo = motivoSemDestino(pedido.status)
 
       const t = e.touches[0]
       cancelarEspera()
@@ -351,8 +362,23 @@ export default function QuadroPedidos({
         const a = aguardando
         espera = 0
         aguardando = null
-        if (a) comecarArraste(a)
+        if (!a) return
+
+        // Segurou uma linha que não se move: explica, e o toque não abre o pedido
+        if (motivo) {
+          houveArraste.current = true
+          setRecado(motivo)
+          return
+        }
+
+        comecarArraste(a)
       }, ESPERA_TOQUE)
+    }
+
+    // Segurar o dedo num link abre o menu de contexto (Android) ou a prévia
+    // do link (iOS), e qualquer um dos dois cancela o toque no meio do gesto
+    function aoMenu(e: Event) {
+      if (aguardando || arrastoRef.current) e.preventDefault()
     }
 
     function aoMover(e: TouchEvent) {
@@ -383,6 +409,7 @@ export default function QuadroPedidos({
     quadro.addEventListener('touchmove', aoMover, { passive: false })
     quadro.addEventListener('touchend', aoSoltar)
     quadro.addEventListener('touchcancel', aoSoltar)
+    quadro.addEventListener('contextmenu', aoMenu)
 
     return () => {
       cancelarEspera()
@@ -390,6 +417,7 @@ export default function QuadroPedidos({
       quadro.removeEventListener('touchmove', aoMover)
       quadro.removeEventListener('touchend', aoSoltar)
       quadro.removeEventListener('touchcancel', aoSoltar)
+      quadro.removeEventListener('contextmenu', aoMenu)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [podeMover])
@@ -556,6 +584,13 @@ export default function QuadroPedidos({
                     setSelecionados(new Set(lista.map((p) => p.id)))
                   }
                   onLimpar={() => setSelecionados(new Set())}
+                />
+              )}
+
+              {lista.length > 0 && (
+                <CabecalhoColunas
+                  dono={dono}
+                  selecionavel={status === 'estampando'}
                 />
               )}
 
@@ -742,6 +777,39 @@ function BarraRomaneio({
 
 /* -------------------------------- linha -------------------------------- */
 
+/** Larguras das colunas, iguais no cabeçalho e nas linhas. */
+const COL = {
+  numero: 'w-9 shrink-0 tabular-nums',
+  entrada: 'w-11 shrink-0 text-right tabular-nums hidden sm:block',
+  parado: 'w-16 shrink-0 text-center',
+  qtd: 'w-14 shrink-0 text-right tabular-nums',
+  valor: 'w-20 shrink-0 text-right tabular-nums hidden sm:block',
+}
+
+function CabecalhoColunas({
+  dono,
+  selecionavel,
+}: {
+  dono: boolean
+  selecionavel: boolean
+}) {
+  return (
+    <div className="flex items-stretch border-b border-[#EFEEE8] bg-[#FCFCFA]">
+      <span aria-hidden className="w-1 shrink-0" />
+      {selecionavel && <span aria-hidden className="w-[22px] shrink-0" />}
+      <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1 text-[8px] sm:text-[9px] font-mono uppercase tracking-[0.14em] text-[#9B9A93]">
+        <span className={COL.numero}>Nº</span>
+        <span className="flex-1 min-w-0">Cliente</span>
+        <span className={COL.entrada}>Entrou</span>
+        <span className={COL.parado}>Parado há</span>
+        <span className={COL.qtd}>{dono ? 'Qtd' : 'Qtd · m'}</span>
+        {dono && <span className={COL.valor}>Valor</span>}
+        <span aria-hidden className="w-2 shrink-0" />
+      </div>
+    </div>
+  )
+}
+
 function LinhaPedido({
   p,
   ce,
@@ -768,6 +836,10 @@ function LinhaPedido({
   const s = sinal(p.status, p.dias)
   const nivel = nivelUrgencia(s.cl) as keyof Tons
   const urgente = nivel !== 'leve'
+  const entrou = new Date(p.entrada).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+  })
 
   return (
     <div
@@ -775,9 +847,11 @@ function LinhaPedido({
       data-pedido-id={p.id}
       data-busca={p.numero + ' ' + p.cliente}
       onPointerDown={onPointerDown}
-      title={s.tx}
+      title={s.tx + ' · entrou em ' + entrou}
+      // Sem isto o iOS abre a prévia do link ao segurar, cancelando o toque
+      style={{ WebkitTouchCallout: 'none' }}
       className={
-        'relative flex items-stretch bg-white hover:bg-[#FAFAF8]' +
+        'relative flex items-stretch bg-white hover:bg-[#FAFAF8] select-none' +
         (marcado ? ' bg-[#F4FAFD]' : '') +
         (arrastando ? ' opacity-40' : '') +
         (movivel ? ' cursor-grab active:cursor-grabbing' : '')
@@ -804,7 +878,7 @@ function LinhaPedido({
         onDragStart={(e) => e.preventDefault()}
         className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5"
       >
-        <span className="font-mono text-[11px] text-[#6E6E68] shrink-0 tabular-nums">
+        <span className={COL.numero + ' font-mono text-[11px] text-[#6E6E68]'}>
           {p.numero}
         </span>
 
@@ -818,25 +892,28 @@ function LinhaPedido({
           </span>
         )}
 
+        <span className={COL.entrada + ' font-mono text-[11px] text-[#9B9A93]'}>
+          {entrou}
+        </span>
+
         <span
           className={
-            (urgente
-              ? ce.tarja[nivel]
-              : 'text-[#9B9A93] bg-transparent') +
-            ' text-[9px] font-mono uppercase tracking-wider rounded-sm px-1 py-0.5 shrink-0 w-12 text-center'
+            COL.parado +
+            (urgente ? ' ' + ce.tarja[nivel] : ' text-[#9B9A93]') +
+            ' text-[9px] font-mono uppercase tracking-wider rounded-sm px-1 py-0.5'
           }
         >
           {sinalCurto(p.status, p.dias)}
         </span>
 
-        <span className="font-mono text-[11px] text-[#6E6E68] shrink-0 w-14 text-right tabular-nums">
+        <span className={COL.qtd + ' font-mono text-[11px] text-[#6E6E68]'}>
           {p.liberadoMetragem && !dono
             ? brl(p.metragemImpressa ?? 0) + ' m'
             : p.unidades + ' un'}
         </span>
 
         {dono && (
-          <span className="font-mono text-[11px] font-bold text-[#131A2E] shrink-0 w-20 text-right tabular-nums hidden sm:block">
+          <span className={COL.valor + ' font-mono text-[11px] font-bold text-[#131A2E]'}>
             {p.liberadoMetragem ? 'R$ ' + brl(p.total) : '—'}
           </span>
         )}

@@ -181,8 +181,21 @@ export default function BuscaPagina({
           }
         }}
         placeholder={placeholder}
-        className="w-full border border-[#DDDCD5] rounded-sm pl-8 pr-8 py-1.5 text-sm bg-white outline-none focus:border-[#131A2E]"
+        className={
+          'w-full border border-[#DDDCD5] rounded-sm pl-8 py-1.5 text-sm bg-white outline-none focus:border-[#131A2E] ' +
+          (encontrados !== null ? 'pr-36' : 'pr-8')
+        }
       />
+
+      {/* Fica dentro da caixa do campo: posicionado abaixo dele, no celular
+          o texto caía em cima da linha seguinte da página */}
+      {encontrados !== null && (
+        <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[9px] font-mono tracking-wide text-[#6E6E68] pointer-events-none whitespace-nowrap">
+          {encontrados === 0
+            ? 'NENHUM RESULTADO'
+            : encontrados + (encontrados === 1 ? ' RESULTADO' : ' RESULTADOS')}
+        </span>
+      )}
 
       {termo && (
         <button
@@ -198,13 +211,6 @@ export default function BuscaPagina({
         </button>
       )}
 
-      {encontrados !== null && (
-        <p className="absolute left-0 top-full mt-1 text-[10px] font-mono tracking-wide text-[#6E6E68]">
-          {encontrados === 0
-            ? 'NADA ENCONTRADO NESTA PÁGINA'
-            : encontrados + (encontrados === 1 ? ' RESULTADO' : ' RESULTADOS')}
-        </p>
-      )}
     </div>
   )
 }

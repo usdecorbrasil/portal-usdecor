@@ -90,12 +90,22 @@ Importante:
   mão.
 - Admin escolhe a próxima etapa entre as ainda não lançadas e pode desfazer o último
   lançamento manual.
-- **Arrastar e soltar em `/admin/pedidos`**: o cartão tem um punho à esquerda; arrastar
-  até outra seção lança a etapa. Funciona com mouse e com o dedo (Pointer Events, com
-  rolagem automática perto das bordas). Destinos permitidos vêm de `destinosPermitidos()`
-  em `src/app/admin/pedidos/estagios.ts` e espelham a regra do painel do pedido: uma
-  etapa por vez, exceto saindo de Estampando, onde a costura pode ser pulada. Soltar
-  num destino inválido não faz nada e explica o porquê.
+- **Arrastar e soltar em `/admin/pedidos`**: arrasta-se a própria linha do pedido (o
+  punho à esquerda foi removido a pedido do dono). No mouse o arraste só começa depois
+  de andar 6px, para o clique continuar abrindo o pedido; no toque exige segurar 350ms
+  parado (tolerância de 10px), para não brigar com a rolagem. Os ouvintes de mouse são
+  presos no próprio `pointerdown`, não num efeito — num efeito, os primeiros movimentos
+  se perdiam esperando o React renderizar. No toque são eventos nativos não-passivos
+  (`preventDefault` no `touchmove`), com `contextmenu` bloqueado e
+  `-webkit-touch-callout: none` na linha, senão o menu de contexto do Android e a prévia
+  de link do iOS cancelam o gesto. Rolagem automática perto das bordas. Destinos vêm de
+  `destinosPermitidos()` em `src/app/admin/pedidos/estagios.ts` e espelham a regra do
+  painel do pedido: uma etapa por vez, exceto saindo de Estampando, onde a costura pode
+  ser pulada. Tentar arrastar uma linha que não se move (aguardando confirmação, ou já
+  em etapa do Bling) mostra o motivo (`motivoSemDestino()`) em vez de ignorar.
+- A listagem é densa, em linhas com cabeçalho de colunas por etapa. A coluna
+  **"Parado há"** conta dias desde o **último lançamento de status**, não desde a
+  criação do pedido — a data de criação está na coluna "Entrou" (escondida no celular).
 - Toda mudança por arraste **pede confirmação antes de gravar**, e quando a etapa exige
   dados eles são preenchidos no próprio pop-up: Estampando abre o acerto de metragem e
   quantidades (gera o romaneio), Impressão abre a conferência de quantidade para o dono.
@@ -137,6 +147,11 @@ primeiro acesso, recuperação de senha).
   `data-busca-contagem` (contador do grupo) e `data-busca-vazio` (aviso de nada
   encontrado). Convive com os filtros de URL da tela (cliente, período, etapa):
   o servidor filtra primeiro, a busca da página filtra por cima.
+  Cuidados que já deram problema: o `MutationObserver` que reaplica o filtro após
+  `router.refresh()` só pode escrever no DOM o que mudou (reescrever o mesmo
+  `textContent` conta como mutação e vira laço infinito, travando a aba), e a contagem
+  de resultados fica **dentro** da caixa do campo — posicionada abaixo dele, no celular
+  caía em cima da linha seguinte.
 
 ## Painel do Dono — extras
 
@@ -226,6 +241,20 @@ primeiro acesso, recuperação de senha).
 
 Supabase Pro (~US$25) + Vercel Pro (~US$20) + Resend (grátis até 3.000 e-mails/mês) ≈
 **US$45/mês**, fixo, independente do nº de clientes.
+
+## Desempenho — o que se sabe
+
+- Cada navegação no painel faz 3 a 4 idas **sequenciais** ao Supabase antes de
+  renderizar: `getUser()` no proxy, depois `lerPerfil()` (getUser + `profiles`), depois
+  as consultas da página. `lerPerfil()` está em `cache()` do React para layout e página
+  compartilharem a mesma chamada na requisição.
+- A latência entre a região da função na Vercel e a região do projeto Supabase
+  multiplica esse custo. Se o carregamento estiver lento, conferir primeiro em
+  Vercel → Settings → Functions → Region e escolher a região mais próxima do Supabase.
+- `sharp` (binário nativo) é importado sob demanda dentro de `buscarDadosRomaneio`, não
+  no topo de `app/actions/romaneio.ts`: esse módulo é importado pela listagem de
+  pedidos (via `confirmarRomaneio`), e no topo fazia a rota `/admin/pedidos` carregar o
+  binário a cada início frio.
 
 ## Convenções
 

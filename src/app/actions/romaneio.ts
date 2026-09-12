@@ -2,7 +2,6 @@
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
-import sharp from 'sharp'
 import { createClient } from '@/lib/supabase/server'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
@@ -69,6 +68,11 @@ export async function buscarDadosRomaneio(pedidoId: string) {
       // O PDF (@react-pdf/renderer) não suporta imagens .webp, então baixamos
       // e convertemos para PNG embutido como data URI em vez de usar URL assinada.
       const porCaminho = new Map<string, string>()
+
+      // Carregado só aqui: este módulo também é importado pela listagem de
+      // pedidos (via confirmarRomaneio), e o sharp no topo fazia essa rota
+      // pagar o binário nativo a cada início frio da função
+      const sharp = (await import('sharp')).default
 
       await Promise.all(
         caminhos.map(async (caminho) => {

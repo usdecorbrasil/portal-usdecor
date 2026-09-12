@@ -60,7 +60,21 @@ export function sinalCurto(status: string, dias: number) {
   if (!EM_PRODUCAO.includes(status)) return 'bling'
   if (dias === 0) return 'hoje'
   if (dias === 1) return 'ontem'
-  return dias + 'd'
+  return dias + ' dias'
+}
+
+/**
+ * Por que um pedido nesta etapa não pode ser arrastado — ou null se pode.
+ * Mostrado quando alguém tenta arrastar mesmo assim.
+ */
+export function motivoSemDestino(status: string): string | null {
+  if (status === 'aguardando') {
+    return 'Este pedido ainda aguarda confirmação. Confirme-o na tela do pedido — depois ele pode ser arrastado.'
+  }
+  if (destinosPermitidos(status).length === 0) {
+    return 'A partir de Pedido pronto as etapas são lançadas pelo Bling (nota fiscal, expedição, entrega); não dá para mover à mão.'
+  }
+  return null
 }
 
 export function nivelUrgencia(cl: string) {

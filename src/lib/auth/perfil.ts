@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
 export type Papel = 'admin' | 'funcionario' | 'cliente' | 'financeiro'
@@ -15,8 +16,11 @@ export type Perfil = {
 /**
  * Lê o perfil do usuário logado.
  * Use em toda página do painel para decidir o que mostrar.
+ *
+ * Envolvido em `cache()`: layout e página chamam isto na mesma requisição, e
+ * sem o cache cada um fazia a própria ida ao Supabase (getUser + profiles).
  */
-export async function lerPerfil(): Promise<Perfil | null> {
+export const lerPerfil = cache(async (): Promise<Perfil | null> => {
   const supabase = await createClient()
 
   const {
@@ -42,4 +46,4 @@ export async function lerPerfil(): Promise<Perfil | null> {
     nome: data.nome,
     veValores: papel === 'admin' || papel === 'financeiro',
   }
-}
+})
