@@ -18,3 +18,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* Animações da tela de carregamento (src/components/carregando.tsx). */
+@keyframes respira {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes desliza {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
+}
+
+/* Quem pediu menos movimento no sistema não deve levar pulso nem barra. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[respira_1\.6s_ease-in-out_infinite\],
+  .animate-\[respira_1s_ease-in-out_infinite\],
+  .animate-\[desliza_1\.2s_ease-in-out_infinite\] {
+    animation: none;
+  }
+}

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { logout } from '../actions/auth'
 import BuscaHeader from './busca-header'
+import Abas from './abas'
 
 const LABEL_PAPEL: Record<string, string> = {
   admin: 'ADMIN',
@@ -82,24 +83,7 @@ export default async function AdminLayout({
           </div>
         </div>
 
-        <nav className="max-w-5xl mx-auto px-5 flex items-center overflow-x-auto">
-          {abas.map((a, i) => (
-            <div key={a.href} className="flex items-center shrink-0">
-              {i > 0 && (
-                <span
-                  aria-hidden
-                  className="w-px h-4 bg-[#DDDCD5] shrink-0"
-                />
-              )}
-              <Link
-                href={a.href}
-                className="px-3 py-2.5 text-sm text-[#6E6E68] hover:text-[#131A2E] whitespace-nowrap"
-              >
-                {a.label}
-              </Link>
-            </div>
-          ))}
-        </nav>
+        <Abas abas={abas} />
       </header>
 
       <main className="max-w-5xl mx-auto px-5 py-6">{children}</main>

@@ -153,6 +153,19 @@ primeiro acesso, recuperação de senha).
   de resultados fica **dentro** da caixa do campo — posicionada abaixo dele, no celular
   caía em cima da linha seguinte.
 
+## Carregamento entre páginas
+
+Cada área tem um `loading.tsx` (`app/loading.tsx`, `app/admin/`, `app/(cliente)/`) que
+renderiza `src/components/carregando.tsx`: logo pulsando, barra indeterminada e a
+palavra "carregando". O Next troca só o miolo — cabeçalho e navegação continuam na
+tela, então dá para clicar em outra aba sem esperar. As animações (`respira`,
+`desliza`) estão em `globals.css`, com `prefers-reduced-motion` desligando ambas.
+
+Além disso, as abas mostram um pontinho no link clicado enquanto a navegação está
+pendente (`src/components/link-carregando.tsx`, via `useLinkStatus` do Next) — resposta
+imediata ao clique, antes mesmo de o `loading.tsx` entrar. Por causa disso as abas do
+painel viraram client component (`src/app/admin/abas.tsx`).
+
 ## Padrão visual das listas
 
 Decidido em 12/09/2026: as telas de lista deixaram de ser cartões espaçados e

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCarrinho } from '@/lib/carrinho/contexto'
+import LinkCarregando from '@/components/link-carregando'
 
 const ABAS = [
   { href: '/catalogo', label: 'Catálogo' },
@@ -32,6 +33,7 @@ export default function Navegacao() {
             }`}
           >
             {a.label}
+            <LinkCarregando className="ml-1.5 align-middle" />
             {mostrarBadge && (
               <span
                 className="ml-1.5 inline-flex items-center justify-center bg-[#D8007A] text-white text-[10px] font-mono font-semibold rounded-full px-1.5 min-w-[18px] h-[18px] align-middle"
