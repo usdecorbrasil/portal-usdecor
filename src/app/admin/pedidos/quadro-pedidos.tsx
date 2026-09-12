@@ -19,11 +19,20 @@ import {
   destinosPermitidos,
   nivelUrgencia,
   sinal,
+  sinalCurto,
+  type CorEstagio,
   type Tons,
 } from './estagios'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+/** Quanto o mouse precisa andar para virar arraste em vez de clique. */
+const LIMIAR_MOUSE = 6
+/** Quanto tempo o dedo precisa ficar parado sobre o cartão. */
+const ESPERA_TOQUE = 350
+/** Quanto o dedo pode escorregar antes de virar rolagem em vez de arraste. */
+const TOLERANCIA_TOQUE = 10
 
 export type PedidoQuadro = {
   id: string
@@ -53,6 +62,14 @@ type Arrasto = {
 /** Mudança já solta no destino e ainda pendente de confirmação. */
 type Movimento = { pedido: PedidoQuadro; destino: string }
 
+type Pendente = {
+  pedido: PedidoQuadro
+  destinos: string[]
+  x: number
+  y: number
+  largura: number
+}
+
 export default function QuadroPedidos({
   grupos,
   dono,
@@ -61,7 +78,6 @@ export default function QuadroPedidos({
 }: {
   grupos: Grupo[]
   dono: boolean
-  /** Falso quando o filtro de etapa esconde os destinos possíveis */
   podeMover: boolean
   valorMinimoBoleto: number
 }) {
@@ -75,10 +91,16 @@ export default function QuadroPedidos({
   const [recado, setRecado] = useState('')
   const [pendente, iniciar] = useTransition()
 
-  // Lidos dentro dos handlers de ponteiro, que não podem depender do estado
-  // reativo sem reassinar os eventos a cada movimento do dedo
+  // Os handlers de ponteiro rodam fora do ciclo do React e precisam do valor
+  // atual sem esperar re-render
   const arrastoRef = useRef<Arrasto | null>(null)
   const alvoRef = useRef<string | null>(null)
+  const rafRef = useRef(0)
+  /** Impede que o fim do arraste abra o pedido pelo clique do link. */
+  const houveArraste = useRef(false)
+
+  const quadroRef = useRef<HTMLDivElement>(null)
+  const pedidosRef = useRef<PedidoQuadro[]>([])
 
   const estagiosNaTela = grupos.map((g) => g.status)
 
@@ -99,41 +121,6 @@ export default function QuadroPedidos({
       else novo.add(id)
       return novo
     })
-  }
-
-  /* ----------------------------- arrastar ----------------------------- */
-
-  function estagioSob(x: number, y: number): string | null {
-    const el = document.elementFromPoint(x, y)
-    const secao = el?.closest('[data-estagio]') as HTMLElement | null
-    return secao?.dataset.estagio ?? null
-  }
-
-  function iniciarArrasto(e: React.PointerEvent, pedido: PedidoQuadro) {
-    if (!podeMover || pendente) return
-    const destinos = destinosPermitidos(pedido.status)
-    if (destinos.length === 0) return
-
-    e.preventDefault()
-    e.stopPropagation()
-
-    const cartao = (e.currentTarget as HTMLElement).closest(
-      '[data-cartao]'
-    ) as HTMLElement | null
-
-    const novo: Arrasto = {
-      pedido,
-      destinos,
-      x: e.clientX,
-      y: e.clientY,
-      largura: cartao?.offsetWidth ?? 280,
-    }
-
-    arrastoRef.current = novo
-    alvoRef.current = null
-    setArrasto(novo)
-    setAlvo(null)
-    setRecado('')
   }
 
   /* --------------------------- confirmação --------------------------- */
@@ -159,97 +146,268 @@ export default function QuadroPedidos({
     })
   }
 
-  const arrastando = !!arrasto
-
-  useEffect(() => {
-    if (!arrastando) return
-
-    function mover(e: PointerEvent) {
-      const atual = arrastoRef.current
-      if (!atual) return
-      e.preventDefault()
-
-      const novo = { ...atual, x: e.clientX, y: e.clientY }
-      arrastoRef.current = novo
-      setArrasto(novo)
-
-      const sob = estagioSob(e.clientX, e.clientY)
-      if (sob !== alvoRef.current) {
-        alvoRef.current = sob
-        setAlvo(sob)
-      }
-    }
-
-    function encerrar() {
-      arrastoRef.current = null
-      alvoRef.current = null
-      setArrasto(null)
-      setAlvo(null)
-    }
-
-    function soltar() {
-      const atual = arrastoRef.current
-      const destino = alvoRef.current
-      encerrar()
-
-      if (!atual || !destino || destino === atual.pedido.status) return
-
-      if (!atual.destinos.includes(destino)) {
-        setRecado(
-          'Não dá para ir de ' +
-            ROTULOS[atual.pedido.status] +
-            ' direto para ' +
-            ROTULOS[destino] +
-            '. A partir dessa etapa só ' +
-            atual.destinos.map((d) => ROTULOS[d]).join(' ou ') +
-            '.'
-        )
-        return
-      }
-
-      setErro('')
-      abrirConfirmacao(atual.pedido, destino)
-    }
-
-    function cancelar(e: KeyboardEvent) {
-      if (e.key === 'Escape') encerrar()
-    }
-
-    // Rolagem automática perto das bordas — sem isso não dá para arrastar
-    // até uma etapa que está fora da tela no celular
-    let raf = 0
-    function rolar() {
-      const atual = arrastoRef.current
-      if (atual) {
-        const margem = 90
-        if (atual.y < margem) window.scrollBy(0, -14)
-        else if (atual.y > window.innerHeight - margem) window.scrollBy(0, 14)
-      }
-      raf = requestAnimationFrame(rolar)
-    }
-    raf = requestAnimationFrame(rolar)
-
-    document.addEventListener('pointermove', mover, { passive: false })
-    document.addEventListener('pointerup', soltar)
-    document.addEventListener('pointercancel', encerrar)
-    document.addEventListener('keydown', cancelar)
-
-    return () => {
-      cancelAnimationFrame(raf)
-      document.removeEventListener('pointermove', mover)
-      document.removeEventListener('pointerup', soltar)
-      document.removeEventListener('pointercancel', encerrar)
-      document.removeEventListener('keydown', cancelar)
-    }
-    // Só precisa (re)assinar quando o arrasto começa ou termina
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arrastando])
-
   function fechar() {
     setMovimento(null)
     setItens(null)
     setErro('')
   }
+
+  /* ----------------------------- arrastar ----------------------------- */
+
+  function estagioSob(x: number, y: number): string | null {
+    const el = document.elementFromPoint(x, y)
+    const secao = el?.closest('[data-estagio]') as HTMLElement | null
+    return secao?.dataset.estagio ?? null
+  }
+
+  function rolarSePerto() {
+    const atual = arrastoRef.current
+    if (atual) {
+      const margem = 90
+      if (atual.y < margem) window.scrollBy(0, -14)
+      else if (atual.y > window.innerHeight - margem) window.scrollBy(0, 14)
+    }
+    rafRef.current = requestAnimationFrame(rolarSePerto)
+  }
+
+  function comecarArraste(inicio: Pendente) {
+    const novo: Arrasto = {
+      pedido: inicio.pedido,
+      destinos: inicio.destinos,
+      x: inicio.x,
+      y: inicio.y,
+      largura: inicio.largura,
+    }
+
+    arrastoRef.current = novo
+    alvoRef.current = estagioSob(inicio.x, inicio.y)
+    houveArraste.current = true
+
+    setArrasto(novo)
+    setAlvo(alvoRef.current)
+    setRecado('')
+
+    if (!rafRef.current) rafRef.current = requestAnimationFrame(rolarSePerto)
+  }
+
+  function atualizarArraste(x: number, y: number) {
+    const atual = arrastoRef.current
+    if (!atual) return
+
+    const novo = { ...atual, x, y }
+    arrastoRef.current = novo
+    setArrasto(novo)
+
+    const sob = estagioSob(x, y)
+    if (sob !== alvoRef.current) {
+      alvoRef.current = sob
+      setAlvo(sob)
+    }
+  }
+
+  function limparArraste() {
+    arrastoRef.current = null
+    alvoRef.current = null
+    setArrasto(null)
+    setAlvo(null)
+
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+    }
+  }
+
+  function soltarArraste() {
+    const atual = arrastoRef.current
+    const destino = alvoRef.current
+    limparArraste()
+
+    if (!atual || !destino || destino === atual.pedido.status) return
+
+    if (!atual.destinos.includes(destino)) {
+      setRecado(
+        'Não dá para ir de ' +
+          ROTULOS[atual.pedido.status] +
+          ' direto para ' +
+          ROTULOS[destino] +
+          '. A partir dessa etapa só ' +
+          atual.destinos.map((d) => ROTULOS[d]).join(' ou ') +
+          '.'
+      )
+      return
+    }
+
+    setErro('')
+    abrirConfirmacao(atual.pedido, destino)
+  }
+
+  function movivel(pedido: PedidoQuadro) {
+    return podeMover && !pendente && destinosPermitidos(pedido.status).length > 0
+  }
+
+  /**
+   * Mouse: os ouvintes são presos no próprio pointerdown, e não num efeito —
+   * assim nenhum movimento se perde esperando o React re-renderizar. O
+   * arraste só começa depois de andar alguns pixels, senão um clique simples
+   * deixaria de abrir o pedido.
+   */
+  function aoPointerDown(e: React.PointerEvent, pedido: PedidoQuadro) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    if (!movivel(pedido)) return
+    if ((e.target as HTMLElement).closest('button, input, label')) return
+
+    const destinos = destinosPermitidos(pedido.status)
+    const largura = (e.currentTarget as HTMLElement).offsetWidth
+    const partida = { x: e.clientX, y: e.clientY }
+
+    houveArraste.current = false
+    let comecou = false
+
+    function mover(ev: PointerEvent) {
+      if (!comecou) {
+        const dist = Math.hypot(ev.clientX - partida.x, ev.clientY - partida.y)
+        if (dist < LIMIAR_MOUSE) return
+        comecou = true
+        comecarArraste({
+          pedido,
+          destinos,
+          x: ev.clientX,
+          y: ev.clientY,
+          largura,
+        })
+      }
+      ev.preventDefault()
+      atualizarArraste(ev.clientX, ev.clientY)
+    }
+
+    function desligar() {
+      document.removeEventListener('pointermove', mover)
+      document.removeEventListener('pointerup', soltar)
+      document.removeEventListener('pointercancel', abortar)
+    }
+
+    function soltar() {
+      desligar()
+      if (comecou) soltarArraste()
+    }
+
+    function abortar() {
+      desligar()
+      if (comecou) limparArraste()
+    }
+
+    document.addEventListener('pointermove', mover)
+    document.addEventListener('pointerup', soltar)
+    document.addEventListener('pointercancel', abortar)
+  }
+
+  /**
+   * Toque: segurar parado antes de arrastar, senão o gesto de rolar a lista
+   * viraria arraste. Usa eventos de toque nativos porque o `preventDefault`
+   * que trava a rolagem no meio do gesto precisa de ouvinte não-passivo.
+   */
+  useEffect(() => {
+    const quadro = quadroRef.current
+    if (!quadro || !podeMover) return
+
+    let espera = 0
+    let aguardando: Pendente | null = null
+
+    function cancelarEspera() {
+      if (espera) {
+        window.clearTimeout(espera)
+        espera = 0
+      }
+      aguardando = null
+    }
+
+    function aoTocar(e: TouchEvent) {
+      const alvoToque = e.target as HTMLElement
+      if (alvoToque.closest('button, input, label')) return
+
+      const cartao = alvoToque.closest('[data-pedido-id]') as HTMLElement | null
+      const id = cartao?.dataset.pedidoId
+      if (!id) return
+
+      const pedido = pedidosRef.current.find((p) => p.id === id)
+      if (!pedido) return
+
+      const destinos = destinosPermitidos(pedido.status)
+      if (destinos.length === 0) return
+
+      const t = e.touches[0]
+      cancelarEspera()
+      houveArraste.current = false
+
+      aguardando = {
+        pedido,
+        destinos,
+        x: t.clientX,
+        y: t.clientY,
+        largura: cartao.offsetWidth,
+      }
+
+      espera = window.setTimeout(() => {
+        const a = aguardando
+        espera = 0
+        aguardando = null
+        if (a) comecarArraste(a)
+      }, ESPERA_TOQUE)
+    }
+
+    function aoMover(e: TouchEvent) {
+      const t = e.touches[0]
+      if (!t) return
+
+      // Ainda decidindo: escorregou, então o gesto era rolagem
+      if (aguardando) {
+        const dist = Math.hypot(
+          t.clientX - aguardando.x,
+          t.clientY - aguardando.y
+        )
+        if (dist > TOLERANCIA_TOQUE) cancelarEspera()
+        return
+      }
+
+      if (!arrastoRef.current) return
+      e.preventDefault()
+      atualizarArraste(t.clientX, t.clientY)
+    }
+
+    function aoSoltar() {
+      cancelarEspera()
+      if (arrastoRef.current) soltarArraste()
+    }
+
+    quadro.addEventListener('touchstart', aoTocar, { passive: true })
+    quadro.addEventListener('touchmove', aoMover, { passive: false })
+    quadro.addEventListener('touchend', aoSoltar)
+    quadro.addEventListener('touchcancel', aoSoltar)
+
+    return () => {
+      cancelarEspera()
+      quadro.removeEventListener('touchstart', aoTocar)
+      quadro.removeEventListener('touchmove', aoMover)
+      quadro.removeEventListener('touchend', aoSoltar)
+      quadro.removeEventListener('touchcancel', aoSoltar)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [podeMover])
+
+  // O handler de toque é nativo e não enxerga as props: precisa da lista
+  // atual dos pedidos por fora do render
+  useEffect(() => {
+    pedidosRef.current = grupos.flatMap((g) => g.itens)
+  }, [grupos])
+
+  // Não deixa a rolagem automática viva se a tela sair no meio do arraste
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
+
+  /* --------------------------- ações no banco --------------------------- */
 
   function avancar(destino: string) {
     if (!movimento) return
@@ -308,11 +466,11 @@ export default function QuadroPedidos({
     !!movimento && precisaDosItens(movimento.destino) && !itens
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4" ref={quadroRef}>
       {podeMover && (
-        <p className="text-xs text-[#6E6E68] -mt-2">
-          Arraste pelo punho <span className="font-mono">⠿</span> à esquerda do
-          cartão para mover o pedido de etapa.
+        <p className="text-[11px] text-[#6E6E68] -mt-2">
+          Arraste a linha até a etapa para mudar o status — no celular, segure
+          um instante antes de arrastar.
         </p>
       )}
 
@@ -353,23 +511,26 @@ export default function QuadroPedidos({
             <div
               className={
                 ce.fundo +
-                ' inline-flex items-center gap-2 border-2 border-b-0 ' +
+                ' flex items-center gap-2 border border-b-0 ' +
                 ce.borda +
-                ' rounded-t-lg px-5 py-2 relative z-10 -mb-0.5'
+                ' rounded-t-sm px-2.5 py-1'
               }
             >
+              <span
+                aria-hidden
+                className={ce.faixa + ' w-1.5 h-1.5 rounded-full shrink-0'}
+              />
               <h2
                 className={
-                  ce.texto + ' font-bold tracking-tight text-base sm:text-lg'
+                  ce.texto +
+                  ' text-[11px] font-bold uppercase tracking-[0.12em] truncate'
                 }
               >
                 {ROTULOS[status]}
               </h2>
               <span
                 data-busca-contagem
-                className={
-                  ce.texto + ' font-mono font-semibold opacity-70 text-sm'
-                }
+                className={ce.texto + ' font-mono text-[11px] opacity-60'}
               >
                 {lista.length}
               </span>
@@ -377,7 +538,7 @@ export default function QuadroPedidos({
 
             <div
               className={
-                'border-2 rounded-b-sm rounded-tr-sm p-2.5 sm:p-3 space-y-2 sm:space-y-3 transition-colors ' +
+                'border rounded-b-sm transition-colors ' +
                 (sobreEste && destinoValido
                   ? 'border-[#131A2E] bg-[#F4FAFD]'
                   : sobreEste && !destinoValido && !ehOrigem
@@ -398,25 +559,31 @@ export default function QuadroPedidos({
                 />
               )}
 
-              {lista.map((p) => (
-                <CartaoPedido
-                  key={p.id}
-                  p={p}
-                  ce={ce}
-                  dono={dono}
-                  arrastando={arrasto?.pedido.id === p.id}
-                  podeArrastar={
-                    podeMover && destinosPermitidos(p.status).length > 0
-                  }
-                  onArrastar={(e) => iniciarArrasto(e, p)}
-                  selecionavel={status === 'estampando'}
-                  marcado={selecionados.has(p.id)}
-                  onMarcar={() => alternarSelecao(p.id)}
-                />
-              ))}
+              <div className="divide-y divide-[#EFEEE8]">
+                {lista.map((p) => (
+                  <LinhaPedido
+                    key={p.id}
+                    p={p}
+                    ce={ce}
+                    dono={dono}
+                    arrastando={arrasto?.pedido.id === p.id}
+                    movivel={movivel(p)}
+                    onPointerDown={(e) => aoPointerDown(e, p)}
+                    onClickLink={(e) => {
+                      if (houveArraste.current) {
+                        e.preventDefault()
+                        houveArraste.current = false
+                      }
+                    }}
+                    selecionavel={status === 'estampando'}
+                    marcado={selecionados.has(p.id)}
+                    onMarcar={() => alternarSelecao(p.id)}
+                  />
+                ))}
+              </div>
 
               {lista.length === 0 && (
-                <p className="text-xs text-[#6E6E68] text-center py-6">
+                <p className="text-xs text-[#6E6E68] text-center py-5">
                   Solte aqui para mover para {ROTULOS[status]}
                 </p>
               )}
@@ -427,7 +594,7 @@ export default function QuadroPedidos({
 
       {arrasto && (
         <div
-          className="fixed z-[60] pointer-events-none opacity-90 shadow-2xl rounded-sm bg-white border-2 border-[#131A2E] px-3 py-2"
+          className="fixed z-[60] pointer-events-none opacity-95 shadow-xl rounded-sm bg-white border border-[#131A2E] px-2.5 py-1.5"
           style={{
             width: arrasto.largura,
             left: arrasto.x - arrasto.largura / 2,
@@ -435,14 +602,14 @@ export default function QuadroPedidos({
           }}
         >
           <div className="flex items-baseline gap-1.5">
-            <span className="text-xs font-mono text-[#6E6E68] shrink-0">
-              {arrasto.pedido.numero} ·
+            <span className="text-[11px] font-mono text-[#6E6E68] shrink-0">
+              {arrasto.pedido.numero}
             </span>
             <span className="font-semibold tracking-tight text-sm truncate">
               {arrasto.pedido.cliente}
             </span>
           </div>
-          <div className="text-[9px] font-mono tracking-[0.11em] text-[#6E6E68]">
+          <div className="text-[9px] font-mono tracking-[0.11em] text-[#6E6E68] mt-0.5">
             {alvo && arrasto.destinos.includes(alvo)
               ? '→ ' + ROTULOS[alvo].toUpperCase()
               : 'ARRASTE ATÉ A ETAPA'}
@@ -528,8 +695,8 @@ function BarraRomaneio({
   const marcados = itens.filter((p) => selecionados.has(p.id)).map((p) => p.id)
 
   return (
-    <div className="flex items-center justify-between gap-3 flex-wrap bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-3 py-2">
-      <div className="text-xs text-[#6E6E68]">
+    <div className="flex items-center justify-between gap-3 flex-wrap bg-[#FAFAF8] border-b border-[#EFEEE8] px-2.5 py-1.5">
+      <div className="text-[11px] text-[#6E6E68]">
         {marcados.length > 0 ? (
           <>
             <strong className="text-[#131A2E]">{marcados.length}</strong>{' '}
@@ -544,7 +711,7 @@ function BarraRomaneio({
           <button
             type="button"
             onClick={onLimpar}
-            className="text-xs text-[#6E6E68] hover:text-[#131A2E]"
+            className="text-[11px] text-[#6E6E68] hover:text-[#131A2E]"
           >
             limpar
           </button>
@@ -552,7 +719,7 @@ function BarraRomaneio({
           <button
             type="button"
             onClick={onSelecionarTodos}
-            className="text-xs text-[#6E6E68] hover:text-[#131A2E]"
+            className="text-[11px] text-[#6E6E68] hover:text-[#131A2E]"
           >
             selecionar todos
           </button>
@@ -564,140 +731,117 @@ function BarraRomaneio({
             if (marcados.length === 0) return
             window.open('/admin/romaneio?ids=' + marcados.join(','), '_blank')
           }}
-          className="bg-[#131A2E] text-white text-xs font-semibold tracking-wide rounded-sm px-3 py-2 disabled:opacity-40"
+          className="bg-[#131A2E] text-white text-[10px] font-semibold tracking-wide rounded-sm px-2.5 py-1 disabled:opacity-40"
         >
-          GERAR ROMANEIO DE CALANDRA
+          GERAR ROMANEIO
         </button>
       </div>
     </div>
   )
 }
 
-/* -------------------------------- cartão -------------------------------- */
+/* -------------------------------- linha -------------------------------- */
 
-function CartaoPedido({
+function LinhaPedido({
   p,
   ce,
   dono,
   arrastando,
-  podeArrastar,
-  onArrastar,
+  movivel,
+  onPointerDown,
+  onClickLink,
   selecionavel,
   marcado,
   onMarcar,
 }: {
   p: PedidoQuadro
-  ce: { borda: string; tarja: Tons }
+  ce: CorEstagio
   dono: boolean
   arrastando: boolean
-  podeArrastar: boolean
-  onArrastar: (e: React.PointerEvent) => void
+  movivel: boolean
+  onPointerDown: (e: React.PointerEvent) => void
+  onClickLink: (e: React.MouseEvent) => void
   selecionavel: boolean
   marcado: boolean
   onMarcar: () => void
 }) {
   const s = sinal(p.status, p.dias)
-  const tarjaClasse = ce.tarja[nivelUrgencia(s.cl) as keyof Tons]
+  const nivel = nivelUrgencia(s.cl) as keyof Tons
+  const urgente = nivel !== 'leve'
 
   return (
     <div
       data-cartao
+      data-pedido-id={p.id}
       data-busca={p.numero + ' ' + p.cliente}
+      onPointerDown={onPointerDown}
+      title={s.tx}
       className={
-        'relative bg-white border rounded-sm overflow-hidden ' +
-        ce.borda +
-        (marcado ? ' ring-2 ring-[#131A2E]' : '') +
-        (arrastando ? ' opacity-40' : '')
+        'relative flex items-stretch bg-white hover:bg-[#FAFAF8]' +
+        (marcado ? ' bg-[#F4FAFD]' : '') +
+        (arrastando ? ' opacity-40' : '') +
+        (movivel ? ' cursor-grab active:cursor-grabbing' : '')
       }
     >
-      {podeArrastar && (
-        <button
-          type="button"
-          aria-label={'Mover pedido ' + p.numero + ' de etapa'}
-          onPointerDown={onArrastar}
-          onClick={(e) => e.preventDefault()}
-          style={{ touchAction: 'none' }}
-          className="absolute left-0 top-0 bottom-0 w-8 z-10 flex items-center justify-center text-[#B8B7B0] hover:text-[#131A2E] hover:bg-[#FAFAF7] cursor-grab active:cursor-grabbing"
-        >
-          <span aria-hidden className="text-sm leading-none font-mono">
-            ⠿
-          </span>
-        </button>
-      )}
+      {/* tarja do estágio: a cor continua ali, sem ocupar uma linha inteira */}
+      <span aria-hidden className={ce.faixa + ' w-1 shrink-0'} />
 
       {selecionavel && (
-        <label className="absolute top-2 right-2 z-10 bg-white border border-[#DDDCD5] rounded-sm p-1 leading-none">
+        <label className="flex items-center pl-2 shrink-0">
           <input
             type="checkbox"
             checked={marcado}
             onChange={onMarcar}
-            className="w-4 h-4 accent-[#131A2E] block"
+            aria-label={'Selecionar pedido ' + p.numero}
+            className="w-3.5 h-3.5 accent-[#131A2E] block"
           />
         </label>
       )}
 
-      <Link href={'/admin/pedidos/' + p.id} className="block">
-        <div
+      <Link
+        href={'/admin/pedidos/' + p.id}
+        onClick={onClickLink}
+        onDragStart={(e) => e.preventDefault()}
+        className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5"
+      >
+        <span className="font-mono text-[11px] text-[#6E6E68] shrink-0 tabular-nums">
+          {p.numero}
+        </span>
+
+        <span className="font-semibold tracking-tight text-sm truncate flex-1 min-w-0">
+          {p.cliente}
+        </span>
+
+        {p.temSolicitacao && (
+          <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-wider text-[#B00063] border border-[#B00063] rounded-sm px-1 shrink-0">
+            cancelar
+          </span>
+        )}
+
+        <span
           className={
-            tarjaClasse +
-            ' text-[9px] sm:text-[10px] tracking-[0.13em] font-mono px-3 py-1 sm:px-4 sm:py-1.5 flex justify-between gap-2' +
-            (podeArrastar ? ' pl-9' : '') +
-            (selecionavel ? ' pr-9' : '')
+            (urgente
+              ? ce.tarja[nivel]
+              : 'text-[#9B9A93] bg-transparent') +
+            ' text-[9px] font-mono uppercase tracking-wider rounded-sm px-1 py-0.5 shrink-0 w-12 text-center'
           }
         >
-          <span>{s.tx.toUpperCase()}</span>
-          {p.temSolicitacao && (
-            <span className="normal-case tracking-normal">
-              pediu cancelamento
-            </span>
-          )}
-        </div>
+          {sinalCurto(p.status, p.dias)}
+        </span>
 
-        <div
-          className={
-            'p-2.5 sm:p-3 flex items-center gap-2' +
-            (podeArrastar ? ' pl-9' : '')
-          }
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xs sm:text-sm font-mono text-[#6E6E68] whitespace-nowrap shrink-0">
-                {p.numero} ·
-              </span>
-              <span className="font-semibold tracking-tight text-base sm:text-lg truncate">
-                {p.cliente}
-              </span>
-            </div>
-            <div className="text-[9px] sm:text-[10px] font-mono tracking-[0.11em] text-[#6E6E68]">
-              ENTROU{' '}
-              {new Date(p.entrada).toLocaleDateString('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-              })}
-            </div>
-          </div>
+        <span className="font-mono text-[11px] text-[#6E6E68] shrink-0 w-14 text-right tabular-nums">
+          {p.liberadoMetragem && !dono
+            ? brl(p.metragemImpressa ?? 0) + ' m'
+            : p.unidades + ' un'}
+        </span>
 
-          <div className="text-right shrink-0 text-xs sm:text-sm font-mono text-[#6E6E68]">
-            {!p.liberadoMetragem && (
-              <div className="whitespace-nowrap">{p.unidades} un</div>
-            )}
-            {p.liberadoMetragem && !dono && (
-              <div className="whitespace-nowrap">
-                {brl(p.metragemImpressa ?? 0)} m
-              </div>
-            )}
-            {p.liberadoMetragem && dono && (
-              <>
-                <div className="whitespace-nowrap">{p.unidades} un</div>
-                <div className="font-bold text-[#131A2E] whitespace-nowrap">
-                  R$ {brl(p.total)}
-                </div>
-              </>
-            )}
-          </div>
+        {dono && (
+          <span className="font-mono text-[11px] font-bold text-[#131A2E] shrink-0 w-20 text-right tabular-nums hidden sm:block">
+            {p.liberadoMetragem ? 'R$ ' + brl(p.total) : '—'}
+          </span>
+        )}
 
-          <span className="text-[#DDDCD5] shrink-0 text-lg leading-none">›</span>
-        </div>
+        <span className="text-[#DDDCD5] shrink-0 leading-none">›</span>
       </Link>
     </div>
   )

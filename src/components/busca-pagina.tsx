@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * Busca que filtra a própria página, sem sair dela.
@@ -26,6 +26,10 @@ const normalizar = (s: string) =>
     .toLowerCase()
     .trim()
 
+function escopoDaPagina(): HTMLElement {
+  return document.querySelector('main') ?? document.body
+}
+
 export default function BuscaPagina({
   placeholder = 'Filtrar nesta página...',
   rotulo = 'Filtrar nesta página',
@@ -37,76 +41,95 @@ export default function BuscaPagina({
   const [encontrados, setEncontrados] = useState<number | null>(null)
   const campo = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    const escopo: HTMLElement =
-      document.querySelector('main') ?? document.body
+  // O filtro roda tanto na digitação quanto no observador; ler o termo de um
+  // ref evita recriar o observador (e refazer tudo) a cada tecla
+  const termoRef = useRef('')
 
-    // Nossas próprias alterações de texto disparam o observador; sem isso o
-    // filtro se realimentaria em laço
-    let aplicando = false
+  const aplicar = useCallback(() => {
+    const escopo = escopoDaPagina()
+    const termos = normalizar(termoRef.current).split(/\s+/).filter(Boolean)
+    const filtrando = termos.length > 0
 
-    function aplicar() {
-      aplicando = true
+    let visiveis = 0
 
-      const termos = normalizar(termo).split(/\s+/).filter(Boolean)
-      const filtrando = termos.length > 0
+    escopo.querySelectorAll<HTMLElement>('[data-busca]').forEach((el) => {
+      const alvo = normalizar(el.dataset.busca || el.textContent || '')
+      const bate = !filtrando || termos.every((t) => alvo.includes(t))
+      const display = bate ? '' : 'none'
+      if (el.style.display !== display) el.style.display = display
+      if (bate) visiveis++
+    })
 
-      const itens = Array.from(
-        escopo.querySelectorAll<HTMLElement>('[data-busca]')
-      )
+    escopo
+      .querySelectorAll<HTMLElement>('[data-busca-grupo]')
+      .forEach((grupo) => {
+        const filhos = Array.from(
+          grupo.querySelectorAll<HTMLElement>('[data-busca]')
+        )
+        const dentro = filhos.filter((e) => e.style.display !== 'none').length
 
-      let visiveis = 0
+        const display =
+          filtrando && filhos.length > 0 && dentro === 0 ? 'none' : ''
+        if (grupo.style.display !== display) grupo.style.display = display
 
-      itens.forEach((el) => {
-        const alvo = normalizar(el.dataset.busca || el.textContent || '')
-        const bate = !filtrando || termos.every((t) => alvo.includes(t))
-        el.style.display = bate ? '' : 'none'
-        if (bate) visiveis++
+        grupo
+          .querySelectorAll<HTMLElement>('[data-busca-contagem]')
+          .forEach((c) => {
+            if (c.dataset.buscaTotal === undefined) {
+              c.dataset.buscaTotal = c.textContent ?? ''
+            }
+            const texto = filtrando
+              ? String(dentro)
+              : c.dataset.buscaTotal ?? ''
+            // Só escreve quando muda: reescrever o mesmo texto ainda conta
+            // como mutação e acordaria o observador de novo, em laço
+            if (c.textContent !== texto) c.textContent = texto
+          })
       })
 
-      escopo
-        .querySelectorAll<HTMLElement>('[data-busca-grupo]')
-        .forEach((grupo) => {
-          const filhos = Array.from(
-            grupo.querySelectorAll<HTMLElement>('[data-busca]')
-          )
-          const dentro = filhos.filter((e) => e.style.display !== 'none').length
-
-          grupo.style.display =
-            filtrando && filhos.length > 0 && dentro === 0 ? 'none' : ''
-
-          grupo
-            .querySelectorAll<HTMLElement>('[data-busca-contagem]')
-            .forEach((c) => {
-              if (c.dataset.buscaTotal === undefined) {
-                c.dataset.buscaTotal = c.textContent ?? ''
-              }
-              c.textContent = filtrando
-                ? String(dentro)
-                : c.dataset.buscaTotal ?? ''
-            })
-        })
-
-      escopo
-        .querySelectorAll<HTMLElement>('[data-busca-vazio]')
-        .forEach((el) => {
-          el.style.display = filtrando && visiveis === 0 ? '' : 'none'
-        })
-
-      setEncontrados(filtrando ? visiveis : null)
-      aplicando = false
-    }
-
-    aplicar()
-
-    // A lista é renderizada no servidor: depois de um router.refresh() os
-    // cartões voltam sem o filtro aplicado
-    const observador = new MutationObserver(() => {
-      if (!aplicando) aplicar()
+    escopo.querySelectorAll<HTMLElement>('[data-busca-vazio]').forEach((el) => {
+      const display = filtrando && visiveis === 0 ? '' : 'none'
+      if (el.style.display !== display) el.style.display = display
     })
+
+    setEncontrados(filtrando ? visiveis : null)
+  }, [])
+
+  // Filtra a cada mudança do termo
+  useEffect(() => {
+    termoRef.current = termo
+    aplicar()
+  }, [termo, aplicar])
+
+  // A lista vem do servidor: depois de um router.refresh() os cartões voltam
+  // sem o filtro aplicado, então é preciso reaplicar
+  useEffect(() => {
+    const escopo = escopoDaPagina()
+    let agendado = 0
+
+    const observador = new MutationObserver((registros) => {
+      const externo = registros.some((r) => {
+        const alvo = r.target
+        const el =
+          alvo.nodeType === Node.ELEMENT_NODE
+            ? (alvo as HTMLElement)
+            : alvo.parentElement
+        // Ignora o que a própria busca escreve (contadores) e a sua UI
+        return !el?.closest('[data-busca-ui], [data-busca-contagem]')
+      })
+
+      if (!externo || agendado) return
+
+      agendado = requestAnimationFrame(() => {
+        agendado = 0
+        aplicar()
+      })
+    })
+
     observador.observe(escopo, { childList: true, subtree: true })
 
     return () => {
+      if (agendado) cancelAnimationFrame(agendado)
       observador.disconnect()
 
       escopo
@@ -130,10 +153,10 @@ export default function BuscaPagina({
           }
         })
     }
-  }, [termo])
+  }, [aplicar])
 
   return (
-    <div className="relative w-full sm:w-64">
+    <div data-busca-ui className="relative w-full sm:w-64">
       <label htmlFor="busca-pagina" className="sr-only">
         {rotulo}
       </label>

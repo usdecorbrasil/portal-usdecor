@@ -189,26 +189,26 @@ export default async function PedidosAdminPage({
       </FiltrosRecolhiveis>
 
       {(aguardando > 0 || solicitacoes > 0) && (
-        <div className="space-y-2 mb-5">
+        <div className="space-y-1.5 mb-4">
           {aguardando > 0 && (
             <Link
               href={hrefEtapa('aguardando')}
-              className="flex items-center gap-3 bg-[#F4FAFD] border border-[#0090D8] rounded-sm px-4 py-3"
+              className="flex items-center gap-2.5 bg-[#F4FAFD] border border-[#0090D8] rounded-sm px-3 py-2"
             >
-              <span className="w-2 h-2 rounded-full bg-[#0090D8] shrink-0" />
-              <span className="text-sm flex-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0090D8] shrink-0" />
+              <span className="text-xs flex-1">
                 <strong>
                   {aguardando} pedido{aguardando > 1 ? 's' : ''}
                 </strong>{' '}
                 aguardando confirmação
               </span>
-              <span className="text-[#0090D8] text-sm">›</span>
+              <span className="text-[#0090D8] text-xs">›</span>
             </Link>
           )}
           {solicitacoes > 0 && dono && (
-            <div className="flex items-center gap-3 bg-[#FFF6FA] border border-[#B00063] rounded-sm px-4 py-3">
-              <span className="w-2 h-2 rounded-full bg-[#B00063] shrink-0" />
-              <span className="text-sm">
+            <div className="flex items-center gap-2.5 bg-[#FFF6FA] border border-[#B00063] rounded-sm px-3 py-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#B00063] shrink-0" />
+              <span className="text-xs">
                 <strong>
                   {solicitacoes} solicitação
                   {solicitacoes > 1 ? 'ões' : ''}
@@ -221,7 +221,7 @@ export default async function PedidosAdminPage({
       )}
 
       {lista.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-4 -mx-5 px-5">
+        <div className="flex gap-1.5 overflow-x-auto pb-3 -mx-5 px-5">
           <Chip
             href={hrefEtapa(undefined)}
             ativo={!filtro}
@@ -289,7 +289,7 @@ function Chip({
         (ativo
           ? 'bg-[#131A2E] text-white border-[#131A2E]'
           : 'bg-white text-[#6E6E68] border-[#DDDCD5]') +
-        ' shrink-0 text-xs font-semibold rounded-full px-3.5 py-2 border whitespace-nowrap'
+        ' shrink-0 text-[11px] font-semibold rounded-full px-3 py-1.5 border whitespace-nowrap'
       }
     >
       {rotulo}

@@ -54,6 +54,15 @@ export function sinal(status: string, dias: number) {
   }
 }
 
+/** Versão curta do sinal, para a etiqueta compacta da linha. */
+export function sinalCurto(status: string, dias: number) {
+  if (status === 'aguardando') return 'confirmar'
+  if (!EM_PRODUCAO.includes(status)) return 'bling'
+  if (dias === 0) return 'hoje'
+  if (dias === 1) return 'ontem'
+  return dias + 'd'
+}
+
 export function nivelUrgencia(cl: string) {
   if (cl === 'crit' || cl === 'novo') return 'forte'
   if (cl === 'aten') return 'medio'
@@ -69,6 +78,8 @@ export type Tons = {
 export type CorEstagio = {
   fundo: string
   borda: string
+  /** Cor sólida do estágio, usada na tarja lateral da linha */
+  faixa: string
   texto: string
   tarja: Tons
 }
@@ -77,6 +88,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   aguardando: {
     fundo: 'bg-[#EEF3F7]',
     borda: 'border-[#8FADC4]',
+    faixa: 'bg-[#8FADC4]',
     texto: 'text-[#4A6B85]',
     tarja: {
       leve: 'bg-[#E4EDF3] text-[#5D7A93]',
@@ -87,6 +99,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   recebido: {
     fundo: 'bg-[#EEF5F4]',
     borda: 'border-[#85B0AC]',
+    faixa: 'bg-[#85B0AC]',
     texto: 'text-[#457066]',
     tarja: {
       leve: 'bg-[#E2EEEC] text-[#4F7A72]',
@@ -97,6 +110,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   impressao: {
     fundo: 'bg-[#F7F1E6]',
     borda: 'border-[#C4A868]',
+    faixa: 'bg-[#C4A868]',
     texto: 'text-[#8A6E33]',
     tarja: {
       leve: 'bg-[#F0E5CC] text-[#93773D]',
@@ -107,6 +121,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   estampando: {
     fundo: 'bg-[#F2EFF7]',
     borda: 'border-[#A997C4]',
+    faixa: 'bg-[#A997C4]',
     texto: 'text-[#6B5787]',
     tarja: {
       leve: 'bg-[#E8E2F0] text-[#766093]',
@@ -117,6 +132,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   corte_costura: {
     fundo: 'bg-[#F7EFF3]',
     borda: 'border-[#C495AC]',
+    faixa: 'bg-[#C495AC]',
     texto: 'text-[#8A4F66]',
     tarja: {
       leve: 'bg-[#F0E1E8] text-[#93586F]',
@@ -127,6 +143,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   pronto: {
     fundo: 'bg-[#EEF4F0]',
     borda: 'border-[#85AD92]',
+    faixa: 'bg-[#85AD92]',
     texto: 'text-[#45664F]',
     tarja: {
       leve: 'bg-[#E1EDE4] text-[#4F7358]',
@@ -137,6 +154,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   nf_emitida: {
     fundo: 'bg-[#EFF1F6]',
     borda: 'border-[#92A0C0]',
+    faixa: 'bg-[#92A0C0]',
     texto: 'text-[#4E5D80]',
     tarja: {
       leve: 'bg-[#E4E7F0] text-[#586A8E]',
@@ -147,6 +165,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   expedido: {
     fundo: 'bg-[#F7F0E7]',
     borda: 'border-[#C4A17A]',
+    faixa: 'bg-[#C4A17A]',
     texto: 'text-[#8A6541]',
     tarja: {
       leve: 'bg-[#F0E3D1] text-[#93714A]',
@@ -157,6 +176,7 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
   entregue: {
     fundo: 'bg-[#EEF4EF]',
     borda: 'border-[#7FAA8B]',
+    faixa: 'bg-[#7FAA8B]',
     texto: 'text-[#416150]',
     tarja: {
       leve: 'bg-[#E1EEE3] text-[#4A6F57]',
