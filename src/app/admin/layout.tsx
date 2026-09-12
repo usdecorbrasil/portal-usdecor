@@ -62,13 +62,10 @@ export default async function AdminLayout({
             />
           </Link>
 
-          {/* No celular a busca ganha a própria linha: espremida ao lado do
-              logo, o campo e a lista de resultados ficavam ilegíveis */}
-          <div className="order-last w-full sm:order-none sm:w-auto sm:flex-1 sm:max-w-xs">
+          {/* A busca geral fica atrás da lupa: o caminho do dia a dia é a
+              busca da própria página, ao lado do título */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
             <BuscaHeader />
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0 ml-auto">
             <span
               className={`text-xs tracking-widest px-2 py-1 rounded-sm ${COR_PAPEL[perfil.papel]}`}
             >

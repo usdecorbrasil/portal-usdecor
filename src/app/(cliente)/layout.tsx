@@ -57,18 +57,17 @@ export default async function ClienteLayout({
                 {empresa.razao_social}
               </p>
             </div>
-            <form action={logout}>
-              <button
-                type="submit"
-                className="text-xs text-[#6E6E68] hover:text-[#D8007A] whitespace-nowrap"
-              >
-                Sair
-              </button>
-            </form>
-          </div>
-
-          <div className="max-w-3xl mx-auto px-5 pb-3">
-            <BuscaHeaderCliente />
+            <div className="flex items-center gap-2 shrink-0">
+              <BuscaHeaderCliente />
+              <form action={logout}>
+                <button
+                  type="submit"
+                  className="text-xs text-[#6E6E68] hover:text-[#D8007A] whitespace-nowrap"
+                >
+                  Sair
+                </button>
+              </form>
+            </div>
           </div>
 
           <Navegacao />

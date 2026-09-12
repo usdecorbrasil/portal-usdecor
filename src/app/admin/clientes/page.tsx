@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import FormularioCliente from './formulario'
 import ListaClientes from './lista-clientes'
+import BuscaPagina from '@/components/busca-pagina'
 import { buscarResumoPagamentos } from '@/app/actions/clientes'
 
 export default async function ClientesPage() {
@@ -36,9 +37,15 @@ export default async function ClientesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Clientes
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
+          Clientes
+        </h1>
+        <BuscaPagina
+          placeholder="Filtrar por nome, CNPJ ou e-mail..."
+          rotulo="Filtrar os clientes desta página"
+        />
+      </div>
       <p className="text-sm text-[#6E6E68] mt-1 mb-6">
         {clientes?.length ?? 0} cadastrados
       </p>

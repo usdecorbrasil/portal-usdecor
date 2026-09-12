@@ -17,11 +17,14 @@ export default function CardProduto({
   imagemUrl,
   colecoes,
   prioridade = false,
+  dadosBusca,
 }: {
   produto: Produto
   imagemUrl: string | null
   colecoes: Colecao[]
   prioridade?: boolean
+  /** Texto comparado pela busca da página */
+  dadosBusca?: string
 }) {
   const { adicionar, itens } = useCarrinho()
   const noCarrinho = itens.find((i) => i.produtoId === produto.id)
@@ -49,7 +52,10 @@ export default function CardProduto({
   }
 
   return (
-    <div className="bg-white border border-[#DDDCD5] rounded-sm overflow-hidden flex flex-col">
+    <div
+      data-busca={dadosBusca}
+      className="bg-white border border-[#DDDCD5] rounded-sm overflow-hidden flex flex-col"
+    >
       {imagemUrl ? (
         <button
           onClick={() => setAmpliada(true)}

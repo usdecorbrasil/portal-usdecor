@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import NovoCatalogo from './novo-catalogo'
 import EnviosPendentes from './envios-pendentes'
+import BuscaPagina from '@/components/busca-pagina'
 
 export default async function CatalogosPage() {
   const perfil = await lerPerfil()
@@ -37,9 +38,15 @@ export default async function CatalogosPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Catálogos
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
+          Catálogos
+        </h1>
+        <BuscaPagina
+          placeholder="Filtrar por cliente ou coleção..."
+          rotulo="Filtrar os catálogos desta página"
+        />
+      </div>
       <p className="text-sm text-[#6E6E68] mt-1 mb-6">
         Cada cliente pode ter várias coleções
       </p>
@@ -66,7 +73,7 @@ export default async function CatalogosPage() {
           const meus = catalogos?.filter((k) => k.cliente_id === cliente.id) ?? []
 
           return (
-            <section key={cliente.id}>
+            <section key={cliente.id} data-busca-grupo>
               <div className="flex items-baseline justify-between gap-3 border-b-2 border-[#131A2E] pb-2 mb-3">
                 <h2 className="font-semibold tracking-tight">
                   {cliente.razao_social}
@@ -97,6 +104,7 @@ export default async function CatalogosPage() {
                       <Link
                         key={k.id}
                         href={`/admin/catalogo/${k.id}`}
+                        data-busca={`${cliente.razao_social} ${k.nome} ${k.descricao ?? ''}`}
                         className="flex items-center gap-3 bg-white border border-[#DDDCD5] rounded-sm p-4 hover:border-[#131A2E]"
                       >
                         <div className="flex-1 min-w-0">

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import CardProduto from './card-produto'
+import BuscaPagina from '@/components/busca-pagina'
 import EditarColecao from '@/components/editar-colecao'
 import EnvioArtes from './envio-artes'
 
@@ -50,9 +51,15 @@ export default async function CatalogoPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold tracking-tight text-[#131A2E]">
-        Seu catálogo
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <h1 className="text-3xl font-bold tracking-tight text-[#131A2E] shrink-0">
+          Seu catálogo
+        </h1>
+        <BuscaPagina
+          placeholder="Filtrar por SKU ou nome..."
+          rotulo="Filtrar as artes desta página"
+        />
+      </div>
       <p className="text-sm text-[#6E6E68] mt-1.5 mb-8">
         {total} {total === 1 ? 'arte liberada' : 'artes liberadas'}
         {comArtes.length > 1 && ` em ${comArtes.length} coleções`}
@@ -70,7 +77,7 @@ export default async function CatalogoPage() {
       ) : (
         <div className="space-y-12">
           {comArtes.map((k) => (
-            <section key={k.id}>
+            <section key={k.id} data-busca-grupo>
               {comArtes.length > 1 && (
                 <div className="flex items-start justify-between gap-3 pb-3 mb-5 border-b-2 border-[#131A2E]">
                   <div>
@@ -98,6 +105,7 @@ export default async function CatalogoPage() {
                 {k.artes.map((p, idx) => (
                   <CardProduto
                     key={p.id}
+                    dadosBusca={`${p.sku} ${p.nome}`}
                     prioridade={idx < 6}
                     produto={{
                       id: p.id,

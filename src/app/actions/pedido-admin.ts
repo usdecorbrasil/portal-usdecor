@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { lerPerfil } from '@/lib/auth/perfil'
 
 const schema = z.object({
   clienteId: z.string().uuid('Selecione um cliente'),
@@ -102,5 +103,41 @@ export async function buscarCatalogo(clienteId: string) {
     altura: p.altura != null ? Number(p.altura) : null,
     catalogo: p.catalogos?.nome ?? '',
     imagemUrl: p.imagem_path ? urls.get(p.imagem_path) ?? null : null,
+  }))
+}
+/**
+ * Itens de um pedido, no formato que os modais de mudança de status esperam.
+ * Usado pelo quadro arrastável, que só carrega os itens quando a etapa de
+ * destino exige conferência (Impressão e Estampando).
+ * Funcionário não recebe preço — mesma regra das demais telas.
+ */
+export async function buscarItensPedido(pedidoId: string) {
+  const parsed = z.string().uuid().safeParse(pedidoId)
+  if (!parsed.success) return null
+
+  const perfil = await lerPerfil()
+  if (!perfil || perfil.papel === 'cliente') return null
+
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('pedido_itens')
+    .select(
+      perfil.veValores
+        ? 'id, produto_id, sku, nome, preco_unitario, quantidade_pedida, quantidade_faturada'
+        : 'id, produto_id, sku, nome, quantidade_pedida, quantidade_faturada'
+    )
+    .eq('pedido_id', parsed.data)
+    .order('sku')
+
+  return ((data ?? []) as any[]).map((i) => ({
+    id: i.id as string,
+    produtoId: i.produto_id as string,
+    sku: i.sku as string,
+    nome: i.nome as string,
+    pedida: Number(i.quantidade_pedida),
+    faturada: Number(i.quantidade_faturada),
+    precoMetro: i.preco_unitario != null ? Number(i.preco_unitario) : 0,
+    imagemUrl: null as string | null,
   }))
 }

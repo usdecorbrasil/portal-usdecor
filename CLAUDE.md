@@ -90,6 +90,16 @@ Importante:
   mão.
 - Admin escolhe a próxima etapa entre as ainda não lançadas e pode desfazer o último
   lançamento manual.
+- **Arrastar e soltar em `/admin/pedidos`**: o cartão tem um punho à esquerda; arrastar
+  até outra seção lança a etapa. Funciona com mouse e com o dedo (Pointer Events, com
+  rolagem automática perto das bordas). Destinos permitidos vêm de `destinosPermitidos()`
+  em `src/app/admin/pedidos/estagios.ts` e espelham a regra do painel do pedido: uma
+  etapa por vez, exceto saindo de Estampando, onde a costura pode ser pulada. Soltar
+  num destino inválido não faz nada e explica o porquê.
+- Toda mudança por arraste **pede confirmação antes de gravar**, e quando a etapa exige
+  dados eles são preenchidos no próprio pop-up: Estampando abre o acerto de metragem e
+  quantidades (gera o romaneio), Impressão abre a conferência de quantidade para o dono.
+  Os modais são os mesmos das duas telas — `src/app/admin/pedidos/modais-status.tsx`.
 
 ## E-mails automáticos
 
@@ -115,6 +125,18 @@ primeiro acesso, recuperação de senha).
   relação "não encontrada" logo após criar FK costumam ser isso.
 - Regra transversal: **funcionário nunca deve ver valores monetários** — aplicar em toda
   query/tela nova, inclusive relatórios.
+
+## Busca e navegação
+
+- **Busca geral** (pedidos + clientes + artes) vive **atrás de uma lupa** no cabeçalho,
+  tanto no painel quanto na área do cliente. Abre em sobreposição, `Esc` fecha.
+- **Busca da página**: campo ao lado do título de cada tela, que filtra a própria página
+  na hora, sem recarregar e sem tirar o usuário de onde ele está. Componente genérico
+  `src/components/busca-pagina.tsx`; a página só marca o conteúdo com atributos:
+  `data-busca` (item), `data-busca-grupo` (bloco que some quando vazio),
+  `data-busca-contagem` (contador do grupo) e `data-busca-vazio` (aviso de nada
+  encontrado). Convive com os filtros de URL da tela (cliente, período, etapa):
+  o servidor filtra primeiro, a busca da página filtra por cima.
 
 ## Painel do Dono — extras
 
@@ -160,9 +182,9 @@ primeiro acesso, recuperação de senha).
 - **Portal ficará em `portal.bestcolortecidos.com.br`** (subdomínio, não subpasta).
   Subpasta exigiria proxy reverso no servidor do site institucional, com risco conhecido
   em cookie de sessão, além de `basePath` no Next.
-- Conectar o Bling: a tabela `integracao_bling` está **vazia** — o OAuth nunca foi
-  concluído. O cliente de API com renovação de token já existe (`src/lib/bling/`), e
-  Configurações mostra o status e permite testar a conexão.
+- ~~Conectar o Bling~~ — **feito em 09/09/2026**. OAuth concluído, token gravado em
+  `integracao_bling`, teste de conexão retornando HTTP 200. Configurações mostra o
+  status e permite testar. Falta tudo o que vem depois do OAuth (ver abaixo).
 - **Bling usa dois hosts** — `www.bling.com.br` só para OAuth (authorize/token) e
   `api.bling.com.br` para as chamadas de recurso. Chamar recurso em `www` devolve
   403 FORBIDDEN. Separado em `src/lib/bling/cliente.ts` (`BASE_OAUTH` / `BASE_API`).
@@ -189,6 +211,16 @@ primeiro acesso, recuperação de senha).
   recuperação de senha e todos os avisos internos à equipe.
 - Pedidos estampados antes da migração de custos não têm custo gravado e aparecem na
   Apuração com lucro igual à receita inteira.
+- **Aviso interno de pedido novo (a construir)** — decidido em 12/09/2026: quando entrar
+  pedido de qualquer cliente, o administrador recebe e-mail de aviso. Quem recebe e quais
+  tipos de e-mail cada um recebe ficam num **setup de notificações dentro de
+  Configurações** (lista de destinatários × tipo de gatilho), não no código.
+- **Setup de automação / editor de etapas (a construir)** — decidido em 12/09/2026:
+  área dentro de Configurações para **incluir, excluir e editar os status/estágios** do
+  pedido. Hoje as etapas são constantes espalhadas pelo código
+  (`src/app/admin/pedidos/estagios.ts`, `ETAPAS_MANUAIS` em `app/actions/producao.ts` e
+  o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
+  etapas para o banco e ajustar essas três pontas juntas.
 
 ## Custo estimado
 

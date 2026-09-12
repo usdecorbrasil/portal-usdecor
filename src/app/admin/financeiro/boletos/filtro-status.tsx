@@ -97,11 +97,14 @@ export default function FiltroStatus({ parcelas }: { parcelas: Parcela[] }) {
           if (itens.length === 0) return null
 
           return (
-            <section key={status}>
+            <section key={status} data-busca-grupo>
               <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-3 flex items-center gap-2">
                 {(ROTULOS_STATUS[status] ?? status).toUpperCase()}
                 <span className="flex-1 h-px bg-[#DDDCD5]" />
-                <span className="font-mono normal-case tracking-normal text-[#131A2E]">
+                <span
+                  data-busca-contagem
+                  className="font-mono normal-case tracking-normal text-[#131A2E]"
+                >
                   {itens.length}
                 </span>
               </h2>
@@ -114,6 +117,7 @@ export default function FiltroStatus({ parcelas }: { parcelas: Parcela[] }) {
                     <Link
                       key={`${p.pedidoId}-${p.numeroParcela ?? 'unico'}`}
                       href={`/admin/pedidos/${p.pedidoId}`}
+                      data-busca={`${p.numero} ${p.clienteNome}`}
                       className={`flex items-center gap-3 rounded-sm p-2.5 sm:p-4 border ${
                         p.vencida
                           ? 'bg-[#FFF6FA] border-[#B00063] hover:border-[#B00063]'

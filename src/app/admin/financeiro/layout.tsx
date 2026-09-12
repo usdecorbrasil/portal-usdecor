@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { lerPerfil } from '@/lib/auth/perfil'
 import Abas from './abas'
+import BuscaPagina from '@/components/busca-pagina'
 
 export default async function FinanceiroLayout({
   children,
@@ -16,9 +17,15 @@ export default async function FinanceiroLayout({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Financeiro
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
+          Financeiro
+        </h1>
+        <BuscaPagina
+          placeholder="Filtrar por nº ou cliente..."
+          rotulo="Filtrar o conteúdo desta página"
+        />
+      </div>
 
       <Abas>{children}</Abas>
     </div>

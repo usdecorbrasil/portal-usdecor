@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
+import BuscaPagina from '@/components/busca-pagina'
 import ListaFila from './lista-fila'
 
 const brl = (v: number) =>
@@ -54,9 +55,15 @@ export default async function FilaPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Fila de impressão
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
+          Fila de impressão
+        </h1>
+        <BuscaPagina
+          placeholder="Filtrar por nº ou cliente..."
+          rotulo="Filtrar a fila desta página"
+        />
+      </div>
       <p className="text-sm text-[#6E6E68] mt-1 mb-6">
         {itens.length} {itens.length === 1 ? 'pedido' : 'pedidos'} ·{' '}
         <span className="font-mono">{unidadesTotal} un</span> a estampar

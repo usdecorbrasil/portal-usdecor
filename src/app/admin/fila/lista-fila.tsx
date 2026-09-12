@@ -237,6 +237,7 @@ export default function ListaFila({
           <div
             key={item.id}
             data-item-id={item.id}
+            data-busca={`${item.numero} ${item.cliente}`}
             onPointerDown={(e) => aoPointerDown(e, item.id)}
             onPointerMove={aoPointerMove}
             onPointerUp={aoPointerUp}

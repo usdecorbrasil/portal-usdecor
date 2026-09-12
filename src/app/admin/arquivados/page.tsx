@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import FiltroData from '../pedidos/filtro-data'
+import BuscaPagina from '@/components/busca-pagina'
 import FiltrosRecolhiveis from '@/components/filtros-recolhiveis'
 
 const brl = (v: number) =>
@@ -78,9 +79,15 @@ export default async function ArquivadosPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Pedidos arquivados
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
+          Pedidos arquivados
+        </h1>
+        <BuscaPagina
+          placeholder="Filtrar por nº ou cliente..."
+          rotulo="Filtrar os arquivados desta página"
+        />
+      </div>
       <p className="text-sm text-[#6E6E68] mt-1 mb-4">
         {fechados.length} fechado{fechados.length === 1 ? '' : 's'} ·{' '}
         {cancelados.length} cancelado{cancelados.length === 1 ? '' : 's'}
@@ -108,6 +115,7 @@ export default async function ArquivadosPage({
           <Link
             key={p.id}
             href={`/admin/pedidos/${p.id}`}
+            data-busca={`${p.numero} ${p.cliente}`}
             className="block bg-white border border-[#DDDCD5] rounded-sm p-3 sm:p-4 hover:border-[#131A2E]"
           >
             <div className="flex items-start justify-between gap-3">

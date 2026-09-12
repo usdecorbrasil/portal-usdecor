@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import BuscaPagina from '@/components/busca-pagina'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -36,9 +37,15 @@ export default async function PedidosPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Meus pedidos
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
+          Meus pedidos
+        </h1>
+        <BuscaPagina
+          placeholder="Filtrar por número..."
+          rotulo="Filtrar os pedidos desta página"
+        />
+      </div>
       <p className="text-sm text-[#6E6E68] mt-1 mb-6">
         Acompanhe a produção em tempo real
       </p>
@@ -67,6 +74,7 @@ export default async function PedidosPage() {
             <Link
               key={p.id}
               href={`/pedidos/${p.id}`}
+              data-busca={`${p.numero} ${etapa.label}`}
               className="block bg-white border border-[#DDDCD5] rounded-sm p-4 hover:border-[#131A2E]"
             >
               <div className="flex items-center justify-between gap-3">

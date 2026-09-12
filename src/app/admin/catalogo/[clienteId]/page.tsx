@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import FormularioProduto from './formulario'
 import CardArte from './card-arte'
+import BuscaPagina from '@/components/busca-pagina'
 import EditarColecao from '@/components/editar-colecao'
 
 const brl = (v: number) =>
@@ -73,14 +74,20 @@ export default async function CatalogoPage({
       <p className="text-sm text-[#6E6E68] mt-3">{cliente.razao_social}</p>
 
       <div className="flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-          {catalogo.nome}
-          {!catalogo.ativo && (
-            <span className="ml-2 text-sm font-normal bg-[#EAE9E3] text-[#6E6E68] px-2 py-0.5 rounded-sm align-middle">
-              arquivado
-            </span>
-          )}
-        </h1>
+        <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
+            {catalogo.nome}
+            {!catalogo.ativo && (
+              <span className="ml-2 text-sm font-normal bg-[#EAE9E3] text-[#6E6E68] px-2 py-0.5 rounded-sm align-middle">
+                arquivado
+              </span>
+            )}
+          </h1>
+          <BuscaPagina
+            placeholder="Filtrar por SKU ou nome..."
+            rotulo="Filtrar as artes desta página"
+          />
+        </div>
         <div className="pt-2">
           <EditarColecao
             catalogoId={catalogo.id}
@@ -138,21 +145,22 @@ export default async function CatalogoPage({
 
       <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {produtos?.map((p) => (
-          <CardArte
-            key={p.id}
-            produto={{
-              id: p.id,
-              sku: p.sku,
-              nome: p.nome,
-              largura: p.largura != null ? Number(p.largura) : null,
-              altura: p.altura != null ? Number(p.altura) : null,
-              ativo: p.ativo,
-              catalogoId: p.catalogo_id,
-            }}
-            imagemUrl={p.imagem_path ? urls.get(p.imagem_path) ?? null : null}
-            colecoes={colecoes ?? []}
-            podeEditar={nivelAdmin}
-          />
+          <div key={p.id} data-busca={`${p.sku} ${p.nome}`}>
+            <CardArte
+              produto={{
+                id: p.id,
+                sku: p.sku,
+                nome: p.nome,
+                largura: p.largura != null ? Number(p.largura) : null,
+                altura: p.altura != null ? Number(p.altura) : null,
+                ativo: p.ativo,
+                catalogoId: p.catalogo_id,
+              }}
+              imagemUrl={p.imagem_path ? urls.get(p.imagem_path) ?? null : null}
+              colecoes={colecoes ?? []}
+              podeEditar={nivelAdmin}
+            />
+          </div>
         ))}
 
         {(!produtos || produtos.length === 0) && (
