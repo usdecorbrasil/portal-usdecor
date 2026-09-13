@@ -413,6 +413,31 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
   erro registrado. "Tentar de novo" reenvia ao Bling **e** a cobrança (`email_log`
   impede duplicar).
 
+## Faturamento pelo portal: NF-e e cobrança (13/09/2026, `docs/sql/015`)
+
+A partir de "Pedido pronto" (e com o pedido já no Bling), a tela do pedido mostra o
+bloco **Faturamento** com dois botões, cada um repetível:
+
+- **Emitir NF** (`emitirNotaFiscal`): `POST /pedidos/vendas/{id}/gerar-nfe` → guarda
+  `bling_nf_id` na hora → `POST /nfe/{id}/enviar?enviarEmail=false` → consulta
+  `GET /nfe/{id}` até `situacao` 5/6/7 (autorizada) ou 4/9 (rejeitada/denegada) → baixa
+  `linkPDF` e `xml` para o bucket `documentos` (`pedidos/{id}/nfe-{n}.pdf|.xml`) →
+  `admin_registrar_nf` (grava nº, chave, caminhos e lança a etapa `nf_emitida` com
+  origem `bling`) → e-mail `nf_emitida` ao cliente com os dois anexos. Se a SEFAZ ainda
+  não respondeu em ~12 s, devolve "aguarde e clique de novo" — a nota já existe, o
+  segundo clique só consulta.
+- **Gerar cobrança** (`gerarCobranca`): **não existe endpoint para gerar boleto**. O que
+  há é `POST /pedidos/vendas/{id}/lancar-contas`, que vira as parcelas em contas a
+  receber; com forma de pagamento do Bling Conta, o próprio Bling emite boleto/Pix e expõe
+  `linkBoleto` / `linkQRCodePix` em `GET /contas/receber`. O portal lança, relê as
+  contas (casa por `origem.id`, senão vencimento + valor), guarda links e PDF em
+  `pedido_parcelas` (ou em `pedidos` no à vista) e manda o e-mail `cobranca` com
+  anexos. Cartão não tem botão: é cobrado fora.
+- **Hipótese a validar no primeiro teste**: que o Bling Conta emite o boleto sozinho
+  logo após `lancar-contas`. Se exigir ação no painel do Bling, o botão vai lançar as
+  contas e voltar "sem link" — aí a emissão se faz lá e "Completar" relê os links.
+- Ninguém fora de admin/financeiro chama nada disso (`exigirAdmin` nas duas ações).
+
 ## Nota fiscal — com ou sem, por pedido
 
 Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega

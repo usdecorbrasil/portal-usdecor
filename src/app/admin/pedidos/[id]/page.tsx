@@ -13,6 +13,8 @@ import {
 } from '@/app/actions/configuracoes'
 import PainelAcoes from './painel-acoes'
 import ReenviarBling from './reenviar-bling'
+import Faturamento, { type CobrancaLinha } from './faturamento'
+import { urlDocumento } from '@/lib/storage/documentos'
 import { taxaDoPedido } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
 
@@ -96,6 +98,8 @@ export default async function PedidoAdminPage({
       id, numero, notas, created_at, metragem_impressa,
       cancelado_em, cancelado_motivo, cancelado_por,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
+      bling_nf_id, nf_numero, nf_chave, nf_emitida_em, nf_pdf_path, nf_xml_path, nf_link_danfe,
+      link_boleto, link_pix, boleto_pdf_path, cobranca_gerada_em,
       forma_pagamento, parcelas_solicitadas, cliente_id,
       emitir_nf, emitir_nf_motivo,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
@@ -116,7 +120,7 @@ export default async function PedidoAdminPage({
       pedido_precos(preco_de, preco_para, motivo, created_at, criado_por),
       pedido_nf_historico(emitir_de, emitir_para, motivo, created_at, criado_por),
       pedido_solicitacoes(id, texto, status, resposta, created_at),
-      pedido_parcelas(numero, valor, vencimento, pago_em)
+      pedido_parcelas(numero, valor, vencimento, pago_em, link_boleto, link_pix, boleto_pdf_path)
     `
 
   // As configurações não dependem do pedido: buscar em paralelo
@@ -198,6 +202,47 @@ export default async function PedidoAdminPage({
     0
   )
   const antesDoEstampando = ['aguardando', 'recebido', 'impressao'].includes(atual)
+
+  // Faturamento: só o dono, e só depois de o pedido existir no Bling
+  const mostrarFaturamento = dono && usados.includes('pronto') && !!p.bling_pedido_id
+
+  const nf = p.nf_numero
+    ? {
+        numero: String(p.nf_numero),
+        chave: (p.nf_chave as string | null) ?? null,
+        emitidaEm: String(p.nf_emitida_em ?? p.created_at),
+        pdfUrl: mostrarFaturamento ? await urlDocumento(p.nf_pdf_path) : null,
+        xmlUrl: mostrarFaturamento ? await urlDocumento(p.nf_xml_path) : null,
+        linkDanfe: (p.nf_link_danfe as string | null) ?? null,
+      }
+    : null
+
+  // Parcelado: uma linha por parcela; à vista: uma linha com o que ficou no pedido
+  const linhasCobranca: CobrancaLinha[] = mostrarFaturamento
+    ? parcelas.length > 0
+      ? await Promise.all(
+          parcelas.map(async (pc) => ({
+            numero: Number(pc.numero),
+            valor: Number(pc.valor),
+            vencimento: String(pc.vencimento).slice(0, 10),
+            linkBoleto: (pc.link_boleto as string | null) ?? null,
+            linkPix: (pc.link_pix as string | null) ?? null,
+            pdfUrl: await urlDocumento(pc.boleto_pdf_path),
+          }))
+        )
+      : p.link_boleto || p.link_pix
+        ? [
+            {
+              numero: 1,
+              valor: Number(p.total),
+              vencimento: String(p.cobranca_gerada_em ?? p.created_at).slice(0, 10),
+              linkBoleto: (p.link_boleto as string | null) ?? null,
+              linkPix: (p.link_pix as string | null) ?? null,
+              pdfUrl: await urlDocumento(p.boleto_pdf_path),
+            },
+          ]
+        : []
+    : []
 
   // Quanto vale cada boleto: a menor parcela, ou o valor cobrado inteiro no
   // à vista. É o que a tela compara com o mínimo ao fechar a produção
@@ -323,10 +368,24 @@ export default async function PedidoAdminPage({
         <ReenviarBling pedidoId={p.id} erro={p.bling_erro ?? null} />
       )}
 
-      {dono && p.bling_pedido_id && (
+      {dono && p.bling_pedido_id && !mostrarFaturamento && (
         <p className="text-[11px] font-mono text-[#6E6E68] mt-2">
           Bling: pedido {p.bling_numero ? '#' + p.bling_numero : p.bling_pedido_id}
         </p>
+      )}
+
+      {mostrarFaturamento && (
+        <Faturamento
+          pedidoId={p.id}
+          blingNumero={p.bling_numero ? String(p.bling_numero) : null}
+          emitirNf={p.emitir_nf !== false}
+          nf={nf}
+          formaPagamento={String(p.forma_pagamento ?? '')}
+          cobranca={{
+            geradaEm: (p.cobranca_gerada_em as string | null) ?? null,
+            linhas: linhasCobranca,
+          }}
+        />
       )}
 
       {cancelado ? (
