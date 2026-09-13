@@ -503,6 +503,23 @@ tabela genérica — `entidade` + `entidade_id` + `acao` + `campos` (JSON
 - Aparece em `src/components/historico-alteracoes.tsx`, usado na tela do cliente
   (filtrada por ele) e em Configurações (equipe + pagamento, sem filtro de registro).
 
+## `criar_pedido` (carrinho) — o que ela valida e o que não valida
+
+Reescrita em `docs/sql/013` (13/09/2026), depois de o primeiro pedido real pelo carrinho
+expor três defeitos herdados:
+
+- **Não checa valor.** A versão antiga recusava boleto abaixo do mínimo e parcela abaixo
+  do mínimo na criação, contra um `total` que só existe depois da estampa. O mínimo é
+  aplicado onde há valor: o modal de "Pedido pronto" avisa.
+- **Aceita `pix`** — estava fora da lista de formas desde antes de a forma existir — e
+  **parcelas no cartão de crédito**, que a configuração permite. Teto de parcelas vem de
+  `config_forma_pagamento(forma) ->> 'maxParcelas'`, com a chave antiga `max_parcelas`
+  de rede. Forma desativada em Configurações é recusada.
+- Limite de crédito (`cliente_pode_parcelar`) continua valendo só para boleto parcelado:
+  é contas a receber; cartão se resolve fora.
+- Roda com `search_path = ''`: tudo o que ela chama vem com `public.`. Foi esse contexto
+  que expôs o gatilho `pedidos_congelar_taxa` sem qualificação (`docs/sql/012`).
+
 ## Formas de pagamento — configuráveis
 
 Decidido em 12/09/2026. Em Configurações → Pagamento, o dono define por forma
