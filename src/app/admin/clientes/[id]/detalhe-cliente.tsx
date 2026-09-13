@@ -10,6 +10,7 @@ import {
   buscarHistoricoPagamentos,
   arquivarCliente,
 } from '@/app/actions/clientes'
+import ImportarBling from './importar-bling'
 
 type Cliente = {
   id: string
@@ -32,6 +33,7 @@ type Cliente = {
   bairro: string | null
   municipio: string | null
   uf: string | null
+  bling_contato_id: number | null
 }
 
 type Pagamentos = {
@@ -134,6 +136,15 @@ export default function DetalheCliente({
           <p className="text-sm text-[#6E6E68]">{cliente.email}</p>
           {cliente.contato && (
             <p className="text-sm text-[#6E6E68]">{cliente.contato}</p>
+          )}
+
+          {/* Clientes antigos já têm endereço e IE completos no ERP; puxar de
+              lá evita redigitar e evita divergência entre os dois cadastros */}
+          {!cliente.arquivado && (
+            <ImportarBling
+              clienteId={cliente.id}
+              jaVinculado={!!cliente.bling_contato_id}
+            />
           )}
         </div>
         <span

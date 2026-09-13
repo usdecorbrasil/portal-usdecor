@@ -25,7 +25,7 @@ export default async function ClienteDetalhePage({
       `id, razao_social, cnpj, email, contato, telefone, preco_metro,
        limite_credito, ativo, arquivado,
        inscricao_estadual, indicador_ie, cep, endereco, numero, complemento,
-       bairro, municipio, uf`
+       bairro, municipio, uf, bling_contato_id`
     )
     .eq('id', id)
     .single()
