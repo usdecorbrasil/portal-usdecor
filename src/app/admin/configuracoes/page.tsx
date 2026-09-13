@@ -3,15 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lerPerfil } from '@/lib/auth/perfil'
 import Equipe from './equipe'
-import ConfigValorMinimoBoleto from './config-valor-minimo'
-import ConfigMaxParcelas from './config-max-parcelas'
 import ConfigPagamento from './config-pagamento'
 import IntegracaoBling from './integracao-bling'
-import {
-  buscarValorMinimoBoleto,
-  buscarMaxParcelas,
-  buscarConfigPagamento,
-} from '@/app/actions/configuracoes'
+import { buscarConfigPagamento } from '@/app/actions/configuracoes'
 import { lerEstadoBling } from '@/lib/bling/cliente'
 
 export default async function ConfiguracoesPage() {
@@ -45,13 +39,10 @@ export default async function ConfiguracoesPage() {
     (usuarios?.users ?? []).map((u) => [u.id, u.email ?? ''])
   )
 
-  const [valorMinimoBoleto, maxParcelas, configPagamento, estadoBling] =
-    await Promise.all([
-      buscarValorMinimoBoleto(),
-      buscarMaxParcelas(),
-      buscarConfigPagamento(),
-      lerEstadoBling(),
-    ])
+  const [configPagamento, estadoBling] = await Promise.all([
+    buscarConfigPagamento(),
+    lerEstadoBling(),
+  ])
 
   return (
     <div>
@@ -87,15 +78,6 @@ export default async function ConfiguracoesPage() {
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
         <ConfigPagamento configAtual={configPagamento} />
-      </div>
-
-      <div className="mt-8">
-        <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-3 flex items-center gap-2">
-          AUTOMAÇÕES E REGRAS
-          <span className="flex-1 h-px bg-[#DDDCD5]" />
-        </h2>
-        <ConfigValorMinimoBoleto valorAtual={valorMinimoBoleto} />
-        <ConfigMaxParcelas valorAtual={maxParcelas} />
       </div>
 
       <div className="mt-8">

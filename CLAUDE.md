@@ -304,6 +304,11 @@ e **taxa fixa** somados ao pedido.
   forma e o aviso do acréscimo. Valor mínimo por parcela e a taxa em si só podem ser
   aplicados quando o valor existe.
 
+As chaves antigas `max_parcelas` e `valor_minimo_boleto` **não têm mais tela própria** —
+quem edita é a de Pagamento, que grava as duas como ponte, porque `parcelar_pedido` no
+Postgres ainda valida por elas. `buscarMaxParcelas()` e `buscarValorMinimoBoleto()`
+continuam existindo, mas agora leem do JSON.
+
 **PENDENTE**: a taxa ainda não entra no `total` nem nas parcelas. `pedidos.total` é
 recalculado e `pedido_parcelas.valor` é gerado por funções no Postgres
 (`confirmar_romaneio`, `parcelar_pedido`) que não estão neste repositório. Para fechar,
