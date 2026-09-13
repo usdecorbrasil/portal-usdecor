@@ -54,9 +54,10 @@ export async function confirmarPedido(
   if (error) return { ok: false, erro: error.message }
 
   // E-mail ao cliente — não bloqueia a confirmação se falhar
+  // Sem valor: nesta etapa ele ainda não existe. Vão as artes e quantidades
   const { data: pedido } = await supabase
     .from('pedidos')
-    .select('numero, total, clientes(email, razao_social)')
+    .select('numero, clientes(email, razao_social), pedido_itens(sku, nome, quantidade_faturada)')
     .eq('id', parsedId.data)
     .single()
 
@@ -65,6 +66,14 @@ export async function confirmarPedido(
       email: string
       razao_social: string
     } | null
+
+    const itens = ((pedido.pedido_itens ?? []) as {
+      sku: string
+      nome: string
+      quantidade_faturada: number
+    }[])
+      .map((i) => ({ sku: i.sku, nome: i.nome, quantidade: Number(i.quantidade_faturada) }))
+      .sort((a, b) => a.sku.localeCompare(b.sku))
 
     if (cliente?.email) {
       await enviarEmail({
@@ -75,7 +84,7 @@ export async function confirmarPedido(
         html: templatePedidoConfirmado({
           clienteNome: cliente.razao_social,
           numero: Number(pedido.numero),
-          total: Number(pedido.total),
+          itens,
           urlPedido: `${urlDoSite()}/pedidos/${parsedId.data}`,
         }),
       })
