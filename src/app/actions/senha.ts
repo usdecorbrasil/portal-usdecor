@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { urlDoSite } from '@/lib/site'
 
 const schema = z.object({
   email: z.string().trim().toLowerCase().email('E-mail inválido'),
@@ -20,7 +21,7 @@ export async function pedirRecuperacao(
   }
 
   const supabase = await createClient()
-  const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+  const site = urlDoSite()
 
   await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo: `${site}/auth/confirmar?next=/nova-senha`,

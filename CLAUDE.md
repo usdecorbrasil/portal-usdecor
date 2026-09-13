@@ -232,7 +232,7 @@ ali a imagem é o conteúdo.
   o nome antigo mesmo após o projeto ser renomeado para `portal-bestcolortecidos`).
   Quando a zona DNS liberar, revisar **na ordem**:
   1. Criar o CNAME `portal` no Registro.br e adicionar o domínio no Vercel.
-  2. Atualizar `NEXT_PUBLIC_SITE_URL` e `BLING_REDIRECT_URI` no Vercel para
+  2. Atualizar `SITE_URL` e `BLING_REDIRECT_URI` no Vercel para
      `https://portal.bestcolortecidos.com.br...`.
   3. Atualizar a URL de redirecionamento **no painel do Bling** — os dois textos
      precisam ser idênticos, senão o OAuth falha com `token_falhou`
@@ -287,6 +287,17 @@ ali a imagem é o conteúdo.
 
 Supabase Pro (~US$25) + Vercel Pro (~US$20) + Resend (grátis até 3.000 e-mails/mês) ≈
 **US$45/mês**, fixo, independente do nº de clientes.
+
+## Variáveis de ambiente — o que é público e o que não é
+
+- `SITE_URL` é lida **só no servidor** (`src/lib/site.ts`, usada pelas Server Actions
+  para montar links dentro dos e-mails). Não leva `NEXT_PUBLIC_`. O código ainda aceita
+  `NEXT_PUBLIC_SITE_URL` como ponte enquanto a variável antiga existir na Vercel.
+- `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` **precisam** do
+  prefixo: `src/lib/supabase/client.ts` é importado pela tela de login e pelo envio de
+  artes, que rodam no navegador. Tirar o prefixo quebra o login. São públicas por
+  natureza — quem protege os dados é o RLS.
+- `SUPABASE_SECRET_KEY`, `RESEND_API_KEY` e `BLING_CLIENT_SECRET` nunca levam prefixo.
 
 ## Desempenho — o que se sabe
 

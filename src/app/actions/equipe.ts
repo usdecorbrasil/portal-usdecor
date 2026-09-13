@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
+import { urlDoSite } from '@/lib/site'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 type ComSenha = { ok: true; senha: string } | { ok: false; erro: string }
@@ -90,7 +91,7 @@ export async function criarMembro(
       nome,
       email,
       senha,
-      urlLogin: `${process.env.NEXT_PUBLIC_SITE_URL}/login`,
+      urlLogin: `${urlDoSite()}/login`,
     }),
   })
 

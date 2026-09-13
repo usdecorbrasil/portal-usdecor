@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
+import { urlDoSite } from '@/lib/site'
 
 const precoBr = z.string()
   .transform((v) => Number(String(v).replace(',', '.')))
@@ -127,7 +128,7 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
       nome: dados.contato || dados.razao_social,
       email: dados.email,
       senha,
-      urlLogin: `${process.env.NEXT_PUBLIC_SITE_URL}/login`,
+      urlLogin: `${urlDoSite()}/login`,
     }),
   })
 

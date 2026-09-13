@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templatePedidoConfirmado } from '@/lib/resend/templates/pedido-confirmado'
+import { urlDoSite } from '@/lib/site'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
@@ -72,7 +73,7 @@ export async function confirmarPedido(
           clienteNome: cliente.razao_social,
           numero: Number(pedido.numero),
           total: Number(pedido.total),
-          urlPedido: `${process.env.NEXT_PUBLIC_SITE_URL}/pedidos/${parsedId.data}`,
+          urlPedido: `${urlDoSite()}/pedidos/${parsedId.data}`,
         }),
       })
     }

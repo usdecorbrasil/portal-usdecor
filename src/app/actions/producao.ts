@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateEmProducao } from '@/lib/resend/templates/em-producao'
+import { urlDoSite } from '@/lib/site'
 
 const ETAPAS_MANUAIS = ['impressao', 'estampando', 'corte_costura', 'pronto'] as const
 
@@ -62,7 +63,7 @@ export async function lancarStatus(
           html: templateEmProducao({
             clienteNome: cliente.razao_social,
             numero: Number(pedido.numero),
-            urlPedido: `${process.env.NEXT_PUBLIC_SITE_URL}/pedidos/${parsed.data.pedidoId}`,
+            urlPedido: `${urlDoSite()}/pedidos/${parsed.data.pedidoId}`,
           }),
         })
       }
