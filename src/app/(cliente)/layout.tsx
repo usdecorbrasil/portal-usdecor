@@ -6,6 +6,7 @@ import { logout } from '../actions/auth'
 import { CarrinhoProvider } from '@/lib/carrinho/contexto'
 import Navegacao from './navegacao'
 import BuscaHeaderCliente from './busca-header-cliente'
+import BarraCarrinho from './barra-carrinho'
 
 export default async function ClienteLayout({
   children,
@@ -74,6 +75,8 @@ export default async function ClienteLayout({
         </header>
 
         <main className="max-w-3xl mx-auto px-5 py-6">{children}</main>
+
+        <BarraCarrinho />
       </div>
     </CarrinhoProvider>
   )
