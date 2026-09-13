@@ -81,6 +81,19 @@ export default function DetalheCliente({
   const [confirmando, setConfirmando] = useState(false)
   const [pendente, iniciar] = useTransition()
 
+  // Só monta o endereço quando há logradouro: "—, — - —/—" não informa nada
+  const enderecoCompleto = cliente.endereco
+    ? [
+        [cliente.endereco, cliente.numero].filter(Boolean).join(', '),
+        cliente.complemento,
+        cliente.bairro,
+        [cliente.municipio, cliente.uf].filter(Boolean).join('/'),
+        cliente.cep ? 'CEP ' + cliente.cep : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null
+
   const disponivel = cliente.limite_credito - cliente.em_aberto
   const percentualUsado =
     cliente.limite_credito > 0
@@ -132,10 +145,6 @@ export default function DetalheCliente({
           <p className="text-sm text-[#6E6E68] mt-1 font-mono">
             {formatarCnpj(cliente.cnpj)}
           </p>
-          <p className="text-sm text-[#6E6E68]">{cliente.email}</p>
-          {cliente.contato && (
-            <p className="text-sm text-[#6E6E68]">{cliente.contato}</p>
-          )}
         </div>
         <span
           className={`text-xs px-2 py-0.5 rounded-sm whitespace-nowrap shrink-0 ${
@@ -146,6 +155,38 @@ export default function DetalheCliente({
         >
           {cliente.ativo ? 'Ativo' : 'Inativo'}
         </span>
+      </div>
+
+      {/* Contato e dados fiscais ficavam só dentro do formulário de edição:
+          para conferir um endereço era preciso abrir a edição do cliente */}
+      <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
+        <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9B9A93] mb-3">
+          Cadastro
+        </p>
+
+        <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+          <Info rotulo="E-mail de acesso" valor={cliente.email} />
+          <Info rotulo="Contato" valor={cliente.contato} />
+          <Info rotulo="Telefone" valor={formatarTelefone(cliente.telefone)} mono />
+          <Info
+            rotulo="Inscrição estadual"
+            valor={
+              cliente.inscricao_estadual
+                ? `${cliente.inscricao_estadual} · ${ROTULO_IE[cliente.indicador_ie ?? 9]}`
+                : ROTULO_IE[cliente.indicador_ie ?? 9]
+            }
+            mono={!!cliente.inscricao_estadual}
+          />
+          <div className="sm:col-span-2">
+            <Info rotulo="Endereço" valor={enderecoCompleto} />
+          </div>
+        </dl>
+
+        {!enderecoCompleto && (
+          <p className="text-xs text-[#C79600] mt-3">
+            Sem endereço cadastrado — a nota fiscal não pode ser emitida assim.
+          </p>
+        )}
       </div>
 
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
@@ -822,4 +863,46 @@ function Campo({
       />
     </div>
   )
+}
+
+const ROTULO_IE: Record<number, string> = {
+  1: 'Contribuinte de ICMS',
+  2: 'Contribuinte isento',
+  9: 'Não contribuinte',
+}
+
+/** Linha de "rótulo: valor" do bloco de cadastro. */
+function Info({
+  rotulo,
+  valor,
+  mono = false,
+}: {
+  rotulo: string
+  valor: string | null
+  mono?: boolean
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9B9A93]">
+        {rotulo}
+      </dt>
+      <dd
+        className={
+          'text-sm text-[#131A2E] break-words ' +
+          (mono ? 'font-mono ' : '') +
+          (valor ? '' : 'text-[#B8B7B0]')
+        }
+      >
+        {valor || '—'}
+      </dd>
+    </div>
+  )
+}
+
+/** (19) 3604-5412 / (19) 99999-9999 — o banco guarda só dígitos. */
+function formatarTelefone(v: string | null) {
+  const d = String(v ?? '').replace(/\D/g, '')
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+  return d || null
 }
