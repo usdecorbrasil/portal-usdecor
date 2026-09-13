@@ -53,11 +53,52 @@ export default function CampoSenha({
           onClick={() => setVisivel((v) => !v)}
           aria-label={visivel ? 'Ocultar senha' : 'Mostrar senha'}
           aria-pressed={visivel}
-          className="absolute inset-y-0 right-0 px-3 text-[10px] font-mono uppercase tracking-wider text-[#6E6E68] hover:text-[#131A2E]"
+          className="absolute inset-y-0 right-0 px-3 flex items-center text-[#6E6E68] hover:text-[#131A2E]"
         >
-          {visivel ? 'ocultar' : 'ver'}
+          {visivel ? <OlhoFechado /> : <OlhoAberto />}
         </button>
       </div>
     </div>
+  )
+}
+
+/* Ícones inline: são dois traços, não vale uma biblioteca por eles */
+
+function OlhoAberto() {
+  return (
+    <svg
+      aria-hidden
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function OlhoFechado() {
+  return (
+    <svg
+      aria-hidden
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M4 4l16 16" />
+    </svg>
   )
 }
