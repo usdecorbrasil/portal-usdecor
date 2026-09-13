@@ -1,13 +1,19 @@
 import { notFound, redirect } from 'next/navigation'
+
+// As ações desta tela falam com o Bling e com o Resend; o padrão da
+// Vercel é curto demais para isso
+export const maxDuration = 60
 import BotaoVoltar from '@/components/botao-voltar'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import {
   buscarMaxParcelas,
   buscarValorMinimoBoleto,
+  buscarConfigPagamento,
 } from '@/app/actions/configuracoes'
 import PainelAcoes from './painel-acoes'
 import ReenviarBling from './reenviar-bling'
+import { taxaDoPedido } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
 
 const brl = (v: number) =>
@@ -92,6 +98,7 @@ export default async function PedidoAdminPage({
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       forma_pagamento, parcelas_solicitadas, cliente_id,
       emitir_nf, emitir_nf_motivo,
+      taxa_pagamento_percentual, taxa_pagamento_fixa,
       ${camposFinanceiros}
       clientes(razao_social, cnpj, preco_metro),
       pedido_itens(${camposItens}),
@@ -113,11 +120,13 @@ export default async function PedidoAdminPage({
     `
 
   // As configurações não dependem do pedido: buscar em paralelo
-  const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto] = await Promise.all([
-    supabase.from('pedidos').select(campos).eq('id', id).single(),
-    buscarMaxParcelas(),
-    buscarValorMinimoBoleto(),
-  ])
+  const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto, configPagamento] =
+    await Promise.all([
+      supabase.from('pedidos').select(campos).eq('id', id).single(),
+      buscarMaxParcelas(),
+      buscarValorMinimoBoleto(),
+      buscarConfigPagamento(),
+    ])
 
   // Só "nenhuma linha" é 404. Qualquer outra falha da consulta (permissão,
   // tabela embutida sem grant, coluna inexistente) precisa aparecer como erro
@@ -189,6 +198,22 @@ export default async function PedidoAdminPage({
     0
   )
   const antesDoEstampando = ['aguardando', 'recebido', 'impressao'].includes(atual)
+
+  // Quanto vale cada boleto: a menor parcela, ou o valor cobrado inteiro no
+  // à vista. É o que a tela compara com o mínimo ao fechar a produção
+  const valorDocumentoBoleto =
+    dono && String(p.forma_pagamento ?? '').startsWith('boleto') && Number(p.total) > 0
+      ? parcelas.length > 0
+        ? Math.min(...parcelas.map((x) => Number(x.valor)))
+        : Number(p.total) +
+          taxaDoPedido(
+            Number(p.total),
+            Number(p.taxa_pagamento_percentual ?? 0),
+            Number(p.taxa_pagamento_fixa ?? 0),
+            p.forma_pagamento,
+            1
+          )
+      : null
   const notaEmitida = usados.some((s: string) =>
     ['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(s)
   )
@@ -292,9 +317,10 @@ export default async function PedidoAdminPage({
         {new Date(p.created_at).toLocaleDateString('pt-BR')}
       </p>
 
-      {/* Sem isto, uma falha de sincronia com o ERP passaria despercebida */}
-      {dono && p.bling_sync_status === 'erro' && (
-        <ReenviarBling pedidoId={p.id} erro={p.bling_erro} />
+      {/* Sem isto, uma falha de sincronia com o ERP passaria despercebida —
+          e "pendente" depois de pronto é falha também: o envio morreu no meio */}
+      {dono && usados.includes('pronto') && p.bling_sync_status !== 'ok' && (
+        <ReenviarBling pedidoId={p.id} erro={p.bling_erro ?? null} />
       )}
 
       {dono && p.bling_pedido_id && (
@@ -467,6 +493,8 @@ export default async function PedidoAdminPage({
           parcelasAtuais={parcelas.length}
           maxParcelas={maxParcelas}
           valorMinimoBoleto={valorMinimoBoleto}
+          valorDocumentoBoleto={valorDocumentoBoleto}
+          intervaloBoleto={configPagamento.boleto.intervaloDias}
           precoCliente={dono ? Number(cliente.preco_metro) : 0}
           metragemImpressa={
             p.metragem_impressa != null ? Number(p.metragem_impressa) : null

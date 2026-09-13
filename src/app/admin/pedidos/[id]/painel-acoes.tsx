@@ -85,6 +85,8 @@ export default function PainelAcoes({
   parcelasAtuais,
   maxParcelas,
   valorMinimoBoleto,
+  valorDocumentoBoleto,
+  intervaloBoleto,
   solicitacao,
   precoCliente,
   metragemImpressa,
@@ -105,6 +107,10 @@ export default function PainelAcoes({
   parcelasAtuais: number
   maxParcelas: number
   valorMinimoBoleto: number
+  /** Menor boleto do pedido, ou null quando não é boleto / não tem valor. */
+  valorDocumentoBoleto: number | null
+  /** Dias entre boletos, da configuração. Também é o prazo do primeiro. */
+  intervaloBoleto: number
   solicitacao: Solicitacao | null
   precoCliente: number
   metragemImpressa: number | null
@@ -118,7 +124,7 @@ export default function PainelAcoes({
   const [qtdParcelas, setQtdParcelas] = useState(
     Math.min(parcelasSolicitadas ?? 3, maxParcelas)
   )
-  const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(30))
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(intervaloBoleto))
   const [statusPendente, setStatusPendente] = useState<string | null>(null)
 
   const idx = ORDEM.indexOf(statusAtual)
@@ -237,6 +243,7 @@ export default function PainelAcoes({
   if (tela === 'forma') {
     return (
       <TelaFormaPagamento
+        intervaloBoleto={intervaloBoleto}
         formaAtual={formaPagamento}
         parcelasAtual={parcelasAtuais || parcelasSolicitadas}
         total={total}
@@ -662,15 +669,14 @@ export default function PainelAcoes({
             para={statusPendente}
             pendente={pendente}
             erro={erro}
-            avisoBoleto={
-              // Só o dono vê valores. O aviso aparece ao fechar a produção,
+            bloqueioBoleto={
+              // Só o dono vê valores. O bloqueio aparece ao fechar a produção,
               // quando a metragem (e portanto o valor) já não muda mais.
               statusPendente === 'pronto' &&
               podeCancelarOuAjustar &&
-              formaPagamento.startsWith('boleto') &&
-              total > 0 &&
-              total < valorMinimoBoleto
-                ? { total, minimo: valorMinimoBoleto }
+              valorDocumentoBoleto !== null &&
+              valorDocumentoBoleto < valorMinimoBoleto
+                ? { documento: valorDocumentoBoleto, minimo: valorMinimoBoleto }
                 : null
             }
             semNf={!emitirNf}
@@ -694,6 +700,7 @@ function TelaFormaPagamento({
   total,
   antesDoEstampando,
   maxParcelas,
+  intervaloBoleto,
   pendente,
   erro,
   onVoltar,
@@ -704,6 +711,7 @@ function TelaFormaPagamento({
   total: number
   antesDoEstampando: boolean
   maxParcelas: number
+  intervaloBoleto: number
   pendente: boolean
   erro: string
   onVoltar: () => void
@@ -720,7 +728,7 @@ function TelaFormaPagamento({
       ? Math.min(parcelasAtual ?? 3, maxParcelas)
       : Math.min(3, maxParcelas)
   )
-  const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(30))
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(intervaloBoleto))
   const [motivo, setMotivo] = useState('')
   const [aviso, setAviso] = useState('')
 

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { chamarBling } from '@/lib/bling/cliente'
 import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
+import { enviarCobrancaPedido } from '@/lib/cobranca/enviar'
 
 type Resultado =
   | { ok: true; detalhe: string }
@@ -64,6 +65,10 @@ export async function reenviarPedidoAoBling(
   if (!parsed.success) return { ok: false, erro: 'Pedido inválido.' }
 
   await sincronizarPedidoComBling(parsed.data)
+
+  // A cobrança sai junto: se o envio original morreu no meio, o e-mail também
+  // não saiu. `email_log` impede duplicar quando ele já foi
+  await enviarCobrancaPedido(parsed.data)
 
   const admin = createAdminClient()
   const { data } = await admin

@@ -39,19 +39,37 @@ export default function ReenviarBling({
     )
   }
 
+  // Sem erro registrado é "pendente": o envio que roda depois de "Pedido
+  // pronto" ainda não terminou — ou morreu no meio sem deixar rastro
+  const pendenteSemErro = !erro && !resposta
+
   return (
-    <div className="bg-[#FFF6FA] border border-[#B00063] rounded-sm px-3 py-2.5 mt-3">
-      <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#B00063]">
-        Não foi enviado ao Bling
+    <div
+      className={
+        pendenteSemErro
+          ? 'bg-[#FBF0D9] border border-[#C79600] rounded-sm px-3 py-2.5 mt-3'
+          : 'bg-[#FFF6FA] border border-[#B00063] rounded-sm px-3 py-2.5 mt-3'
+      }
+    >
+      <p
+        className={
+          'text-[10px] font-mono uppercase tracking-[0.14em] ' +
+          (pendenteSemErro ? 'text-[#8A6A00]' : 'text-[#B00063]')
+        }
+      >
+        {pendenteSemErro ? 'Envio ao Bling pendente' : 'Não foi enviado ao Bling'}
       </p>
 
-      <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">
-        {resposta?.texto ?? erro}
-      </p>
+      {!pendenteSemErro && (
+        <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">
+          {resposta?.texto ?? erro}
+        </p>
+      )}
 
       <p className="text-[11px] text-[#6E6E68] mt-1.5">
-        O pedido seguiu normalmente no portal. Corrija o que falta no Bling e
-        tente de novo.
+        {pendenteSemErro
+          ? 'O envio acontece logo depois de lançar "Pedido pronto". Atualize a página em instantes; se continuar assim, tente de novo.'
+          : 'O pedido seguiu normalmente no portal. Corrija o que falta no Bling e tente de novo.'}
       </p>
 
       <button

@@ -1,6 +1,10 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
+
+// O quadro lança etapas que falam com o Bling e com o Resend
+export const maxDuration = 60
+import { taxaDoPedido } from '@/lib/pagamento/config'
 import { buscarValorMinimoBoleto } from '@/app/actions/configuracoes'
 import NovoPedido from './novo-pedido'
 import FiltroCliente from './filtro-cliente'
@@ -11,6 +15,32 @@ import BuscaPagina from '@/components/busca-pagina'
 import { ATIVOS, ROTULOS, sinal } from './estagios'
 
 const DIA = 86400000
+
+/**
+ * Menor boleto do pedido — a menor parcela, ou o valor cobrado no à vista.
+ * É o que o modal de "Pedido pronto" compara com o mínimo. Null quando não é
+ * boleto ou a metragem ainda não deu valor ao pedido.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function valorDocumentoBoleto(p: any): number | null {
+  const forma = String(p.forma_pagamento ?? '')
+  const total = Number(p.total)
+  if (!forma.startsWith('boleto') || total <= 0) return null
+
+  const parcelas = (p.pedido_parcelas ?? []) as { valor: number | string }[]
+  if (parcelas.length > 0) return Math.min(...parcelas.map((x) => Number(x.valor)))
+
+  return (
+    total +
+    taxaDoPedido(
+      total,
+      Number(p.taxa_pagamento_percentual ?? 0),
+      Number(p.taxa_pagamento_fixa ?? 0),
+      forma,
+      1
+    )
+  )
+}
 
 export default async function PedidosAdminPage({
   searchParams,
@@ -30,6 +60,8 @@ export default async function PedidosAdminPage({
       .select(`
         id, numero, total, cliente_id, created_at, cancelado_em, metragem_impressa,
         forma_pagamento, emitir_nf,
+        taxa_pagamento_percentual, taxa_pagamento_fixa,
+        pedido_parcelas(valor),
         clientes(razao_social),
         pedido_status_historico(status, created_at),
         pedido_itens(quantidade_faturada),
@@ -80,6 +112,7 @@ export default async function PedidosAdminPage({
         status,
         formaPagamento: (p.forma_pagamento as string) ?? '',
         emitirNf: p.emitir_nf !== false,
+        valorDocumentoBoleto: valorDocumentoBoleto(p),
         dias: ultimo
           ? Math.floor((agora - new Date(ultimo.created_at).getTime()) / DIA)
           : 0,

@@ -385,7 +385,7 @@ export function ModalConfirmarStatus({
   para,
   pendente,
   erro,
-  avisoBoleto,
+  bloqueioBoleto,
   semNf,
   onCancelar,
   onConfirmar,
@@ -394,7 +394,8 @@ export function ModalConfirmarStatus({
   para: string
   pendente: boolean
   erro: string
-  avisoBoleto: { total: number; minimo: number } | null
+  /** Boleto abaixo do mínimo por documento: o botão de confirmar trava. */
+  bloqueioBoleto: { documento: number; minimo: number } | null
   /** Pedido marcado para sair sem nota — avisa só ao fechar a produção. */
   semNf?: boolean
   onCancelar: () => void
@@ -437,15 +438,15 @@ export function ModalConfirmarStatus({
           .
         </p>
 
-        {avisoBoleto && (
-          <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
-            <strong className="block text-[10px] tracking-widest mb-1">
-              ATENÇÃO
+        {bloqueioBoleto && (
+          <div className="bg-[#FFF6FA] border-l-4 border-[#B00063] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
+            <strong className="block text-[10px] tracking-widest mb-1 text-[#B00063]">
+              NÃO DÁ PARA FECHAR ASSIM
             </strong>
-            Com a metragem impressa, o pedido ficou em{' '}
-            <strong>R$ {brl(avisoBoleto.total)}</strong>, abaixo do mínimo de{' '}
-            <strong>R$ {brl(avisoBoleto.minimo)}</strong> para boleto. Combine a
-            cobrança com o cliente antes de seguir.
+            Com a metragem impressa, cada boleto ficou em{' '}
+            <strong>R$ {brl(bloqueioBoleto.documento)}</strong>, abaixo do mínimo de{' '}
+            <strong>R$ {brl(bloqueioBoleto.minimo)}</strong>. Altere a forma de
+            pagamento — menos parcelas ou outra forma — e volte aqui.
           </div>
         )}
 
@@ -473,7 +474,7 @@ export function ModalConfirmarStatus({
           </button>
           <button
             onClick={onConfirmar}
-            disabled={pendente}
+            disabled={pendente || !!bloqueioBoleto}
             className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
           >
             {pendente ? '...' : 'CONFIRMAR'}

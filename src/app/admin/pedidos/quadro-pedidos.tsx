@@ -49,6 +49,8 @@ export type PedidoQuadro = {
   dias: number
   formaPagamento: string
   emitirNf: boolean
+  /** Menor boleto do pedido, ou null quando não é boleto / não tem valor. */
+  valorDocumentoBoleto: number | null
 }
 
 type Grupo = { status: string; itens: PedidoQuadro[] }
@@ -698,13 +700,15 @@ export default function QuadroPedidos({
           para={movimento.destino}
           pendente={pendente}
           erro={erro}
-          avisoBoleto={
+          bloqueioBoleto={
             movimento.destino === 'pronto' &&
             dono &&
-            movimento.pedido.formaPagamento.startsWith('boleto') &&
-            movimento.pedido.total > 0 &&
-            movimento.pedido.total < valorMinimoBoleto
-              ? { total: movimento.pedido.total, minimo: valorMinimoBoleto }
+            movimento.pedido.valorDocumentoBoleto !== null &&
+            movimento.pedido.valorDocumentoBoleto < valorMinimoBoleto
+              ? {
+                  documento: movimento.pedido.valorDocumentoBoleto,
+                  minimo: valorMinimoBoleto,
+                }
               : null
           }
           semNf={!movimento.pedido.emitirNf}

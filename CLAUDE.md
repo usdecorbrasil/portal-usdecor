@@ -390,6 +390,29 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
   o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
   etapas para o banco e ajustar essas três pontas juntas.
 
+## "Pedido pronto": o que acontece e o que trava (13/09/2026)
+
+- **Boleto abaixo do mínimo por documento bloqueia** a etapa — no servidor
+  (`lancarStatus` → `boletoAbaixoDoMinimo`) e no modal, que desativa o botão. Compara a
+  **menor parcela** (parcelado) ou o valor cobrado inteiro (à vista) com
+  `valorMinimoParcela` do boleto. Antes comparava o total do pedido, e por isso o 1006
+  (3 × R$ 127,50, total R$ 375) passou sem aviso. A saída é trocar forma ou parcelas
+  em "Forma de pagamento" e voltar.
+- **Bling e cobrança rodam em `after()`**, depois de a resposta sair, e as duas telas
+  de pedidos têm `maxDuration = 60`. Esperar dentro da requisição estourava o tempo da
+  função: o 1006 ficou `pendente` sem nunca ser enviado e sem e-mail de cobrança. A
+  cobrança mora em `src/lib/cobranca/enviar.ts` (chave de serviço: em `after()` não há
+  cookies) — não em `actions/producao.ts`, porque exportar de um `'use server'` viraria
+  endpoint público.
+- **Primeiro vencimento do boleto = hoje + intervalo configurado.** Estava fixo em 30
+  dias no painel (`dataPadrao(30)`), e a configuração de 15 dias só valia entre o 1º e o
+  2º boleto — o 1006 saiu com 30/15/15. O intervalo entre parcelas continua vindo de
+  `parcelar_pedido` no banco; o painel só sugere o primeiro, e quem confirma pode mudar.
+- **"Pendente" depois de pronto é falha**: a tela do pedido mostra o bloco de reenvio
+  sempre que `bling_sync_status !== 'ok'` a partir de "pronto", em amarelo quando não há
+  erro registrado. "Tentar de novo" reenvia ao Bling **e** a cobrança (`email_log`
+  impede duplicar).
+
 ## Nota fiscal — com ou sem, por pedido
 
 Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega
