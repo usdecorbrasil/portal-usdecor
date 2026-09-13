@@ -230,7 +230,8 @@ ali a imagem é o conteúdo.
 - **Limite de crédito não é alterável por fora.** Há trava no banco exigindo
   `atualizar_limite_credito()`, e a função identifica quem chama pela sessão — chave de
   serviço não passa. Só pelo portal, logado como admin/financeiro, e com motivo, que vai
-  para `cliente_limite_historico`.
+  para `cliente_limite_historico`. Confirmado em 13/09/2026: a alteração pelo portal
+  funciona.
 - **Pedido de venda criado ao lançar "Pedido pronto"** (`src/lib/bling/pedido.ts`), não
   na confirmação: o valor é metragem × preço/metro e a metragem só existe depois da
   estampa. Vai com **uma linha de metragem** (produto genérico `ESTAMPA`, unidade `m`),
@@ -262,20 +263,18 @@ ali a imagem é o conteúdo.
 - Já verificado nesta conta: os SKUs do portal **são** os códigos de produto do Bling
   (`D10409` etc.), e o token já vem em **JWT** (a nota de migração abaixo está vencida).
 
-**NADA DISSO FOI TESTADO CONTRA O ERP** (12/09/2026). Só operações de leitura foram
-executadas — contatos, produtos, pedidos e formas de pagamento foram consultados e a
-estrutura veio de dados reais da conta. Nenhum `POST` ou `PUT` rodou: criar contato,
-atualizar contato e criar pedido de venda estão escritos a partir do formato observado,
-mas podem esbarrar em campo obrigatório não previsto. Ordem sugerida para validar, do
-mais barato ao mais caro de reverter:
+**Validação contra o ERP, em ordem de custo de reverter:**
 
-1. Editar um cliente que já exista no Bling, preenchendo os dados fiscais (exercita
-   `GET` + mescla + `PUT`).
-2. Cadastrar um cliente novo (exercita `POST /contatos`).
-3. Levar um pedido até "Pedido pronto" (exercita `POST /pedidos/vendas`, o e-mail de
-   cobrança e a geração de parcelas com taxa, tudo de uma vez).
+1. ~~Editar cliente que já existe no Bling~~ — **funcionou em 13/09/2026**: alterar o
+   e-mail de um cliente no portal atualizou o contato no Bling. O caminho
+   `GET` + mescla + `PUT` está provado.
+2. Cadastrar cliente novo (`POST /contatos`) — **não testado**. Será feito depois da
+   limpeza dos dados de teste, junto do fluxo completo.
+3. Levar um pedido até "Pedido pronto" (`POST /pedidos/vendas`, e-mail de cobrança e
+   parcelas com taxa de uma vez) — **não testado**.
 
-O erro do Bling aparece na própria tela em qualquer um dos três casos.
+Os dois que faltam estão escritos a partir do formato observado em leitura e podem
+esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própria tela.
 
 ## Integração com o Bling
 
@@ -375,6 +374,28 @@ O erro do Bling aparece na própria tela em qualquer um dos três casos.
   (`src/app/admin/pedidos/estagios.ts`, `ETAPAS_MANUAIS` em `app/actions/producao.ts` e
   o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
   etapas para o banco e ajustar essas três pontas juntas.
+
+## Nota fiscal — com ou sem, por pedido
+
+Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega
+`pedidos.emitir_nf` (`docs/sql/008`), que nasce `true`.
+
+- **Quem decide é a equipe, não o cliente.** É decisão fiscal da empresa; o carrinho não
+  tem essa escolha. Aparece na tela do pedido, em "Nota fiscal", ao lado da forma de
+  pagamento — a mesma conversa comercial.
+- **Dispensar a nota exige motivo** (mín. 10 caracteres, guardado em
+  `emitir_nf_motivo`); emitir não exige. Emitir é o caminho normal — cobrar
+  justificativa para o normal seria atrito sem propósito. Quem mudou por último fica em
+  `emitir_nf_definido_por` / `_em`; não há tabela de histórico, porque o que importa é a
+  decisão vigente.
+- **Vale até "Pedido pronto".** É a etapa que cria o pedido de venda no Bling, de onde
+  sai o faturamento. Depois de `nf_emitida` o banco recusa a troca
+  (`admin_definir_emissao_nf`): mudar viraria divergência com o que já foi para a SEFAZ.
+- **O Bling recebe o aviso na observação do pedido** (`*** SEM NOTA FISCAL ***`, antes de
+  tudo), porque não há campo próprio para isso no pedido de venda. É o que quem fatura
+  lê antes de emitir.
+- Na lista de pedidos só a exceção aparece (etiqueta `sem nf`), e o modal de confirmação
+  de "Pedido pronto" repete o aviso — último momento em que dá para desfazer.
 
 ## Formas de pagamento — configuráveis
 

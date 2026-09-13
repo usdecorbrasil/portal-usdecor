@@ -388,3 +388,48 @@ export async function alterarFormaPagamento(
   revalidatePath('/pedidos')
   return { ok: true }
 }
+
+/**
+ * Define se o pedido sai com ou sem nota fiscal.
+ *
+ * A decisão vale até "Pedido pronto": é a etapa que cria o pedido de venda no
+ * Bling, e quem fatura lê a decisão de lá. Depois da nota emitida o banco
+ * recusa a troca — mudar viraria divergência com o que já foi para a SEFAZ.
+ *
+ * O motivo só é exigido para dispensar a nota. Emitir é o caminho normal e não
+ * precisa de justificativa; a exceção é que precisa ficar registrada.
+ */
+export async function definirEmissaoNf(
+  pedidoId: string,
+  emitir: boolean,
+  motivo?: string
+): Promise<Resultado> {
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    emitir: z.boolean(),
+    motivo: z.string().trim().max(500).optional(),
+  }).safeParse({ pedidoId, emitir, motivo })
+
+  if (!parsed.success) return { ok: false, erro: 'Dados inválidos.' }
+
+  if (!parsed.data.emitir && (parsed.data.motivo ?? '').length < 10) {
+    return {
+      ok: false,
+      erro: 'Descreva por que o pedido sai sem nota fiscal (mín. 10 caracteres).',
+    }
+  }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('admin_definir_emissao_nf', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_emitir: parsed.data.emitir,
+    p_motivo: parsed.data.motivo ?? null,
+  })
+
+  if (error) return { ok: false, erro: error.message }
+
+  revalidar()
+  revalidatePath(`/admin/pedidos/${parsed.data.pedidoId}`)
+  return { ok: true }
+}

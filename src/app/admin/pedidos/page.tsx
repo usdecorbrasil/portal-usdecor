@@ -29,7 +29,7 @@ export default async function PedidosAdminPage({
       .from('pedidos')
       .select(`
         id, numero, total, cliente_id, created_at, cancelado_em, metragem_impressa,
-        forma_pagamento,
+        forma_pagamento, emitir_nf,
         clientes(razao_social),
         pedido_status_historico(status, created_at),
         pedido_itens(quantidade_faturada),
@@ -79,6 +79,7 @@ export default async function PedidosAdminPage({
         cliente: p.clientes?.razao_social ?? '—',
         status,
         formaPagamento: (p.forma_pagamento as string) ?? '',
+        emitirNf: p.emitir_nf !== false,
         dias: ultimo
           ? Math.floor((agora - new Date(ultimo.created_at).getTime()) / DIA)
           : 0,

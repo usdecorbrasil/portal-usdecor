@@ -8,6 +8,7 @@ import {
 } from '@/app/actions/configuracoes'
 import PainelAcoes from './painel-acoes'
 import ReenviarBling from './reenviar-bling'
+import NotaFiscal from './nota-fiscal'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -87,6 +88,7 @@ export default async function PedidoAdminPage({
       cancelado_em, cancelado_motivo,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       forma_pagamento, parcelas_solicitadas, cliente_id,
+      emitir_nf, emitir_nf_motivo,
       ${camposFinanceiros}
       clientes(razao_social, cnpj, preco_metro),
       pedido_itens(${camposItens}),
@@ -171,6 +173,9 @@ export default async function PedidoAdminPage({
     0
   )
   const antesDoEstampando = ['aguardando', 'recebido', 'impressao'].includes(atual)
+  const notaEmitida = usados.some((s: string) =>
+    ['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(s)
+  )
   const ajustesQtd = (p.pedido_ajustes ?? []) as any[]
   const ajustesForma = (p.pedido_forma_pagamento_historico ?? []) as any[]
   const ajustesPreco = (p.pedido_precos ?? []) as any[]
@@ -395,6 +400,7 @@ export default async function PedidoAdminPage({
           reimpressoes={reimpressoes}
           podeCancelarOuAjustar={dono}
           formaPagamento={p.forma_pagamento}
+          emitirNf={p.emitir_nf !== false}
           parcelasSolicitadas={p.parcelas_solicitadas}
           parcelasAtuais={parcelas.length}
           maxParcelas={maxParcelas}
@@ -464,6 +470,15 @@ export default async function PedidoAdminPage({
           </div>
         )}
       </div>
+
+      {dono && (
+        <NotaFiscal
+          pedidoId={p.id}
+          emitirNf={p.emitir_nf !== false}
+          motivo={p.emitir_nf_motivo ?? null}
+          editavel={!cancelado && !notaEmitida}
+        />
+      )}
 
       <Titulo>ANDAMENTO</Titulo>
 

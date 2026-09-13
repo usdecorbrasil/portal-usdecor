@@ -80,6 +80,7 @@ export default function PainelAcoes({
   reimpressoes,
   podeCancelarOuAjustar,
   formaPagamento,
+  emitirNf,
   parcelasSolicitadas,
   parcelasAtuais,
   maxParcelas,
@@ -99,6 +100,7 @@ export default function PainelAcoes({
   reimpressoes: number
   podeCancelarOuAjustar: boolean
   formaPagamento: string
+  emitirNf: boolean
   parcelasSolicitadas: number | null
   parcelasAtuais: number
   maxParcelas: number
@@ -671,6 +673,7 @@ export default function PainelAcoes({
                 ? { total, minimo: valorMinimoBoleto }
                 : null
             }
+            semNf={!emitirNf}
             onCancelar={() => {
               setErro('')
               setStatusPendente(null)

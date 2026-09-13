@@ -80,7 +80,7 @@ export async function criarPedidoNoBling(
   const { data: pedido } = await admin
     .from('pedidos')
     .select(`
-      numero, total, metragem_impressa, forma_pagamento, notas,
+      numero, total, metragem_impressa, forma_pagamento, notas, emitir_nf,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
       bling_pedido_id,
       clientes(razao_social, cnpj),
@@ -98,6 +98,7 @@ export async function criarPedidoNoBling(
     metragem_impressa: number | string | null
     forma_pagamento: string
     notas: string | null
+    emitir_nf: boolean | null
     taxa_pagamento_percentual: number | string | null
     taxa_pagamento_fixa: number | string | null
     bling_pedido_id: number | null
@@ -191,7 +192,13 @@ export async function criarPedidoNoBling(
     contato: { id: contato.id },
     // O número do pedido no portal é o que liga os dois sistemas na conferência
     numeroPedidoCompra: String(p.numero),
-    observacoes: [`Portal — pedido #${p.numero}`, p.notas?.trim()]
+    // O aviso vem primeiro de propósito: é a observação que quem fatura no
+    // Bling precisa ver antes de emitir a nota
+    observacoes: [
+      p.emitir_nf === false ? '*** SEM NOTA FISCAL ***' : null,
+      `Portal — pedido #${p.numero}`,
+      p.notas?.trim(),
+    ]
       .filter(Boolean)
       .join(' | ')
       .slice(0, 500),

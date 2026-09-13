@@ -48,6 +48,7 @@ export type PedidoQuadro = {
   entrada: string
   dias: number
   formaPagamento: string
+  emitirNf: boolean
 }
 
 type Grupo = { status: string; itens: PedidoQuadro[] }
@@ -706,6 +707,7 @@ export default function QuadroPedidos({
               ? { total: movimento.pedido.total, minimo: valorMinimoBoleto }
               : null
           }
+          semNf={!movimento.pedido.emitirNf}
           onCancelar={fechar}
           onConfirmar={() => avancar(movimento.destino)}
         />
@@ -885,6 +887,12 @@ function LinhaPedido({
         <span className="font-semibold tracking-tight text-sm truncate flex-1 min-w-0">
           {p.cliente}
         </span>
+
+        {!p.emitirNf && (
+          <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-wider text-[#8A6A00] bg-[#FBF0D9] rounded-sm px-1 shrink-0">
+            sem nf
+          </span>
+        )}
 
         {p.temSolicitacao && (
           <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-wider text-[#B00063] border border-[#B00063] rounded-sm px-1 shrink-0">

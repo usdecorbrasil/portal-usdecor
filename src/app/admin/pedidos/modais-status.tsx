@@ -386,6 +386,7 @@ export function ModalConfirmarStatus({
   pendente,
   erro,
   avisoBoleto,
+  semNf,
   onCancelar,
   onConfirmar,
 }: {
@@ -394,6 +395,8 @@ export function ModalConfirmarStatus({
   pendente: boolean
   erro: string
   avisoBoleto: { total: number; minimo: number } | null
+  /** Pedido marcado para sair sem nota — avisa só ao fechar a produção. */
+  semNf?: boolean
   onCancelar: () => void
   onConfirmar: () => void
 }) {
@@ -443,6 +446,18 @@ export function ModalConfirmarStatus({
             <strong>R$ {brl(avisoBoleto.total)}</strong>, abaixo do mínimo de{' '}
             <strong>R$ {brl(avisoBoleto.minimo)}</strong> para boleto. Combine a
             cobrança com o cliente antes de seguir.
+          </div>
+        )}
+
+        {/* Último momento em que a decisão ainda pode ser desfeita: daqui o
+            pedido vai para o Bling e alguém fatura */}
+        {semNf && para === 'pronto' && (
+          <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
+            <strong className="block text-[10px] tracking-widest mb-1">
+              SEM NOTA FISCAL
+            </strong>
+            Este pedido está marcado para sair <strong>sem nota</strong>. Para
+            mudar, cancele e ajuste na tela do pedido antes de seguir.
           </div>
         )}
 
