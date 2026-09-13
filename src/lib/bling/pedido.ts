@@ -305,7 +305,10 @@ export async function sincronizarPedidoComBling(pedidoId: string) {
       .update({
         bling_pedido_id: resultado.blingId,
         bling_numero: resultado.numero,
-        bling_sync_status: 'ok',
+        // O enum `bling_sync` é pendente | enviado | erro. Com 'ok' o update
+        // era recusado em silêncio e o vínculo nunca chegava ao banco — foi o
+        // que deixou 1006 e 1007 "pendentes" com o pedido já criado no Bling
+        bling_sync_status: 'enviado',
         bling_erro: null,
       })
       .eq('id', pedidoId)

@@ -419,6 +419,12 @@ nada.
   dias no painel (`dataPadrao(30)`), e a configuração de 15 dias só valia entre o 1º e o
   2º boleto — o 1006 saiu com 30/15/15. O intervalo entre parcelas continua vindo de
   `parcelar_pedido` no banco; o painel só sugere o primeiro, e quem confirma pode mudar.
+- **`bling_sync` é `pendente | enviado | erro`** — não existe `ok`. O código gravava
+  `'ok'`, o Postgres recusava (22P02) e, como o erro do update não era lido, o pedido
+  ficava sem vínculo mesmo com a venda criada no Bling. Foi a causa real dos
+  "pendentes" de 13/09, não o tempo da função. Lição de método: testar o enum com um
+  `PATCH` em id inexistente devolve 204 — o cast só acontece quando há linha; ler o
+  `enum` no OpenAPI do PostgREST é o jeito confiável.
 - **"Pendente" depois de pronto é falha**: a tela do pedido mostra o bloco de reenvio
   sempre que `bling_sync_status !== 'ok'` a partir de "pronto", em amarelo quando não há
   erro registrado. "Tentar de novo" reenvia ao Bling **e** a cobrança (`email_log`

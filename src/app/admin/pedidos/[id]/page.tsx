@@ -374,7 +374,7 @@ export default async function PedidoAdminPage({
 
       {/* Sem isto, uma falha de sincronia com o ERP passaria despercebida —
           e "pendente" depois de pronto é falha também: o envio morreu no meio */}
-      {dono && !cancelado && usados.includes('pronto') && p.bling_sync_status !== 'ok' && (
+      {dono && !cancelado && usados.includes('pronto') && p.bling_sync_status !== 'enviado' && (
         <ReenviarBling pedidoId={p.id} erro={p.bling_erro ?? null} />
       )}
 

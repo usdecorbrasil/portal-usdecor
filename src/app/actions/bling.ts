@@ -79,7 +79,7 @@ export async function reenviarPedidoAoBling(
 
   revalidatePath(`/admin/pedidos/${parsed.data}`)
 
-  if (data?.bling_sync_status === 'ok') {
+  if (data?.bling_sync_status === 'enviado') {
     return {
       ok: true,
       detalhe: `Pedido enviado ao Bling${data.bling_numero ? ` (#${data.bling_numero})` : ''}.`,
