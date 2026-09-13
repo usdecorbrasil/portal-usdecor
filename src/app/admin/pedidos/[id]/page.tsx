@@ -54,6 +54,9 @@ function dataHora(iso: string) {
   )
 }
 
+/** `null` é pedido anterior à decisão existir — e antes dela todos tinham nota. */
+const rotuloNf = (v: boolean | null) => (v === false ? 'Sem nota' : 'Com nota')
+
 function dataBr(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR')
 }
@@ -79,13 +82,13 @@ export default async function PedidoAdminPage({
 
   const camposFinanceiros = dono ? `total,` : ''
 
-  // As configurações não dependem do pedido: buscar em paralelo
-  const [{ data: pedido }, maxParcelas, valorMinimoBoleto] = await Promise.all([
-    supabase
-    .from('pedidos')
-    .select(`
+  // Anotado como `string` de propósito: sem isso o TypeScript tenta montar o
+  // tipo do retorno a partir do texto da consulta, e com esta quantidade de
+  // tabelas embutidas a união fica grande demais para ele representar.
+  // O retorno já é tratado como `any` logo abaixo.
+  const campos: string = `
       id, numero, notas, created_at, metragem_impressa,
-      cancelado_em, cancelado_motivo,
+      cancelado_em, cancelado_motivo, cancelado_por,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       forma_pagamento, parcelas_solicitadas, cliente_id,
       emitir_nf, emitir_nf_motivo,
@@ -94,18 +97,24 @@ export default async function PedidoAdminPage({
       pedido_itens(${camposItens}),
       pedido_status_historico(
         status, origem, created_at, observacao,
-        reimpressao_motivo, reimpressao_custo
+        reimpressao_motivo, reimpressao_custo, criado_por
       ),
-      pedido_ajustes(motivo, item_id, quantidade_de, quantidade_para, created_at),
+      pedido_ajustes(
+        motivo, item_id, quantidade_de, quantidade_para, created_at, criado_por
+      ),
       pedido_forma_pagamento_historico(
-        forma_anterior, forma_nova, parcelas_anterior, parcelas_nova, motivo, criado_em
+        forma_anterior, forma_nova, parcelas_anterior, parcelas_nova, motivo,
+        criado_em, autor_id
       ),
-      pedido_precos(preco_de, preco_para, motivo, created_at),
+      pedido_precos(preco_de, preco_para, motivo, created_at, criado_por),
+      pedido_nf_historico(emitir_de, emitir_para, motivo, created_at, criado_por),
       pedido_solicitacoes(id, texto, status, resposta, created_at),
       pedido_parcelas(numero, valor, vencimento, pago_em)
-    `)
-    .eq('id', id)
-    .single(),
+    `
+
+  // As configurações não dependem do pedido: buscar em paralelo
+  const [{ data: pedido }, maxParcelas, valorMinimoBoleto] = await Promise.all([
+    supabase.from('pedidos').select(campos).eq('id', id).single(),
     buscarMaxParcelas(),
     buscarValorMinimoBoleto(),
   ])
@@ -179,17 +188,49 @@ export default async function PedidoAdminPage({
   const ajustesQtd = (p.pedido_ajustes ?? []) as any[]
   const ajustesForma = (p.pedido_forma_pagamento_historico ?? []) as any[]
   const ajustesPreco = (p.pedido_precos ?? []) as any[]
+  const ajustesNf = (p.pedido_nf_historico ?? []) as any[]
   const itemPorId = new Map(itens.map((i) => [i.id, i]))
+
+  // Quem fez cada coisa, numa consulta só. Degrada para nada quando o perfil
+  // foi arquivado ou a política não deixa ler — nome é informação extra, não
+  // pode derrubar a tela do pedido
+  const idsAutores = [
+    ...ajustesQtd.map((a) => a.criado_por),
+    ...ajustesForma.map((a) => a.autor_id),
+    ...ajustesPreco.map((a) => a.criado_por),
+    ...ajustesNf.map((a) => a.criado_por),
+    ...hist.map((h: any) => h.criado_por),
+    p.cancelado_por,
+  ].filter(Boolean) as string[]
+
+  const nomes = new Map<string, string>()
+
+  if (idsAutores.length) {
+    const { data: perfis } = await supabase
+      .from('profiles')
+      .select('id, nome')
+      .in('id', [...new Set(idsAutores)])
+
+    perfis?.forEach((x) => {
+      if (x.nome) nomes.set(x.id as string, x.nome as string)
+    })
+  }
+
+  const autorDe = (id: string | null | undefined) =>
+    (id && nomes.get(id)) || null
 
   const alteracoes = [
     ...ajustesQtd.map((a) => {
       const item = itemPorId.get(a.item_id)
       const produto = item ? `${item.sku} — ${item.nome}: ` : ''
       return {
-        tipo: 'Quantidade',
+        // Item novo entra como 0 → N; chamar isso de "quantidade" escondia o
+        // que de fato aconteceu
+        tipo: a.quantidade_de === 0 ? 'Item adicionado' : 'Quantidade',
         motivo: a.motivo as string,
         detalhe: `${produto}${a.quantidade_de} → ${a.quantidade_para} un`,
         data: a.created_at as string,
+        autor: autorDe(a.criado_por),
       }
     }),
     ...ajustesForma.map((a) => ({
@@ -203,6 +244,7 @@ export default async function PedidoAdminPage({
               a.parcelas_nova
             )}`,
       data: a.criado_em as string,
+      autor: autorDe(a.autor_id),
     })),
     ...ajustesPreco.map((a) => ({
       tipo: 'Preço',
@@ -212,6 +254,18 @@ export default async function PedidoAdminPage({
           ? `R$ ${brl(Number(a.preco_de))} → R$ ${brl(Number(a.preco_para))} /m`
           : 'Preço por metro alterado',
       data: a.created_at as string,
+      autor: autorDe(a.criado_por),
+    })),
+    ...ajustesNf.map((a) => ({
+      tipo: 'Nota fiscal',
+      motivo:
+        (a.motivo as string | null) ??
+        (a.emitir_para
+          ? 'Pedido voltou a sair com nota fiscal.'
+          : 'Pedido passou a sair sem nota fiscal.'),
+      detalhe: `${rotuloNf(a.emitir_de)} → ${rotuloNf(a.emitir_para)}`,
+      data: a.created_at as string,
+      autor: autorDe(a.criado_por),
     })),
   ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
 
@@ -252,6 +306,7 @@ export default async function PedidoAdminPage({
           )}
           <p className="text-[10px] font-mono tracking-widest text-[#6E6E68] mt-2 uppercase">
             {dataHora(p.cancelado_em)}
+            {autorDe(p.cancelado_por) && ` · por ${autorDe(p.cancelado_por)}`}
           </p>
         </div>
       ) : (
@@ -515,6 +570,9 @@ export default async function PedidoAdminPage({
                 <span className="ml-1.5 border border-[#DDDCD5] rounded-sm px-1.5 py-0.5 uppercase tracking-wider">
                   {ORIGENS[h.origem] ?? h.origem}
                 </span>
+                {autorDe(h.criado_por) && (
+                  <span className="ml-1.5">por {autorDe(h.criado_por)}</span>
+                )}
               </div>
               {h.reimpressao_motivo && (
                 <div className="inline-block text-[11px] leading-snug text-[#C79600] bg-[#FBF0D9] rounded-sm px-2 py-1 mt-1.5">
@@ -555,6 +613,7 @@ export default async function PedidoAdminPage({
                 </p>
                 <p className="text-[10px] font-mono text-[#6E9478] mt-1.5 uppercase tracking-wider">
                   {a.detalhe} · {dataHora(a.data)}
+                  {a.autor && ` · por ${a.autor}`}
                 </p>
               </div>
             ))}

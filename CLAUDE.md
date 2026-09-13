@@ -396,6 +396,29 @@ Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega
   lê antes de emitir.
 - Na lista de pedidos só a exceção aparece (etiqueta `sem nf`), e o modal de confirmação
   de "Pedido pronto" repete o aviso — último momento em que dá para desfazer.
+- **Toda troca vira linha em `pedido_nf_historico`** (`docs/sql/009`), como já acontecia
+  com quantidade, preço e forma de pagamento. As colunas `emitir_nf_*` em `pedidos`
+  continuam guardando a decisão vigente, que é o que a tela lê; a tabela guarda o
+  caminho até ela.
+
+## Quem fez cada alteração
+
+Todas as tabelas de histórico do pedido já gravavam o autor — `criado_por` em
+`pedido_ajustes`, `pedido_precos`, `pedido_status_historico` e `pedido_nf_historico`,
+`autor_id` em `pedido_forma_pagamento_historico`, `cancelado_por` em `pedidos`. O que
+faltava era mostrar: a tela do pedido resolve os nomes numa consulta só a `profiles` e
+exibe "por Fulano" em **Alterações no pedido**, em cada etapa do **Andamento** e no aviso
+de cancelamento.
+
+- O nome **degrada para nada** se o perfil foi arquivado ou a política não deixa ler.
+  Nome é informação extra; não pode derrubar a tela do pedido.
+- Item adicionado entra em `pedido_ajustes` como `0 → N` e aparece como
+  **Item adicionado**, não como mudança de quantidade.
+- A consulta do pedido tem `const campos: string` de propósito: sem a anotação o
+  TypeScript monta o tipo do retorno a partir do texto do `select`, e com esta
+  quantidade de tabelas embutidas estoura com *union type too complex*.
+- **Fora do pedido ainda não há trilha**: editar cadastro de cliente não registra
+  histórico (só limite de crédito, em `cliente_limite_historico`).
 
 ## Formas de pagamento — configuráveis
 
