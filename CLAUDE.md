@@ -237,8 +237,22 @@ ali a imagem é o conteúdo.
   não uma por arte — no portal a quantidade de peças serve à produção, não ao preço, e
   somar peças não fecharia com o total nem com os boletos. A taxa da forma de pagamento
   entra em `outrasDespesas`.
-- Configuração em `configuracoes.bling` (JSON): `produtoEstampaCodigo` e
-  `formaPagamentoId` (11079000 = "Boleto - Bling Conta").
+- Configuração em `configuracoes.bling` (JSON): `produtoEstampaCodigo`,
+  `formaPagamentoId` (11079000 = "Boleto - Bling Conta") e `formaPagamentoPixId`
+  (11079001 = "Pix - Bling Conta"). **É a forma de pagamento da parcela que faz o Bling
+  gerar boleto ou Pix.**
+- **Os links de pagamento não ficam no pedido de venda.** Nascem nas contas a receber
+  que o Bling cria a partir dele, em `linkQRCodePix` e `linkBoleto`
+  (`src/lib/bling/cobranca.ts`). A busca é por contato e casa parcela por
+  **vencimento + valor**, porque o vínculo com o pedido não é exposto de forma
+  confiável — a conta que inspecionei tinha `origem` zerado.
+- **Teto de parcelas é 4** (decidido em 13/09/2026), em três lugares que precisam
+  concordar: `MAX_PARCELAS` em `src/lib/pagamento/config.ts`, os schemas zod das
+  actions, e o CHECK `pedidos_parcelas_solicitadas_check` no banco. Já houve
+  descompasso: o CHECK estava em 3 enquanto a tela oferecia mais, e o pedido seria
+  recusado só na hora de gravar.
+- `pedidos.forma_pagamento` é `text` com CHECK (`pedidos_forma_pagamento_check`), não
+  enum — valor novo exige recriar a restrição (`docs/sql/006`).
 - **A API limita 3 requisições por segundo** — daí as pausas entre chamadas.
 - Falha de sincronia **nunca** derruba a operação do portal: fica em
   `pedidos.bling_erro` / `bling_sync_status` e aparece na tela do pedido, com botão

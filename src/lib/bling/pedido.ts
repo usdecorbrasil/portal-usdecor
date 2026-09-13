@@ -23,13 +23,16 @@ const pausa = () => new Promise((r) => setTimeout(r, PAUSA_MS))
 type ConfigBling = {
   /** Código, no Bling, do produto genérico de estampa cobrado por metro. */
   produtoEstampaCodigo: string
-  /** Forma de pagamento usada nas parcelas do pedido. */
+  /** Forma de pagamento do Bling para boleto. */
   formaPagamentoId: number | null
+  /** Forma de pagamento do Bling para Pix — é ela que gera o QR Code. */
+  formaPagamentoPixId: number | null
 }
 
 const CONFIG_PADRAO: ConfigBling = {
   produtoEstampaCodigo: 'ESTAMPA',
   formaPagamentoId: null,
+  formaPagamentoPixId: null,
 }
 
 async function lerConfig(): Promise<ConfigBling> {
@@ -50,6 +53,8 @@ async function lerConfig(): Promise<ConfigBling> {
         j.produtoEstampaCodigo || CONFIG_PADRAO.produtoEstampaCodigo,
       formaPagamentoId:
         typeof j.formaPagamentoId === 'number' ? j.formaPagamentoId : null,
+      formaPagamentoPixId:
+        typeof j.formaPagamentoPixId === 'number' ? j.formaPagamentoPixId : null,
     }
   } catch {
     return CONFIG_PADRAO
@@ -204,14 +209,28 @@ export async function criarPedidoNoBling(
     outrasDespesas: taxa,
   }
 
+  // É a forma de pagamento da parcela que faz o Bling gerar boleto ou Pix
+  const formaBling =
+    p.forma_pagamento === 'pix'
+      ? config.formaPagamentoPixId
+      : config.formaPagamentoId
+
   if (parcelas.length > 0) {
     corpo.parcelas = parcelas.map((pc) => ({
       dataVencimento: String(pc.vencimento).slice(0, 10),
       valor: Number(pc.valor),
-      ...(config.formaPagamentoId
-        ? { formaPagamento: { id: config.formaPagamentoId } }
-        : {}),
+      ...(formaBling ? { formaPagamento: { id: formaBling } } : {}),
     }))
+  } else {
+    // À vista (Pix, boleto único, cartão): uma parcela com o total cobrado
+    const total = Math.round((valorMercadoria + taxa) * 100) / 100
+    corpo.parcelas = [
+      {
+        dataVencimento: hoje,
+        valor: total,
+        ...(formaBling ? { formaPagamento: { id: formaBling } } : {}),
+      },
+    ]
   }
 
   await pausa()

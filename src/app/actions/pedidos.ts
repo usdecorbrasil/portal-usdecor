@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { MAX_PARCELAS } from '@/lib/pagamento/config'
 
 const schema = z.object({
   itens: z.array(
@@ -13,9 +14,15 @@ const schema = z.object({
   ).min(1, 'O pedido precisa ter ao menos um item')
    .max(200, 'Máximo de 200 itens por pedido'),
   notas: z.string().trim().max(2000).optional(),
-  forma_pagamento: z.enum(['boleto_avista', 'boleto_parcelado', 'cartao_credito', 'cartao_debito'])
+  forma_pagamento: z.enum([
+    'boleto_avista',
+    'boleto_parcelado',
+    'pix',
+    'cartao_credito',
+    'cartao_debito',
+  ])
     .default('boleto_avista'),
-  parcelas: z.number().int().min(2).max(24).optional(),
+  parcelas: z.number().int().min(2).max(MAX_PARCELAS).optional(),
 }).refine(
   (d) => d.forma_pagamento !== 'boleto_parcelado' || d.parcelas !== undefined,
   { message: 'Escolha a quantidade de parcelas', path: ['parcelas'] }

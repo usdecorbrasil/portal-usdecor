@@ -43,6 +43,7 @@ const ORDEM_STATUS = [
 const ROTULOS_PAGAMENTO: Record<string, string> = {
   boleto_avista: 'Boleto à vista',
   boleto_parcelado: 'Boleto parcelado',
+  pix: 'Pix',
   cartao_credito: 'Cartão de crédito',
   cartao_debito: 'Cartão de débito',
 }

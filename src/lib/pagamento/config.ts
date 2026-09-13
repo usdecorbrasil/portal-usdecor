@@ -10,12 +10,20 @@
  * cliente ver o valor final antes de confirmar.
  */
 
-export const FORMAS = ['boleto', 'cartao_credito', 'cartao_debito'] as const
+/**
+ * Teto de parcelas do negócio. Espelha o CHECK
+ * `pedidos_parcelas_solicitadas_check` no banco — configurar acima disso na
+ * tela faria o pedido ser recusado só na hora de gravar.
+ */
+export const MAX_PARCELAS = 4
+
+export const FORMAS = ['boleto', 'pix', 'cartao_credito', 'cartao_debito'] as const
 
 export type Forma = (typeof FORMAS)[number]
 
 export const ROTULOS_FORMA: Record<Forma, string> = {
   boleto: 'Boleto',
+  pix: 'Pix',
   cartao_credito: 'Cartão de crédito',
   cartao_debito: 'Cartão de débito',
 }
@@ -50,9 +58,18 @@ export const PADRAO: ConfigPagamento = {
     taxaFixa: 0,
     intervaloDias: 30,
   },
+  // Pix é à vista por natureza: o pagamento acontece na hora
+  pix: {
+    ativa: true,
+    maxParcelas: 1,
+    valorMinimoParcela: 0,
+    percentual: 0,
+    taxaFixa: 0,
+    intervaloDias: 30,
+  },
   cartao_credito: {
     ativa: true,
-    maxParcelas: 6,
+    maxParcelas: MAX_PARCELAS,
     valorMinimoParcela: 100,
     percentual: 0,
     taxaFixa: 0,
@@ -80,7 +97,7 @@ export function normalizar(bruto: unknown): ConfigPagamento {
 
     saida[forma] = {
       ativa: typeof v.ativa === 'boolean' ? v.ativa : p.ativa,
-      maxParcelas: numero(v.maxParcelas, p.maxParcelas),
+      maxParcelas: Math.min(numero(v.maxParcelas, p.maxParcelas), MAX_PARCELAS),
       valorMinimoParcela: numero(v.valorMinimoParcela, p.valorMinimoParcela),
       percentual: numero(v.percentual, p.percentual),
       taxaFixa: numero(v.taxaFixa, p.taxaFixa),
@@ -88,8 +105,9 @@ export function normalizar(bruto: unknown): ConfigPagamento {
     }
   }
 
-  // Débito é à vista por definição; parcelar aqui seria erro de digitação
+  // Débito e Pix são à vista por definição; parcelar aqui seria erro de digitação
   saida.cartao_debito.maxParcelas = 1
+  saida.pix.maxParcelas = 1
 
   return saida
 }

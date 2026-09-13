@@ -9,6 +9,10 @@ export type ParcelaEmail = {
   valor: number
   vencimento: string
   linhaDigitavel: string | null
+  /** Link do QR Code do Pix, quando a cobrança é por Pix. */
+  linkPix: string | null
+  /** Link do boleto no Bling, quando a cobrança é por boleto. */
+  linkBoleto: string | null
 }
 
 /**
@@ -70,6 +74,16 @@ export function templatePedidoPronto({
                 ? `<br><span style="font-size:11px; color:#6E6E68; font-family: monospace; word-break:break-all;">${p.linhaDigitavel}</span>`
                 : ''
             }
+            ${
+              p.linkPix
+                ? `<br><a href="${p.linkPix}" style="font-size:12px; color:#B4005F; font-weight:bold; text-decoration:none;">Pagar com Pix &rsaquo;</a>`
+                : ''
+            }
+            ${
+              p.linkBoleto
+                ? `<br><a href="${p.linkBoleto}" style="font-size:12px; color:#B4005F; font-weight:bold; text-decoration:none;">Abrir boleto &rsaquo;</a>`
+                : ''
+            }
           </td>
           <td align="right" style="padding: 10px 14px; border-top:${i === 0 ? '0' : '1px solid #EFEEE8'}; font-size:13px; color:#131A2E; font-family: monospace; font-weight:bold; white-space:nowrap;">
             R$ ${brl(p.valor)}
@@ -80,7 +94,11 @@ export function templatePedidoPronto({
       </table>`
       : ''
 
-  const semBoleto = parcelas.length > 0 && parcelas.every((p) => !p.linhaDigitavel)
+  // Nenhuma parcela trouxe forma de pagar: avisa em vez de deixar o cliente
+  // sem saber como quitar
+  const semCobranca =
+    parcelas.length > 0 &&
+    parcelas.every((p) => !p.linhaDigitavel && !p.linkPix && !p.linkBoleto)
 
   return `
 <!DOCTYPE html>
@@ -124,9 +142,9 @@ export function templatePedidoPronto({
               ${blocoParcelas}
 
               ${
-                semBoleto
+                semCobranca
                   ? `<p style="font-size:12px; color:#6E6E68; line-height:1.6; margin: 16px 0 0;">
-                       Os boletos serão enviados em seguida, em mensagem separada.
+                       Os dados para pagamento serão enviados em seguida, em mensagem separada.
                      </p>`
                   : ''
               }

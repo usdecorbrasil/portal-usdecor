@@ -6,13 +6,15 @@ import { createClient } from '@/lib/supabase/server'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateEmProducao } from '@/lib/resend/templates/em-producao'
 import { templatePedidoPronto } from '@/lib/resend/templates/pedido-pronto'
-import { taxaDoPedido } from '@/lib/pagamento/config'
+import { MAX_PARCELAS, taxaDoPedido } from '@/lib/pagamento/config'
 import { urlDoSite } from '@/lib/site'
 import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
+import { buscarLinksCobranca } from '@/lib/bling/cobranca'
 
 const ROTULOS_PAGAMENTO: Record<string, string> = {
   boleto_avista: 'Boleto à vista',
   boleto_parcelado: 'Boleto parcelado',
+  pix: 'Pix',
   cartao_credito: 'Cartão de crédito',
   cartao_debito: 'Cartão de débito',
 }
@@ -104,7 +106,7 @@ async function enviarCobranca(pedidoId: string) {
     .select(`
       numero, total, metragem_impressa, forma_pagamento,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
-      clientes(email, razao_social),
+      clientes(email, razao_social, bling_contato_id),
       pedido_parcelas(numero, valor, vencimento, boleto_linha)
     `)
     .eq('id', pedidoId)
@@ -119,7 +121,11 @@ async function enviarCobranca(pedidoId: string) {
     forma_pagamento: string
     taxa_pagamento_percentual: number | string | null
     taxa_pagamento_fixa: number | string | null
-    clientes: { email: string; razao_social: string } | null
+    clientes: {
+      email: string
+      razao_social: string
+      bling_contato_id: number | null
+    } | null
     pedido_parcelas: {
       numero: number
       valor: number | string
@@ -131,7 +137,7 @@ async function enviarCobranca(pedidoId: string) {
   const cliente = p.clientes
   if (!cliente?.email) return
 
-  const parcelas = (p.pedido_parcelas ?? [])
+  const base = (p.pedido_parcelas ?? [])
     .slice()
     .sort((a, b) => a.numero - b.numero)
     .map((pc) => ({
@@ -140,6 +146,19 @@ async function enviarCobranca(pedidoId: string) {
       vencimento: String(pc.vencimento).slice(0, 10),
       linhaDigitavel: pc.boleto_linha ?? null,
     }))
+
+  // Pix e boleto do Bling Conta nascem nas contas a receber, não no pedido de
+  // venda. Se ainda não existirem, o e-mail sai sem eles e avisa o cliente
+  const links = cliente.bling_contato_id
+    ? await buscarLinksCobranca(Number(cliente.bling_contato_id), base)
+    : []
+
+  const parcelas = base.map((pc) => {
+    const l = links.find(
+      (x) => x.vencimento === pc.vencimento && Math.abs(x.valor - pc.valor) < 0.01
+    )
+    return { ...pc, linkPix: l?.pix ?? null, linkBoleto: l?.boleto ?? null }
+  })
 
   const valorMercadoria = Number(p.total)
 
@@ -333,9 +352,15 @@ export async function alterarFormaPagamento(
 ): Promise<Resultado> {
   const parsed = z.object({
     pedidoId: z.string().uuid(),
-    formaNova: z.enum(['boleto_avista', 'boleto_parcelado', 'cartao_credito', 'cartao_debito']),
+    formaNova: z.enum([
+      'boleto_avista',
+      'boleto_parcelado',
+      'pix',
+      'cartao_credito',
+      'cartao_debito',
+    ]),
     motivo: z.string().trim().min(10, 'Descreva o motivo com pelo menos 10 caracteres').max(500),
-    parcelas: z.number().int().min(2).max(12).optional(),
+    parcelas: z.number().int().min(2).max(MAX_PARCELAS).optional(),
     primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida').optional(),
   }).safeParse({ pedidoId, formaNova, motivo, parcelas, primeiroVencimento })
 

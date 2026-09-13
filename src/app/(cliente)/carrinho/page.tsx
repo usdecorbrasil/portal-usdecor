@@ -71,7 +71,7 @@ export default function CarrinhoPage() {
         ? parcelasEscolhidas === 1
           ? 'boleto_avista'
           : 'boleto_parcelado'
-        : categoria
+        : escolhida
 
     const aceitaParcelas =
       escolhida === 'boleto' || escolhida === 'cartao_credito'

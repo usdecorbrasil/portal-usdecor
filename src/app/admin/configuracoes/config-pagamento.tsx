@@ -159,7 +159,8 @@ function BlocoForma({
   aoAlterar: (campo: keyof ConfigForma, valor: number | boolean) => void
 }) {
   const ehBoleto = forma === 'boleto'
-  const ehDebito = forma === 'cartao_debito'
+  // Pix e débito são à vista: sem parcelas, sem mínimo por parcela
+  const ehDebito = forma === 'cartao_debito' || forma === 'pix'
 
   // Prévia: sempre no maior parcelamento permitido, que é o pior caso
   const parcelas = Math.max(1, config.maxParcelas)

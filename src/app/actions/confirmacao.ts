@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templatePedidoConfirmado } from '@/lib/resend/templates/pedido-confirmado'
 import { urlDoSite } from '@/lib/site'
+import { MAX_PARCELAS } from '@/lib/pagamento/config'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
@@ -27,7 +28,7 @@ export async function confirmarPedido(
 
   if (parcelamento) {
     const parsedParc = z.object({
-      quantidade: z.number().int().min(2).max(12),
+      quantidade: z.number().int().min(2).max(MAX_PARCELAS),
       primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida'),
     }).safeParse(parcelamento)
 

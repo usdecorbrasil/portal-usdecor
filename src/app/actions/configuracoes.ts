@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
+  MAX_PARCELAS,
   normalizar,
   PADRAO,
   type ConfigPagamento,
@@ -58,7 +59,8 @@ export async function buscarConfigPagamento(): Promise<ConfigPagamento> {
 
 const schemaForma = z.object({
   ativa: z.boolean(),
-  maxParcelas: z.number().int().min(1, 'Mínimo de 1 parcela').max(24, 'Máximo de 24 parcelas'),
+  maxParcelas: z.number().int().min(1, 'Mínimo de 1 parcela')
+    .max(MAX_PARCELAS, `Máximo de ${MAX_PARCELAS} parcelas`),
   valorMinimoParcela: z.number().min(0, 'Não pode ser negativo').max(100000),
   percentual: z.number().min(0, 'Não pode ser negativo').max(100, 'Máximo de 100%'),
   taxaFixa: z.number().min(0, 'Não pode ser negativo').max(10000),
