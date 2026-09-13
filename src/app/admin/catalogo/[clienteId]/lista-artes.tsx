@@ -6,8 +6,14 @@ import Paginacao from '@/components/paginacao'
 import { casa, termosDe, useBusca } from '@/components/busca-contexto'
 import { type Colecao } from '@/components/seletor-colecao'
 
-/** Artes por página. Catálogo grande não cabe numa rolagem só. */
-const POR_PAGINA = 50
+/**
+ * Artes por página. Catálogo grande não cabe numa rolagem só.
+ *
+ * Múltiplo de 12 de propósito: a grade tem 2 colunas no telefone, 3 no tablet
+ * e 4 no desktop, e só um múltiplo dos três fecha a última linha cheia nos
+ * três tamanhos. Com 50 sobravam 2 buracos no desktop e 1 no tablet.
+ */
+const POR_PAGINA = 60
 
 export type ArteAdmin = {
   id: string
