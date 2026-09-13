@@ -2,7 +2,17 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
+import {
+  CAIXA,
+  CABECALHO,
+  CORPO,
+  CORPO_ESPACADO,
+  ETIQUETA,
+  LINHA_SOLTA,
+  NUM,
+  NOME,
+  VAZIO,
+} from '@/components/estilo-lista'
 
 type Cliente = {
   id: string
@@ -53,13 +63,15 @@ export default function ListaClientes({
           <span aria-hidden className="w-2 shrink-0" />
         </div>
 
-        <div className={CORPO}>
+        <div className={CORPO_ESPACADO}>
           {clientes.map((c) => (
             <Link
               key={c.id}
               href={`/admin/clientes/${c.id}`}
               data-busca={`${c.razao_social} ${c.cnpj} ${c.email}`}
-              className="flex items-stretch bg-white hover:bg-[#FAFAF8]"
+              className={
+                LINHA_SOLTA + ' flex items-stretch overflow-hidden hover:border-[#131A2E]'
+              }
             >
               {/* tarja: vermelha quando há boleto em atraso */}
               <span

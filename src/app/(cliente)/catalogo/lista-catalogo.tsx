@@ -7,7 +7,7 @@ import Paginacao from '@/components/paginacao'
 import { casa, termosDe, useBusca } from '@/components/busca-contexto'
 
 /** Artes por página. Catálogo grande não cabe numa rolagem só. */
-const POR_PAGINA = 24
+const POR_PAGINA = 50
 
 export type ArteCatalogo = {
   id: string
@@ -61,6 +61,14 @@ export default function ListaCatalogo({
     setEstado({ termo, paginas: { ...paginas, [colecaoId]: n } })
   }
 
+  // Preferência de visualização, não posição: não volta a paginar quando a
+  // pessoa digita na busca
+  const [verTudo, setVerTudo] = useState<Record<string, boolean>>({})
+
+  function alternarVerTudo(colecaoId: string) {
+    setVerTudo((atual) => ({ ...atual, [colecaoId]: !atual[colecaoId] }))
+  }
+
   const opcoesColecao = useMemo(
     () => colecoes.map((c) => ({ id: c.id, nome: c.nome })),
     [colecoes]
@@ -101,6 +109,8 @@ export default function ListaCatalogo({
           mostrarTitulo={colecoes.length > 1}
           pagina={paginas[colecao.id] ?? 1}
           aoMudarPagina={(n) => definirPagina(colecao.id, n)}
+          verTudo={!!verTudo[colecao.id]}
+          aoAlternarVerTudo={() => alternarVerTudo(colecao.id)}
         />
       ))}
     </div>
@@ -114,6 +124,8 @@ function SecaoColecao({
   mostrarTitulo,
   pagina,
   aoMudarPagina,
+  verTudo,
+  aoAlternarVerTudo,
 }: {
   colecao: ColecaoCatalogo
   artes: ArteCatalogo[]
@@ -121,14 +133,16 @@ function SecaoColecao({
   mostrarTitulo: boolean
   pagina: number
   aoMudarPagina: (n: number) => void
+  verTudo: boolean
+  aoAlternarVerTudo: () => void
 }) {
   const topo = useRef<HTMLElement>(null)
 
   const totalPaginas = Math.max(1, Math.ceil(artes.length / POR_PAGINA))
   // Se a busca encolheu a lista, a página guardada pode não existir mais
   const atual = Math.min(pagina, totalPaginas)
-  const inicio = (atual - 1) * POR_PAGINA
-  const visiveis = artes.slice(inicio, inicio + POR_PAGINA)
+  const inicio = verTudo ? 0 : (atual - 1) * POR_PAGINA
+  const visiveis = verTudo ? artes : artes.slice(inicio, inicio + POR_PAGINA)
 
   function irPara(n: number) {
     aoMudarPagina(n)
@@ -180,13 +194,17 @@ function SecaoColecao({
         pagina={atual}
         totalPaginas={totalPaginas}
         aoMudar={irPara}
+        verTudo={verTudo}
+        aoAlternarVerTudo={aoAlternarVerTudo}
         legenda={
-          inicio + 1 +
-          '–' +
-          Math.min(inicio + POR_PAGINA, artes.length) +
-          ' de ' +
-          artes.length +
-          (artes.length === 1 ? ' arte' : ' artes')
+          verTudo
+            ? artes.length + (artes.length === 1 ? ' arte' : ' artes')
+            : inicio + 1 +
+              '–' +
+              Math.min(inicio + POR_PAGINA, artes.length) +
+              ' de ' +
+              artes.length +
+              (artes.length === 1 ? ' arte' : ' artes')
         }
       />
     </section>

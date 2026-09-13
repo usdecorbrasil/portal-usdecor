@@ -7,7 +7,7 @@ import { casa, termosDe, useBusca } from '@/components/busca-contexto'
 import { type Colecao } from '@/components/seletor-colecao'
 
 /** Artes por página. Catálogo grande não cabe numa rolagem só. */
-const POR_PAGINA = 24
+const POR_PAGINA = 50
 
 export type ArteAdmin = {
   id: string
@@ -52,12 +52,18 @@ export default function ListaArtes({
   const [estado, setEstado] = useState({ termo: '', pagina: 1 })
   const topo = useRef<HTMLDivElement>(null)
 
+  // Preferência de visualização, não posição: não volta a paginar quando a
+  // pessoa digita na busca
+  const [verTudo, setVerTudo] = useState(false)
+
   const pagina = estado.termo === termo ? estado.pagina : 1
 
   const totalPaginas = Math.max(1, Math.ceil(encontradas.length / POR_PAGINA))
   const atual = Math.min(pagina, totalPaginas)
-  const inicio = (atual - 1) * POR_PAGINA
-  const visiveis = encontradas.slice(inicio, inicio + POR_PAGINA)
+  const inicio = verTudo ? 0 : (atual - 1) * POR_PAGINA
+  const visiveis = verTudo
+    ? encontradas
+    : encontradas.slice(inicio, inicio + POR_PAGINA)
 
   function irPara(n: number) {
     setEstado({ termo, pagina: n })
@@ -100,13 +106,18 @@ export default function ListaArtes({
         pagina={atual}
         totalPaginas={totalPaginas}
         aoMudar={irPara}
+        verTudo={verTudo}
+        aoAlternarVerTudo={() => setVerTudo((v) => !v)}
         legenda={
-          inicio + 1 +
-          '–' +
-          Math.min(inicio + POR_PAGINA, encontradas.length) +
-          ' de ' +
-          encontradas.length +
-          (encontradas.length === 1 ? ' arte' : ' artes')
+          verTudo
+            ? encontradas.length +
+              (encontradas.length === 1 ? ' arte' : ' artes')
+            : inicio + 1 +
+              '–' +
+              Math.min(inicio + POR_PAGINA, encontradas.length) +
+              ' de ' +
+              encontradas.length +
+              (encontradas.length === 1 ? ' arte' : ' artes')
         }
       />
     </div>

@@ -21,6 +21,16 @@ export const CABECALHO =
 /** Container das linhas: elas se tocam, separadas por 1px. */
 export const CORPO = 'divide-y divide-[#EFEEE8]'
 
+/**
+ * Variante com um respiro entre as linhas, para listas em que cada item é
+ * uma entidade que se lê sozinha (clientes) e não uma sequência (pedidos).
+ * Combina com `LINHA_SOLTA` em cada filho.
+ */
+export const CORPO_ESPACADO = 'p-1 space-y-1 bg-[#FAFAF8]'
+
+/** A linha, quando o corpo é espaçado: ganha moldura própria. */
+export const LINHA_SOLTA = 'border border-[#EFEEE8] rounded-sm bg-white'
+
 /** Uma linha da lista. */
 export const LINHA =
   'flex items-center gap-2 px-2.5 py-1.5 bg-white hover:bg-[#FAFAF8]'

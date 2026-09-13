@@ -4,7 +4,7 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import NovoCatalogo from './novo-catalogo'
 import EnviosPendentes from './envios-pendentes'
 import BuscaPagina from '@/components/busca-pagina'
-import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME } from '@/components/estilo-lista'
+import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM } from '@/components/estilo-lista'
 
 export default async function CatalogosPage() {
   const perfil = await lerPerfil()
@@ -75,21 +75,15 @@ export default async function CatalogosPage() {
 
           return (
             <section key={cliente.id} data-busca-grupo>
-              <div className="flex items-center justify-between gap-3 px-2.5 py-1 border border-b-0 border-[#E4E3DC] bg-[#FCFCFA] rounded-t-sm">
-                <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6E6E68] truncate">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 border border-b-0 border-[#E4E3DC] bg-[#FCFCFA] rounded-t-sm">
+                <h2 className="text-sm font-bold tracking-tight text-[#131A2E] truncate">
                   {cliente.razao_social}
-                  {!cliente.ativo && (
-                    <span className="ml-1.5 font-normal normal-case tracking-normal text-[#9B9A93]">
-                      inativo
-                    </span>
-                  )}
                 </h2>
-                <span
-                  data-busca-contagem
-                  className="font-mono text-[11px] text-[#9B9A93] whitespace-nowrap tabular-nums"
-                >
-                  {meus.length}
-                </span>
+                {!cliente.ativo && (
+                  <span className={ETIQUETA + ' bg-[#EAE9E3] text-[#6E6E68]'}>
+                    inativo
+                  </span>
+                )}
               </div>
 
               {meus.length === 0 ? (
@@ -124,7 +118,9 @@ export default async function CatalogosPage() {
                       >
                         <span className="flex-1 min-w-0">
                           <span className="flex items-center gap-1.5">
-                            <span className={NOME}>{k.nome}</span>
+                            <span className="text-xs font-medium text-[#4A4943] truncate">
+                              {k.nome}
+                            </span>
                             {!k.ativo && (
                               <span className={ETIQUETA + ' bg-[#EAE9E3] text-[#6E6E68]'}>
                                 arquivado
