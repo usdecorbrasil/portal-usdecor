@@ -4,6 +4,7 @@ import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { definirPrimeiraSenha } from '@/app/actions/senha'
+import CampoSenha from '@/components/campo-senha'
 
 /**
  * Primeiro acesso. Quem entrou com a senha do convite passa por aqui antes de
@@ -57,42 +58,18 @@ export default function PrimeiroAcessoPage() {
             </p>
 
             <form action={acao} className="space-y-4">
-              <div>
-                <label
-                  htmlFor="senha"
-                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-                >
-                  NOVA SENHA
-                </label>
-                <input
-                  id="senha"
-                  name="senha"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  autoFocus
-                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E]"
-                />
-              </div>
+              <CampoSenha
+                id="senha"
+                name="senha"
+                rotulo="NOVA SENHA"
+                autoFocus
+              />
 
-              <div>
-                <label
-                  htmlFor="confirmacao"
-                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-                >
-                  CONFIRMAR SENHA
-                </label>
-                <input
-                  id="confirmacao"
-                  name="confirmacao"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E]"
-                />
-              </div>
+              <CampoSenha
+                id="confirmacao"
+                name="confirmacao"
+                rotulo="CONFIRMAR SENHA"
+              />
 
               {estado && !estado.ok && (
                 <p className="text-sm text-[#B00063]">{estado.erro}</p>

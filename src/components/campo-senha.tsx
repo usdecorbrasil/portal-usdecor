@@ -1,0 +1,63 @@
+'use client'
+
+import { useState } from 'react'
+
+/**
+ * Campo de senha com botão de ver o que foi digitado.
+ *
+ * Existe porque senha nova é digitada às cegas e duas vezes: sem poder
+ * conferir, o erro mais comum ("as senhas não coincidem") só aparece depois de
+ * enviar, e a pessoa recomeça sem saber onde errou.
+ *
+ * O estado é por campo, não compartilhado: quem revela a senha para conferir um
+ * caractere não expõe a confirmação junto.
+ */
+export default function CampoSenha({
+  id,
+  name,
+  rotulo,
+  autoFocus = false,
+  minLength = 8,
+}: {
+  id: string
+  name: string
+  rotulo: string
+  autoFocus?: boolean
+  minLength?: number
+}) {
+  const [visivel, setVisivel] = useState(false)
+
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+      >
+        {rotulo}
+      </label>
+
+      <div className="relative">
+        <input
+          id={id}
+          name={name}
+          type={visivel ? 'text' : 'password'}
+          required
+          minLength={minLength}
+          autoComplete="new-password"
+          autoFocus={autoFocus}
+          className="w-full border border-[#DDDCD5] rounded-sm pl-3 pr-12 py-2.5 bg-white outline-none focus:border-[#131A2E]"
+        />
+
+        <button
+          type="button"
+          onClick={() => setVisivel((v) => !v)}
+          aria-label={visivel ? 'Ocultar senha' : 'Mostrar senha'}
+          aria-pressed={visivel}
+          className="absolute inset-y-0 right-0 px-3 text-[10px] font-mono uppercase tracking-wider text-[#6E6E68] hover:text-[#131A2E]"
+        >
+          {visivel ? 'ocultar' : 'ver'}
+        </button>
+      </div>
+    </div>
+  )
+}
