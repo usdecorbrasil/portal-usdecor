@@ -20,8 +20,14 @@ const schema = z.object({
   (d) => d.forma_pagamento !== 'boleto_parcelado' || d.parcelas !== undefined,
   { message: 'Escolha a quantidade de parcelas', path: ['parcelas'] }
 ).refine(
-  (d) => d.forma_pagamento === 'boleto_parcelado' || d.parcelas === undefined,
-  { message: 'Quantidade de parcelas só se aplica a boleto parcelado', path: ['parcelas'] }
+  (d) =>
+    d.forma_pagamento === 'boleto_parcelado' ||
+    d.forma_pagamento === 'cartao_credito' ||
+    d.parcelas === undefined,
+  {
+    message: 'Esta forma de pagamento não aceita parcelamento',
+    path: ['parcelas'],
+  }
 )
 
 type Resultado =

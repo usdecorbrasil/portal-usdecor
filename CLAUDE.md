@@ -283,6 +283,34 @@ ali a imagem é o conteúdo.
   o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
   etapas para o banco e ajustar essas três pontas juntas.
 
+## Formas de pagamento — configuráveis
+
+Decidido em 12/09/2026. Em Configurações → Pagamento, o dono define por forma
+(boleto, cartão de crédito, cartão de débito): se está **ativa**, **máximo de parcelas**,
+**valor mínimo por parcela**, **intervalo entre boletos** (15 ou 30 dias), **percentual**
+e **taxa fixa** somados ao pedido.
+
+- Tudo vive numa chave só de `configuracoes` (`formas_pagamento`), em JSON — são cinco
+  ajustes por forma, e em linhas chave/valor cada leitura viraria uma consulta. A
+  gravação usa `upsert`, porque a chave pode não existir ainda.
+- O cálculo está em `src/lib/pagamento/config.ts`, puro de propósito (sem Supabase),
+  para rodar também no navegador. **Taxa fixa do boleto é por documento** (multiplica
+  pelas parcelas); no cartão é por transação (cobra uma vez).
+- Cartão de crédito **não tem gateway**: o portal registra a escolha e o valor, a
+  cobrança sai por fora e alguém marca como pago. Decidido assim para não travar a
+  configuração esperando a definição do gateway.
+- **O carrinho não conhece o valor do pedido** — a cobrança é por metragem impressa, que
+  só existe depois da estampa. Então o carrinho só aplica: formas ativas, parcelas por
+  forma e o aviso do acréscimo. Valor mínimo por parcela e a taxa em si só podem ser
+  aplicados quando o valor existe.
+
+**PENDENTE**: a taxa ainda não entra no `total` nem nas parcelas. `pedidos.total` é
+recalculado e `pedido_parcelas.valor` é gerado por funções no Postgres
+(`confirmar_romaneio`, `parcelar_pedido`) que não estão neste repositório. Para fechar,
+é preciso ler o código dessas duas funções e passar a gravar a taxa no pedido (uma
+coluna nova em `pedidos`), aplicando-a no recálculo — senão o recálculo da metragem
+apaga o acréscimo.
+
 ## Custo estimado
 
 Supabase Pro (~US$25) + Vercel Pro (~US$20) + Resend (grátis até 3.000 e-mails/mês) ≈

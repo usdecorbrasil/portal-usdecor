@@ -5,18 +5,19 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCarrinho } from '@/lib/carrinho/contexto'
 import { criarPedido, verificarPodeParcelar } from '@/app/actions/pedidos'
-import { buscarMaxParcelas } from '@/app/actions/configuracoes'
+import { buscarConfigPagamento } from '@/app/actions/configuracoes'
+import {
+  FORMAS,
+  PADRAO,
+  ROTULOS_FORMA,
+  type ConfigPagamento,
+  type Forma,
+} from '@/lib/pagamento/config'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const CATEGORIAS = [
-  { value: 'boleto', label: 'Boleto' },
-  { value: 'cartao_credito', label: 'Cartão de crédito' },
-  { value: 'cartao_debito', label: 'Cartão de débito' },
-] as const
 
-type Categoria = (typeof CATEGORIAS)[number]['value']
 
 export default function CarrinhoPage() {
   const {
@@ -33,27 +34,47 @@ export default function CarrinhoPage() {
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState<{ numero: number } | null>(null)
   const [removendo, setRemovendo] = useState<string | null>(null)
-  const [categoria, setCategoria] = useState<Categoria>('boleto')
-  const [parcelasBoleto, setParcelasBoleto] = useState(1)
+  const [categoria, setCategoria] = useState<Forma>('boleto')
+  const [parcelas, setParcelas] = useState(1)
   const [podeParcelar, setPodeParcelar] = useState(true)
-  const [maxParcelas, setMaxParcelas] = useState(3)
+  const [config, setConfig] = useState<ConfigPagamento>(PADRAO)
   const router = useRouter()
 
   useEffect(() => {
     verificarPodeParcelar().then(setPodeParcelar)
-    buscarMaxParcelas().then(setMaxParcelas)
+    buscarConfigPagamento().then(setConfig)
   }, [])
+
+  const disponiveis = FORMAS.filter((f) => config[f].ativa)
+
+  // O dono pode ter desligado justamente a forma selecionada: em vez de
+  // corrigir o estado num efeito, a escolha vigente é derivada
+  const escolhida =
+    config[categoria].ativa || disponiveis.length === 0
+      ? categoria
+      : disponiveis[0]
+
+  const regra = config[escolhida]
+
+  // Crédito parcela; boleto parcela; débito é sempre à vista
+  const maxParcelas = Math.max(1, regra.maxParcelas)
+  // O limite de crédito trava só o boleto parcelado — cartão é cobrado na hora
+  const parcelasEscolhidas = Math.min(parcelas, maxParcelas)
+  const parcelamentoTravado = escolhida === 'boleto' && !podeParcelar
 
   async function enviar() {
     setErro('')
     setEnviando(true)
 
     const formaPagamento =
-      categoria === 'boleto'
-        ? parcelasBoleto === 1
+      escolhida === 'boleto'
+        ? parcelasEscolhidas === 1
           ? 'boleto_avista'
           : 'boleto_parcelado'
         : categoria
+
+    const aceitaParcelas =
+      escolhida === 'boleto' || escolhida === 'cartao_credito'
 
     const r = await criarPedido({
       itens: itens.map((i) => ({
@@ -63,7 +84,7 @@ export default function CarrinhoPage() {
       notas: notas.trim() || undefined,
       forma_pagamento: formaPagamento,
       parcelas:
-        categoria === 'boleto' && parcelasBoleto > 1 ? parcelasBoleto : undefined,
+        aceitaParcelas && parcelasEscolhidas > 1 ? parcelasEscolhidas : undefined,
     })
 
     if (!r.ok) {
@@ -252,29 +273,36 @@ export default function CarrinhoPage() {
           FORMA DE PAGAMENTO
         </label>
         <div className="grid gap-2">
-          {CATEGORIAS.map((c) => (
+          {disponiveis.map((f) => (
             <label
-              key={c.value}
+              key={f}
               className={`flex items-center gap-2 border rounded-sm px-3 py-2.5 text-sm cursor-pointer border-[#DDDCD5] hover:border-[#131A2E] ${
-                categoria === c.value ? 'border-[#131A2E] bg-[#FAFAF7]' : ''
+                escolhida === f ? 'border-[#131A2E] bg-[#FAFAF7]' : ''
               }`}
             >
               <input
                 type="radio"
                 name="categoria_pagamento"
-                value={c.value}
-                checked={categoria === c.value}
+                value={f}
+                checked={escolhida === f}
                 onChange={() => {
-                  setCategoria(c.value)
-                  if (c.value !== 'boleto') setParcelasBoleto(1)
+                  setCategoria(f)
+                  setParcelas(1)
                 }}
               />
-              {c.label}
+              <span className="flex-1">{ROTULOS_FORMA[f]}</span>
+              {(config[f].percentual > 0 || config[f].taxaFixa > 0) && (
+                <span className="text-[10px] font-mono text-[#6E6E68] whitespace-nowrap">
+                  {config[f].percentual > 0 && `+${config[f].percentual}%`}
+                  {config[f].percentual > 0 && config[f].taxaFixa > 0 && ' · '}
+                  {config[f].taxaFixa > 0 && `+R$ ${brl(config[f].taxaFixa)}`}
+                </span>
+              )}
             </label>
           ))}
         </div>
 
-        {categoria === 'boleto' && (
+        {maxParcelas > 1 && (
           <div className="mt-3 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-3">
             <label className="block text-xs tracking-widest text-[#6E6E68] mb-2">
               COMO PREFERE PAGAR
@@ -284,17 +312,17 @@ export default function CarrinhoPage() {
               style={{ gridTemplateColumns: `repeat(${maxParcelas}, 1fr)` }}
             >
               {Array.from({ length: maxParcelas }, (_, i) => i + 1).map((n) => {
-                const bloqueado = n > 1 && !podeParcelar
+                const bloqueado = n > 1 && parcelamentoTravado
                 return (
                   <button
                     key={n}
                     type="button"
                     disabled={bloqueado}
-                    onClick={() => setParcelasBoleto(n)}
+                    onClick={() => setParcelas(n)}
                     className={`border rounded-sm py-3.5 text-base font-bold ${
                       bloqueado
                         ? 'opacity-40 cursor-not-allowed border-[#DDDCD5] text-[#6E6E68]'
-                        : parcelasBoleto === n
+                        : parcelasEscolhidas === n
                         ? 'border-[#131A2E] bg-[#131A2E] text-white'
                         : 'border-[#DDDCD5] text-[#6E6E68] hover:border-[#131A2E]'
                     }`}
@@ -304,14 +332,18 @@ export default function CarrinhoPage() {
                 )
               })}
             </div>
-            {!podeParcelar && (
+            {parcelamentoTravado && (
               <p className="text-xs text-[#D8007A] mt-2">
                 Limite de crédito atingido — parcelamento indisponível.
               </p>
             )}
-            {parcelasBoleto > 1 && (
+            {parcelasEscolhidas > 1 && (
               <p className="text-xs text-[#6E6E68] mt-2">
-                A equipe confirma os vencimentos e o valor ao processar seu pedido.
+                {escolhida === 'boleto'
+                  ? `Boletos a cada ${regra.intervaloDias} dias. A equipe confirma os vencimentos e o valor ao processar seu pedido.`
+                  : 'A equipe confirma o valor e combina a cobrança ao processar seu pedido.'}
+                {regra.valorMinimoParcela > 0 &&
+                  ` Parcela mínima de R$ ${brl(regra.valorMinimoParcela)}.`}
               </p>
             )}
           </div>
@@ -326,6 +358,17 @@ export default function CarrinhoPage() {
         <p className="text-xs text-[#6E6E68]">
           O valor do pedido será informado após finalizar a estampa, com base na
           metragem realmente impressa.
+          {(regra.percentual > 0 || regra.taxaFixa > 0) && (
+            <>
+              {' '}
+              A forma escolhida acrescenta
+              {regra.percentual > 0 && ` ${regra.percentual}%`}
+              {regra.percentual > 0 && regra.taxaFixa > 0 && ' e'}
+              {regra.taxaFixa > 0 &&
+                ` R$ ${brl(regra.taxaFixa)}${escolhida === 'boleto' ? ' por boleto' : ''}`}
+              {' '}ao valor final.
+            </>
+          )}
         </p>
       </div>
 
