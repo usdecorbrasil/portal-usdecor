@@ -8,6 +8,7 @@ import { templatePedidoConfirmado } from '@/lib/resend/templates/pedido-confirma
 import { urlDoSite } from '@/lib/site'
 import { MAX_PARCELAS } from '@/lib/pagamento/config'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
+import { cancelarPedidoNoBling } from '@/lib/bling/pedido'
 import { templateInterno } from '@/lib/resend/templates/interno'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
@@ -223,6 +224,20 @@ export async function responderSolicitacao(
   })
 
   if (error) return { ok: false, erro: error.message }
+
+  // Aceitar cancela o pedido; o que existe no Bling cancela junto
+  if (parsed.data.aceitar) {
+    const { data: sol } = await supabase
+      .from('pedido_solicitacoes')
+      .select('pedido_id')
+      .eq('id', parsed.data.solicitacaoId)
+      .maybeSingle()
+
+    if (sol?.pedido_id) {
+      const pedidoId = String(sol.pedido_id)
+      await cancelarPedidoNoBling(pedidoId)
+    }
+  }
 
   revalidar()
   return { ok: true }

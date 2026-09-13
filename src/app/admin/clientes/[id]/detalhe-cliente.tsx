@@ -114,8 +114,11 @@ export default function DetalheCliente({
     iniciar(async () => {
       const r = await redefinirSenha(cliente.id)
       if (r.ok) {
-        setSenhaNova(r.senha)
-        setAvisoEmail(r.avisoEmail ?? null)
+        setSenhaNova(r.enviadoPara)
+        setAvisoEmail(null)
+      } else {
+        setSenhaNova(null)
+        setAvisoEmail(r.erro)
       }
     })
   }
@@ -264,15 +267,14 @@ export default function DetalheCliente({
       {senhaNova && (
         <div className="mt-4 bg-[#E3F0E8] border border-[#2E7D4F] rounded-sm p-4">
           <p className="text-sm text-[#2E7D4F] font-semibold mb-2">
-            Nova senha — anote agora
+            Link para criar nova senha enviado para
           </p>
           <code className="block bg-white border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm break-all">
             {senhaNova}
           </code>
           {avisoEmail && (
             <p className="text-[11px] text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-2 py-1.5 mt-2 leading-relaxed">
-              O e-mail com a senha não foi enviado ({avisoEmail}). Passe a senha
-              acima por outro canal.
+              {avisoEmail}
             </p>
           )}
         </div>

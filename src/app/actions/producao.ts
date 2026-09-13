@@ -8,7 +8,7 @@ import { enviarEmail } from '@/lib/resend/enviar'
 import { templateEmProducao } from '@/lib/resend/templates/em-producao'
 import { MAX_PARCELAS, taxaDoPedido } from '@/lib/pagamento/config'
 import { urlDoSite } from '@/lib/site'
-import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
+import { sincronizarPedidoComBling, cancelarPedidoNoBling } from '@/lib/bling/pedido'
 import { enviarCobrancaPedido } from '@/lib/cobranca/enviar'
 import { buscarValorMinimoBoleto } from './configuracoes'
 
@@ -202,6 +202,13 @@ export async function cancelarPedido(
   })
 
   if (error) return { ok: false, erro: error.message }
+
+  // O que existe no Bling cancela junto. Depois da resposta, como o envio:
+  // são duas ou três chamadas com pausa
+  const id = parsed.data.pedidoId
+  after(async () => {
+    await cancelarPedidoNoBling(id)
+  })
 
   revalidar()
   revalidatePath('/pedidos')

@@ -582,7 +582,7 @@ export default function PainelAcoes({
                   onClick={() => setTela('preco')}
                 />
               )}
-              {podeCancelarOuAjustar && !passouNF && (
+              {podeCancelarOuAjustar && !valorFechado && (
                 <BotaoAcao
                   titulo="Alterar forma de pagamento"
                   legenda={`hoje: ${ROTULOS_PAGAMENTO[formaPagamento] ?? formaPagamento}`}

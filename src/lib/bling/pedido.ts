@@ -306,3 +306,81 @@ export async function sincronizarPedidoComBling(pedidoId: string) {
     })
     .eq('id', pedidoId)
 }
+
+/* ------------------------------ cancelamento ------------------------------ */
+
+/**
+ * Id da situação "Cancelado" do módulo de vendas. Resolvido pelo nome, porque
+ * os ids são da conta — hardcode quebraria em outra conta do Bling.
+ */
+async function situacaoCancelado(): Promise<number | null> {
+  const mods = await chamarBling('/situacoes/modulos')
+  if (!mods.ok) return null
+
+  const lista = ((mods.dados as { data?: { id: number; nome: string }[] })?.data ?? [])
+  const vendas = lista.find((m) => /venda/i.test(String(m.nome)))
+  if (!vendas) return null
+
+  await pausa()
+  const sits = await chamarBling(`/situacoes/modulos/${vendas.id}`)
+  if (!sits.ok) return null
+
+  const situacoes = ((sits.dados as { data?: { id: number; nome: string }[] })?.data ?? [])
+  const cancelado = situacoes.find((x) => /cancelad/i.test(String(x.nome)))
+  return cancelado ? Number(cancelado.id) : null
+}
+
+/**
+ * Cancela no Bling o pedido de venda que espelha este pedido. Muda a situação
+ * para "Cancelado" — mantém o histórico lá; apagar só como último recurso,
+ * quando a conta não tem essa situação.
+ *
+ * Nunca lança. O cancelamento no portal já aconteceu; o que sobrar de
+ * divergência fica em `bling_erro`, que a tela do pedido mostra.
+ */
+export async function cancelarPedidoNoBling(pedidoId: string): Promise<void> {
+  const admin = createAdminClient()
+
+  try {
+    const { data } = await admin
+      .from('pedidos')
+      .select('bling_pedido_id, nf_numero')
+      .eq('id', pedidoId)
+      .maybeSingle()
+
+    const blingId = Number(data?.bling_pedido_id ?? 0)
+    if (!blingId) return
+
+    let erro: string | null = null
+
+    const sit = await situacaoCancelado()
+    await pausa()
+
+    if (sit) {
+      const r = await chamarBling(`/pedidos/vendas/${blingId}/situacoes/${sit}`, { method: 'PATCH' })
+      if (!r.ok) erro = r.erro.slice(0, 300)
+    } else {
+      const r = await chamarBling(`/pedidos/vendas/${blingId}`, { method: 'DELETE' })
+      if (!r.ok) erro = r.erro.slice(0, 300)
+    }
+
+    if (erro) {
+      await admin
+        .from('pedidos')
+        .update({
+          bling_erro: `Cancelado no portal, mas não no Bling: ${erro}` +
+            (data?.nf_numero ? ` — a NF ${data.nf_numero} precisa ser cancelada no Bling.` : ''),
+        })
+        .eq('id', pedidoId)
+    } else if (data?.nf_numero) {
+      // O pedido de venda cancelou, mas nota emitida é assunto da SEFAZ e
+      // não tem endpoint: quem cancela é a equipe, no Bling
+      await admin
+        .from('pedidos')
+        .update({ bling_erro: `Pedido cancelado no Bling. A NF ${data.nf_numero} precisa ser cancelada lá, manualmente.` })
+        .eq('id', pedidoId)
+    }
+  } catch (e) {
+    console.error('[bling cancelar]', pedidoId, e)
+  }
+}

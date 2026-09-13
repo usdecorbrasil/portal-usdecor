@@ -364,7 +364,7 @@ export default async function PedidoAdminPage({
 
       {/* Sem isto, uma falha de sincronia com o ERP passaria despercebida —
           e "pendente" depois de pronto é falha também: o envio morreu no meio */}
-      {dono && usados.includes('pronto') && p.bling_sync_status !== 'ok' && (
+      {dono && !cancelado && usados.includes('pronto') && p.bling_sync_status !== 'ok' && (
         <ReenviarBling pedidoId={p.id} erro={p.bling_erro ?? null} />
       )}
 
@@ -400,6 +400,10 @@ export default async function PedidoAdminPage({
             {dataHora(p.cancelado_em)}
             {autorDe(p.cancelado_por) && ` · por ${autorDe(p.cancelado_por)}`}
           </p>
+          {/* Divergência com o ERP não pode ficar escondida num pedido morto */}
+          {dono && p.bling_erro && (
+            <p className="text-xs text-[#B00063] mt-2 leading-relaxed">{p.bling_erro}</p>
+          )}
         </div>
       ) : (
         <div

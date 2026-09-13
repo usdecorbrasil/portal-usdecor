@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
+import { templateRedefinirSenha } from '@/lib/resend/templates/redefinir-senha'
 import { urlDoSite } from '@/lib/site'
 import { tentarSincronizarContato } from '@/lib/bling/contato'
 import {
@@ -311,12 +312,17 @@ export async function alternarClienteAtivo(
   return { ok: true }
 }
 
+/**
+ * Manda ao cliente um link para criar a própria senha.
+ *
+ * Antes gerava uma senha provisória e mostrava na tela, para alguém da
+ * equipe passar adiante. Isso punha a senha no WhatsApp de quem atende e no
+ * e-mail em texto puro. O link é de uso único, vale uma hora e ninguém além
+ * do cliente vê a senha que ele escolher.
+ */
 export async function redefinirSenha(
   clienteId: string
-): Promise<
-  | { ok: true; senha: string; avisoEmail?: string }
-  | { ok: false; erro: string }
-> {
+): Promise<{ ok: true; enviadoPara: string } | { ok: false; erro: string }> {
   if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
 
   const admin = createAdminClient()
@@ -326,16 +332,36 @@ export async function redefinirSenha(
 
   if (!perfil) return { ok: false, erro: 'Acesso não encontrado.' }
 
-  const senha = gerarSenha()
+  const { data: usuario } = await admin.auth.admin.getUserById(perfil.id)
+  const email = usuario?.user?.email
+  if (!email) return { ok: false, erro: 'Cliente sem e-mail de acesso.' }
 
-  // Volta a ser provisória: quem recebe a senha nova por e-mail precisa
-  // trocá-la no primeiro acesso, como no convite
-  const { error } = await admin.auth.admin.updateUserById(perfil.id, {
-    password: senha,
-    app_metadata: { senha_provisoria: true },
+  // O link é montado pelo portal, não pelo Bling nem pelo Supabase: o
+  // `token_hash` entra no mesmo caminho que "esqueci minha senha" já usa
+  const { data: link, error } = await admin.auth.admin.generateLink({
+    type: 'recovery',
+    email,
   })
 
-  if (error) return { ok: false, erro: 'Não foi possível redefinir a senha.' }
+  const tokenHash = link?.properties?.hashed_token
+  if (error || !tokenHash) {
+    return { ok: false, erro: 'Não foi possível gerar o link de redefinição.' }
+  }
+
+  const urlLink =
+    `${urlDoSite()}/auth/confirmar?token_hash=${encodeURIComponent(tokenHash)}` +
+    `&type=recovery&next=${encodeURIComponent('/nova-senha')}`
+
+  const envio = await enviarEmail({
+    tipo: 'redefinir_senha',
+    destinatario: email,
+    assunto: 'Crie uma nova senha para o portal Best Color Tecidos',
+    html: templateRedefinirSenha({ nome: perfil.nome ?? 'cliente', email, urlLink }),
+  })
+
+  if (!envio.ok) {
+    return { ok: false, erro: `O e-mail com o link não foi enviado (${envio.erro}).` }
+  }
 
   await registrar({
     entidade: 'cliente',
@@ -343,28 +369,7 @@ export async function redefinirSenha(
     acao: 'senha',
   })
 
-  // Mesmo caminho do convite: a senha vai por e-mail e o cliente cria a dele
-  // no próximo login. A tela continua mostrando a senha, para o caso de o
-  // e-mail não chegar
-  const { data: usuario } = await admin.auth.admin.getUserById(perfil.id)
-  const email = usuario?.user?.email
-
-  const envio = email
-    ? await enviarEmail({
-        tipo: 'senha_redefinida',
-        destinatario: email,
-        assunto: 'Sua senha do portal Best Color Tecidos foi redefinida',
-        html: templateConviteAcesso({
-          nome: perfil.nome ?? 'cliente',
-          email,
-          senha,
-          urlLogin: `${urlDoSite()}/login`,
-          redefinida: true,
-        }),
-      })
-    : { ok: false as const, erro: 'cliente sem e-mail de acesso' }
-
-  return { ok: true, senha, avisoEmail: envio.ok ? undefined : envio.erro }
+  return { ok: true, enviadoPara: email }
 }
 
 /**

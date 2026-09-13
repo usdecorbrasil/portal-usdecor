@@ -438,6 +438,23 @@ bloco **Faturamento** com dois botões, cada um repetível:
   contas e voltar "sem link" — aí a emissão se faz lá e "Completar" relê os links.
 - Ninguém fora de admin/financeiro chama nada disso (`exigirAdmin` nas duas ações).
 
+## O que o portal muda, o Bling acompanha (13/09/2026)
+
+- **Cancelar propaga**: `cancelarPedido` (painel) e `responderSolicitacao` (aceitar pedido
+  do cliente) chamam `cancelarPedidoNoBling`, que muda a situação do pedido de venda para
+  "Cancelado" (id resolvido pelo nome em `/situacoes/modulos`, porque é por conta) — ou
+  apaga, se a conta não tiver essa situação. Falha vira texto em `bling_erro`, mostrado
+  no bloco de cancelado. **NF emitida não tem endpoint de cancelamento**: o portal avisa
+  que ela precisa ser cancelada no Bling.
+- **Depois de "pronto" nada diverge**: quantidade, preço e forma de pagamento congelam
+  (tela e servidor). O pedido de venda nasce ali, com metragem, valor e parcelas; a única
+  mudança possível depois é cancelar — e essa propaga.
+- **"Nova senha" do cliente** deixou de gerar senha provisória: manda um link de
+  redefinição por e-mail (`generateLink` do Supabase + `token_hash` no mesmo
+  `/auth/confirmar` que "esqueci minha senha" usa). Ninguém da equipe vê a senha. A
+  tela mostra para qual e-mail o link foi. A equipe (Configurações) ainda usa o modelo
+  antigo.
+
 ## Nota fiscal — com ou sem, por pedido
 
 Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega
