@@ -153,6 +153,17 @@ export async function criarPedidoNoBling(
 
   await pausa()
 
+  /* ---- já existe lá? adota em vez de criar outro ----
+     O envio pode ter morrido depois do POST e antes de gravar o id (foi o
+     caso dos pedidos 1006 e 1007): o Bling recusa a repetição como "venda
+     idêntica", e o portal ficava sem o vínculo para sempre */
+  const existente = await localizarPedidoExistente(Number(contato.id), p.numero)
+  if (existente) {
+    return { ok: true, blingId: existente.id, numero: existente.numero }
+  }
+
+  await pausa()
+
   /* ---- produto genérico de estampa, cobrado por metro ---- */
   const rProduto = await chamarBling(
     `/produtos?codigo=${encodeURIComponent(config.produtoEstampaCodigo)}`
@@ -190,8 +201,10 @@ export async function criarPedidoNoBling(
   const corpo: Record<string, unknown> = {
     data: hoje,
     contato: { id: contato.id },
-    // O número do pedido no portal é o que liga os dois sistemas na conferência
+    // O número do pedido no portal é o que liga os dois sistemas na conferência.
+    // `numeroLoja` porque é o único dos dois que a listagem filtra
     numeroPedidoCompra: String(p.numero),
+    numeroLoja: String(p.numero),
     // O aviso vem primeiro de propósito: é a observação que quem fatura no
     // Bling precisa ver antes de emitir a nota
     observacoes: [
@@ -257,7 +270,16 @@ export async function criarPedidoNoBling(
     return { ok: false, erro: 'O Bling aceitou a chamada mas não devolveu o id do pedido.' }
   }
 
-  return { ok: true, blingId: criado.id, numero: criado.numero ?? null }
+  // A resposta do POST traz só o id; o número do Bling vem na consulta
+  let numero: number | null = criado.numero ?? null
+  if (numero === null) {
+    await pausa()
+    const rDet = await chamarBling(`/pedidos/vendas/${criado.id}`)
+    const det = (rDet.ok ? (rDet.dados as { data?: { numero?: number } })?.data : null) ?? null
+    numero = det?.numero != null ? Number(det.numero) : null
+  }
+
+  return { ok: true, blingId: criado.id, numero }
 }
 
 /**
@@ -278,7 +300,7 @@ export async function sincronizarPedidoComBling(pedidoId: string) {
   }
 
   if (resultado.ok) {
-    await admin
+    const { error } = await admin
       .from('pedidos')
       .update({
         bling_pedido_id: resultado.blingId,
@@ -287,6 +309,8 @@ export async function sincronizarPedidoComBling(pedidoId: string) {
         bling_erro: null,
       })
       .eq('id', pedidoId)
+
+    if (error) console.error('[bling] gravar vínculo', pedidoId, error.message)
     return
   }
 
@@ -383,4 +407,59 @@ export async function cancelarPedidoNoBling(pedidoId: string): Promise<void> {
   } catch (e) {
     console.error('[bling cancelar]', pedidoId, e)
   }
+}
+
+/* ------------------------------ localização ------------------------------ */
+
+type ListaVenda = { id?: number; numero?: number; numeroLoja?: string; data?: string }
+
+/**
+ * Procura no Bling o pedido de venda que espelha o pedido do portal.
+ *
+ * Primeiro por `numeroLoja` (filtro da listagem). Os criados antes de esse
+ * campo existir só têm `numeroPedidoCompra`, que a listagem não filtra nem
+ * devolve — para esses, lista os últimos do contato e consulta um a um.
+ */
+async function localizarPedidoExistente(
+  contatoId: number,
+  numeroPortal: number
+): Promise<{ id: number; numero: number | null } | null> {
+  const alvo = String(numeroPortal)
+
+  const r1 = await chamarBling(
+    `/pedidos/vendas?idContato=${contatoId}&numerosLojas[]=${encodeURIComponent(alvo)}&limite=10`
+  )
+  if (r1.ok) {
+    const lista = ((r1.dados as { data?: ListaVenda[] })?.data ?? []) as ListaVenda[]
+    const achado = lista.find((v) => String(v.numeroLoja ?? '') === alvo)
+    if (achado?.id) return { id: achado.id, numero: achado.numero ?? null }
+  }
+
+  await pausa()
+
+  const hoje = new Date()
+  const inicio = new Date(hoje.getTime() - 30 * 86400000)
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+
+  const r2 = await chamarBling(
+    `/pedidos/vendas?idContato=${contatoId}&dataInicial=${fmt(inicio)}&dataFinal=${fmt(hoje)}&limite=50`
+  )
+  if (!r2.ok) return null
+
+  const recentes = ((r2.dados as { data?: ListaVenda[] })?.data ?? [])
+    .filter((v) => v.id)
+    .sort((a, b) => Number(b.id) - Number(a.id))
+    .slice(0, 8)
+
+  for (const v of recentes) {
+    await pausa()
+    const det = await chamarBling(`/pedidos/vendas/${v.id}`)
+    if (!det.ok) continue
+    const d = (det.dados as { data?: { numeroPedidoCompra?: string; numero?: number } })?.data
+    if (String(d?.numeroPedidoCompra ?? '') === alvo) {
+      return { id: Number(v.id), numero: d?.numero != null ? Number(d.numero) : null }
+    }
+  }
+
+  return null
 }
