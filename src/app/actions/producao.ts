@@ -5,7 +5,16 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateEmProducao } from '@/lib/resend/templates/em-producao'
+import { templatePedidoPronto } from '@/lib/resend/templates/pedido-pronto'
+import { taxaDoPedido } from '@/lib/pagamento/config'
 import { urlDoSite } from '@/lib/site'
+
+const ROTULOS_PAGAMENTO: Record<string, string> = {
+  boleto_avista: 'Boleto à vista',
+  boleto_parcelado: 'Boleto parcelado',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+}
 
 const ETAPAS_MANUAIS = ['impressao', 'estampando', 'corte_costura', 'pronto'] as const
 
@@ -70,8 +79,94 @@ export async function lancarStatus(
     }
   }
 
+  // E-mail de cobrança — é o que fecha o ciclo comercial
+  if (parsed.data.status === 'pronto') {
+    await enviarCobranca(parsed.data.pedidoId)
+  }
+
   revalidar()
   return { ok: true }
+}
+
+/**
+ * Cobrança do pedido pronto. Falha aqui não derruba o lançamento da etapa: a
+ * produção não pode ficar travada porque o e-mail não saiu, e `email_log` tem
+ * chave única por pedido + tipo, então dá para reenviar sem duplicar.
+ */
+async function enviarCobranca(pedidoId: string) {
+  const supabase = await createClient()
+
+  const { data: pedido } = await supabase
+    .from('pedidos')
+    .select(`
+      numero, total, metragem_impressa, forma_pagamento,
+      taxa_pagamento_percentual, taxa_pagamento_fixa,
+      clientes(email, razao_social),
+      pedido_parcelas(numero, valor, vencimento, boleto_linha)
+    `)
+    .eq('id', pedidoId)
+    .single()
+
+  if (!pedido) return
+
+  const p = pedido as unknown as {
+    numero: number
+    total: number | string
+    metragem_impressa: number | string | null
+    forma_pagamento: string
+    taxa_pagamento_percentual: number | string | null
+    taxa_pagamento_fixa: number | string | null
+    clientes: { email: string; razao_social: string } | null
+    pedido_parcelas: {
+      numero: number
+      valor: number | string
+      vencimento: string
+      boleto_linha: string | null
+    }[]
+  }
+
+  const cliente = p.clientes
+  if (!cliente?.email) return
+
+  const parcelas = (p.pedido_parcelas ?? [])
+    .slice()
+    .sort((a, b) => a.numero - b.numero)
+    .map((pc) => ({
+      numero: pc.numero,
+      valor: Number(pc.valor),
+      vencimento: String(pc.vencimento).slice(0, 10),
+      linhaDigitavel: pc.boleto_linha ?? null,
+    }))
+
+  const valorMercadoria = Number(p.total)
+
+  const taxa = taxaDoPedido(
+    valorMercadoria,
+    Number(p.taxa_pagamento_percentual ?? 0),
+    Number(p.taxa_pagamento_fixa ?? 0),
+    p.forma_pagamento,
+    parcelas.length || 1
+  )
+
+  await enviarEmail({
+    tipo: 'pedido_pronto',
+    pedidoId,
+    destinatario: cliente.email,
+    assunto: `Pedido #${p.numero} pronto — valor para pagamento`,
+    html: templatePedidoPronto({
+      clienteNome: cliente.razao_social,
+      numero: Number(p.numero),
+      metragem:
+        p.metragem_impressa != null ? Number(p.metragem_impressa) : null,
+      valorMercadoria,
+      taxa,
+      totalCobrado: Math.round((valorMercadoria + taxa) * 100) / 100,
+      rotuloPagamento:
+        ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento,
+      parcelas,
+      urlPedido: `${urlDoSite()}/pedidos/${pedidoId}`,
+    }),
+  })
 }
 
 export async function reimprimir(

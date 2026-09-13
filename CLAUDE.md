@@ -269,10 +269,17 @@ ali a imagem é o conteúdo.
   Consequência: o pedido não passa de "Pedido pronto" — `admin_lancar_status` só aceita
   impressao/estampando/corte_costura/pronto, e o único caminho para "fechado" é dar baixa
   em todas as parcelas.
-- **E-mails: 3 dos 14 gatilhos** implementados (`convite_acesso`, `pedido_recebido`,
-  `em_producao`). Falta o de "Pedido pronto" com a cobrança, que é o que fecha o ciclo
-  comercial, além de NF emitida, cancelamentos, ajuste de quantidade, artes rejeitadas,
-  recuperação de senha e todos os avisos internos à equipe.
+- **E-mails: 4 dos 14 gatilhos** implementados (`convite_acesso`, `pedido_recebido`,
+  `em_producao`, `pedido_pronto`). Falta NF emitida, cancelamentos, ajuste de
+  quantidade, artes rejeitadas, recuperação de senha e todos os avisos internos à
+  equipe.
+  - `pedido_pronto` é a **cobrança**, disparada em `lancarStatus` quando a etapa
+    "Pedido pronto" é lançada. Traz metragem, mercadoria, taxa da forma de pagamento,
+    total e as parcelas com vencimento. Falhar no e-mail **não** derruba o lançamento da
+    etapa — produção não pode travar porque a mensagem não saiu, e `email_log` garante
+    que o reenvio não duplica.
+  - Enquanto os boletos não são emitidos pelo Bling, a linha digitável vem nula e o
+    e-mail avisa que os boletos chegam em seguida, em vez de mostrar espaço vazio.
 - Pedidos estampados antes da migração de custos não têm custo gravado e aparecem na
   Apuração com lucro igual à receita inteira.
 - **Aviso interno de pedido novo (a construir)** — decidido em 12/09/2026: quando entrar
