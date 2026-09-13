@@ -452,8 +452,8 @@ bloco **Faturamento** com dois botões, cada um repetível:
 - **"Nova senha" do cliente** deixou de gerar senha provisória: manda um link de
   redefinição por e-mail (`generateLink` do Supabase + `token_hash` no mesmo
   `/auth/confirmar` que "esqueci minha senha" usa). Ninguém da equipe vê a senha. A
-  tela mostra para qual e-mail o link foi. A equipe (Configurações) ainda usa o modelo
-  antigo.
+  tela mostra para qual e-mail o link foi. Vale igual para a equipe (Configurações).
+  O convite de cadastro continua com senha provisória + primeiro acesso.
 
 ## Nota fiscal — com ou sem, por pedido
 

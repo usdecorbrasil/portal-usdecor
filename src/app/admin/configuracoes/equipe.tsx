@@ -281,8 +281,8 @@ function CardMembro({ membro }: { membro: Membro }) {
     iniciar(async () => {
       const r = await redefinirSenhaMembro(membro.id)
       if (r.ok) {
-        setSenhaNova(r.senha)
-        setAvisoEmail(r.avisoEmail ?? null)
+        setSenhaNova(r.enviadoPara)
+        setAvisoEmail(null)
       } else setErro(r.erro)
     })
   }
@@ -347,15 +347,14 @@ function CardMembro({ membro }: { membro: Membro }) {
       {senhaNova && (
         <div className="mt-3 bg-[#E3F0E8] border border-[#2E7D4F] rounded-sm p-3">
           <p className="text-xs text-[#2E7D4F] font-semibold mb-1">
-            Nova senha — anote agora
+            Link para criar nova senha enviado para
           </p>
           <code className="block bg-white border border-[#DDDCD5] rounded-sm px-2 py-1.5 font-mono text-sm break-all">
             {senhaNova}
           </code>
           {avisoEmail && (
             <p className="text-[11px] text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-2 py-1.5 mt-2 leading-relaxed">
-              O e-mail com a senha não foi enviado ({avisoEmail}). Passe a senha
-              acima por outro canal.
+              {avisoEmail}
             </p>
           )}
         </div>

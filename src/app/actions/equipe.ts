@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
+import { templateRedefinirSenha } from '@/lib/resend/templates/redefinir-senha'
 import { urlDoSite } from '@/lib/site'
 import { registrar, diferencas, ROTULOS_EQUIPE } from '@/lib/auditoria'
 
@@ -117,9 +118,14 @@ export async function criarMembro(
   return { ok: true, senha, avisoEmail: envio.ok ? undefined : envio.erro }
 }
 
+/**
+ * Manda ao membro um link para criar a própria senha — mesmo modelo do
+ * cliente. Ninguém vê nem transporta a senha; o link é de uso único e vale
+ * uma hora.
+ */
 export async function redefinirSenhaMembro(
   usuarioId: string
-): Promise<ComSenha> {
+): Promise<{ ok: true; enviadoPara: string } | { ok: false; erro: string }> {
   if (!(await exigirDono())) return { ok: false, erro: 'Acesso negado.' }
 
   const parsed = z.string().uuid().safeParse(usuarioId)
@@ -134,46 +140,42 @@ export async function redefinirSenhaMembro(
     return { ok: false, erro: 'Usuário não é da equipe.' }
   }
 
-  const senha = gerarSenha()
+  const { data: usuario } = await admin.auth.admin.getUserById(parsed.data)
+  const email = usuario?.user?.email
+  if (!email) return { ok: false, erro: 'Usuário sem e-mail cadastrado.' }
 
-  // Volta a ser provisória: a senha nova vai por e-mail e precisa ser trocada
-  // no primeiro acesso, como no convite
-  const { error } = await admin.auth.admin.updateUserById(parsed.data, {
-    password: senha,
-    app_metadata: { senha_provisoria: true },
+  const { data: link, error } = await admin.auth.admin.generateLink({
+    type: 'recovery',
+    email,
   })
 
-  if (error) return { ok: false, erro: 'Não foi possível redefinir a senha.' }
+  const tokenHash = link?.properties?.hashed_token
+  if (error || !tokenHash) {
+    return { ok: false, erro: 'Não foi possível gerar o link de redefinição.' }
+  }
 
-  // A senha não é registrada, só o fato de ter sido trocada e por quem
+  const urlLink =
+    `${urlDoSite()}/auth/confirmar?token_hash=${encodeURIComponent(tokenHash)}` +
+    `&type=recovery&next=${encodeURIComponent('/nova-senha')}`
+
+  const envio = await enviarEmail({
+    tipo: 'redefinir_senha',
+    destinatario: email,
+    assunto: 'Crie uma nova senha para o portal Best Color Tecidos',
+    html: templateRedefinirSenha({ nome: perfil.nome ?? 'usuário', email, urlLink }),
+  })
+
+  if (!envio.ok) {
+    return { ok: false, erro: `O e-mail com o link não foi enviado (${envio.erro}).` }
+  }
+
   await registrar({
     entidade: 'equipe',
     entidadeId: parsed.data,
     acao: 'senha',
   })
 
-  // Mesmo caminho do convite: a senha vai por e-mail e a pessoa cria a dela
-  // no próximo login. A tela continua mostrando a senha, para o caso de o
-  // e-mail não chegar
-  const { data: usuario } = await admin.auth.admin.getUserById(parsed.data)
-  const email = usuario?.user?.email
-
-  const envio = email
-    ? await enviarEmail({
-        tipo: 'senha_redefinida',
-        destinatario: email,
-        assunto: 'Sua senha do portal Best Color Tecidos foi redefinida',
-        html: templateConviteAcesso({
-          nome: perfil.nome ?? 'usuário',
-          email,
-          senha,
-          urlLogin: `${urlDoSite()}/login`,
-          redefinida: true,
-        }),
-      })
-    : { ok: false as const, erro: 'usuário sem e-mail cadastrado' }
-
-  return { ok: true, senha, avisoEmail: envio.ok ? undefined : envio.erro }
+  return { ok: true, enviadoPara: email }
 }
 
 /**
