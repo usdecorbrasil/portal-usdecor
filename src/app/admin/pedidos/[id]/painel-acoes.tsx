@@ -472,7 +472,7 @@ export default function PainelAcoes({
 
               <p className="text-xs text-[#6E6E68] mt-2.5">
                 {qtdParcelas}x de R$ {brl(total / qtdParcelas)} · vencimentos a
-                cada 30 dias a partir da data escolhida
+                cada {intervaloBoleto} dias a partir da data escolhida
               </p>
             </div>
           )}
