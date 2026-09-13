@@ -198,9 +198,14 @@ export async function atualizarMembro(
     return { ok: false, erro: parsed.error.issues[0].message }
   }
 
-  // Não rebaixar a si mesmo — evita ficar sem nenhum admin
-  if (parsed.data.usuarioId === meuId && parsed.data.papel !== 'admin') {
-    return { ok: false, erro: 'Você não pode remover o próprio acesso de admin.' }
+  // Não rebaixar a si mesmo — evita ficar sem ninguém administrando.
+  // `financeiro` conta: tem exatamente o mesmo acesso que `admin`, e exigir
+  // `admin` aqui travava a edição do próprio cadastro de quem é financeiro
+  if (parsed.data.usuarioId === meuId && parsed.data.papel === 'funcionario') {
+    return {
+      ok: false,
+      erro: 'Você não pode rebaixar o próprio acesso a funcionário.',
+    }
   }
 
   const admin = createAdminClient()
