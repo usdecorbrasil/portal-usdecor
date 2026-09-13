@@ -1,13 +1,20 @@
+/**
+ * Convite de acesso — e também a redefinição de senha pelo painel, que é o
+ * mesmo e-mail com outra primeira frase: nos dois casos a pessoa recebe uma
+ * senha provisória e vai criar a dela no próximo login.
+ */
 export function templateConviteAcesso({
   nome,
   email,
   senha,
   urlLogin,
+  redefinida = false,
 }: {
   nome: string
   email: string
   senha: string
   urlLogin: string
+  redefinida?: boolean
 }) {
   return `
 <!DOCTYPE html>
@@ -26,7 +33,11 @@ export function templateConviteAcesso({
             <td style="padding: 32px;">
               <h1 style="font-size:18px; color:#131A2E; margin: 0 0 16px;">Olá, ${nome}</h1>
               <p style="font-size:14px; color:#131A2E; line-height:1.6; margin: 0 0 20px;">
-                Seu acesso ao portal Best Color Tecidos foi criado. Use os dados abaixo para entrar:
+                ${
+                  redefinida
+                    ? 'Sua senha de acesso ao portal Best Color Tecidos foi redefinida. Use os dados abaixo para entrar:'
+                    : 'Seu acesso ao portal Best Color Tecidos foi criado. Use os dados abaixo para entrar:'
+                }
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#FAFAF7; border:1px solid #DDDCD5; border-radius:4px; margin-bottom:24px;">
                 <tr>

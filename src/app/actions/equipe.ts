@@ -10,7 +10,10 @@ import { urlDoSite } from '@/lib/site'
 import { registrar, diferencas, ROTULOS_EQUIPE } from '@/lib/auditoria'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
-type ComSenha = { ok: true; senha: string } | { ok: false; erro: string }
+/** `avisoEmail` vem preenchido quando a senha existe mas o e-mail não saiu. */
+type ComSenha =
+  | { ok: true; senha: string; avisoEmail?: string }
+  | { ok: false; erro: string }
 
 /** Admin e financeiro administram a equipe */
 async function exigirDono() {
@@ -85,8 +88,9 @@ export async function criarMembro(
     return { ok: false, erro: 'Não foi possível vincular o acesso.' }
   }
 
-  // E-mail de convite — não bloqueia o cadastro se falhar
-  await enviarEmail({
+  // E-mail de convite — não bloqueia o cadastro se falhar, mas quem cadastrou
+  // precisa saber, senão a pessoa fica esperando um e-mail que não vem
+  const envio = await enviarEmail({
     tipo: 'convite_acesso',
     destinatario: email,
     assunto: 'Seu acesso ao portal Best Color Tecidos',
@@ -110,7 +114,7 @@ export async function criarMembro(
   })
 
   revalidatePath('/admin/configuracoes')
-  return { ok: true, senha }
+  return { ok: true, senha, avisoEmail: envio.ok ? undefined : envio.erro }
 }
 
 export async function redefinirSenhaMembro(
@@ -124,7 +128,7 @@ export async function redefinirSenhaMembro(
   const admin = createAdminClient()
 
   const { data: perfil } = await admin
-    .from('profiles').select('role').eq('id', parsed.data).single()
+    .from('profiles').select('role, nome').eq('id', parsed.data).single()
 
   if (!perfil || perfil.role === 'cliente') {
     return { ok: false, erro: 'Usuário não é da equipe.' }
@@ -148,7 +152,28 @@ export async function redefinirSenhaMembro(
     acao: 'senha',
   })
 
-  return { ok: true, senha }
+  // Mesmo caminho do convite: a senha vai por e-mail e a pessoa cria a dela
+  // no próximo login. A tela continua mostrando a senha, para o caso de o
+  // e-mail não chegar
+  const { data: usuario } = await admin.auth.admin.getUserById(parsed.data)
+  const email = usuario?.user?.email
+
+  const envio = email
+    ? await enviarEmail({
+        tipo: 'senha_redefinida',
+        destinatario: email,
+        assunto: 'Sua senha do portal Best Color Tecidos foi redefinida',
+        html: templateConviteAcesso({
+          nome: perfil.nome ?? 'usuário',
+          email,
+          senha,
+          urlLogin: `${urlDoSite()}/login`,
+          redefinida: true,
+        }),
+      })
+    : { ok: false as const, erro: 'usuário sem e-mail cadastrado' }
+
+  return { ok: true, senha, avisoEmail: envio.ok ? undefined : envio.erro }
 }
 
 /**

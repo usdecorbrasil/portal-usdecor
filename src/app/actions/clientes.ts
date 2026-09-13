@@ -48,7 +48,7 @@ const schemaCriar = z.object({ ...camposBase, preco_metro: precoBr })
 const schemaEditar = z.object({ id: z.string().uuid(), ...camposBase })
 
 type ResultadoCriar =
-  | { ok: true; senha: string; avisoBling?: string }
+  | { ok: true; senha: string; avisoBling?: string; avisoEmail?: string }
   | { ok: false; erro: string }
 type Resultado = { ok: true; avisoBling?: string } | { ok: false; erro: string }
 
@@ -165,8 +165,9 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
   // portal e o vínculo pode ser refeito depois, mas quem cadastrou precisa saber
   const avisoBling = await tentarSincronizarContato(cliente.id)
 
-  // E-mail de convite — não bloqueia o cadastro se falhar
-  await enviarEmail({
+  // E-mail de convite — não bloqueia o cadastro se falhar, mas quem cadastrou
+  // precisa saber, senão o cliente fica esperando um e-mail que não vem
+  const envio = await enviarEmail({
     tipo: 'convite_acesso',
     destinatario: dados.email,
     assunto: 'Seu acesso ao portal Best Color Tecidos',
@@ -189,7 +190,12 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
   })
 
   revalidatePath('/admin/clientes')
-  return { ok: true, senha, avisoBling: avisoBling ?? undefined }
+  return {
+    ok: true,
+    senha,
+    avisoBling: avisoBling ?? undefined,
+    avisoEmail: envio.ok ? undefined : envio.erro,
+  }
 }
 
 export async function editarCliente(
@@ -307,13 +313,16 @@ export async function alternarClienteAtivo(
 
 export async function redefinirSenha(
   clienteId: string
-): Promise<{ ok: true; senha: string } | { ok: false; erro: string }> {
+): Promise<
+  | { ok: true; senha: string; avisoEmail?: string }
+  | { ok: false; erro: string }
+> {
   if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
 
   const admin = createAdminClient()
 
   const { data: perfil } = await admin
-    .from('profiles').select('id').eq('cliente_id', clienteId).single()
+    .from('profiles').select('id, nome').eq('cliente_id', clienteId).single()
 
   if (!perfil) return { ok: false, erro: 'Acesso não encontrado.' }
 
@@ -334,7 +343,28 @@ export async function redefinirSenha(
     acao: 'senha',
   })
 
-  return { ok: true, senha }
+  // Mesmo caminho do convite: a senha vai por e-mail e o cliente cria a dele
+  // no próximo login. A tela continua mostrando a senha, para o caso de o
+  // e-mail não chegar
+  const { data: usuario } = await admin.auth.admin.getUserById(perfil.id)
+  const email = usuario?.user?.email
+
+  const envio = email
+    ? await enviarEmail({
+        tipo: 'senha_redefinida',
+        destinatario: email,
+        assunto: 'Sua senha do portal Best Color Tecidos foi redefinida',
+        html: templateConviteAcesso({
+          nome: perfil.nome ?? 'cliente',
+          email,
+          senha,
+          urlLogin: `${urlDoSite()}/login`,
+          redefinida: true,
+        }),
+      })
+    : { ok: false as const, erro: 'cliente sem e-mail de acesso' }
+
+  return { ok: true, senha, avisoEmail: envio.ok ? undefined : envio.erro }
 }
 
 /**

@@ -155,6 +155,12 @@ export default function Equipe({
                 <code className="block bg-white border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm break-all">
                   {estado.senha}
                 </code>
+                {estado.avisoEmail && (
+                  <p className="text-[11px] text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-2 py-1.5 mt-2 leading-relaxed">
+                    O e-mail com a senha não foi enviado ({estado.avisoEmail}). Passe a senha
+                    acima por outro canal.
+                  </p>
+                )}
               </div>
             )}
 
@@ -263,6 +269,7 @@ function CardArquivado({ membro }: { membro: Membro }) {
 
 function CardMembro({ membro }: { membro: Membro }) {
   const [senhaNova, setSenhaNova] = useState<string | null>(null)
+  const [avisoEmail, setAvisoEmail] = useState<string | null>(null)
   const [editando, setEditando] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
   const [arquivando, setArquivando] = useState(false)
@@ -273,8 +280,10 @@ function CardMembro({ membro }: { membro: Membro }) {
     setErro('')
     iniciar(async () => {
       const r = await redefinirSenhaMembro(membro.id)
-      if (r.ok) setSenhaNova(r.senha)
-      else setErro(r.erro)
+      if (r.ok) {
+        setSenhaNova(r.senha)
+        setAvisoEmail(r.avisoEmail ?? null)
+      } else setErro(r.erro)
     })
   }
 
@@ -343,6 +352,12 @@ function CardMembro({ membro }: { membro: Membro }) {
           <code className="block bg-white border border-[#DDDCD5] rounded-sm px-2 py-1.5 font-mono text-sm break-all">
             {senhaNova}
           </code>
+          {avisoEmail && (
+            <p className="text-[11px] text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-2 py-1.5 mt-2 leading-relaxed">
+              O e-mail com a senha não foi enviado ({avisoEmail}). Passe a senha
+              acima por outro canal.
+            </p>
+          )}
         </div>
       )}
 

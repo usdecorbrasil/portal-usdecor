@@ -79,6 +79,7 @@ export default function DetalheCliente({
   const [editandoComercial, setEditandoComercial] = useState(false)
   const [arquivando, setArquivando] = useState(false)
   const [senhaNova, setSenhaNova] = useState<string | null>(null)
+  const [avisoEmail, setAvisoEmail] = useState<string | null>(null)
   const [confirmando, setConfirmando] = useState(false)
   const [pendente, iniciar] = useTransition()
 
@@ -112,7 +113,10 @@ export default function DetalheCliente({
   function novaSenha() {
     iniciar(async () => {
       const r = await redefinirSenha(cliente.id)
-      if (r.ok) setSenhaNova(r.senha)
+      if (r.ok) {
+        setSenhaNova(r.senha)
+        setAvisoEmail(r.avisoEmail ?? null)
+      }
     })
   }
 
@@ -265,6 +269,12 @@ export default function DetalheCliente({
           <code className="block bg-white border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm break-all">
             {senhaNova}
           </code>
+          {avisoEmail && (
+            <p className="text-[11px] text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-2 py-1.5 mt-2 leading-relaxed">
+              O e-mail com a senha não foi enviado ({avisoEmail}). Passe a senha
+              acima por outro canal.
+            </p>
+          )}
         </div>
       )}
 

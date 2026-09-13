@@ -168,6 +168,12 @@ export default function FormularioCliente() {
             <code className="block bg-white border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm break-all">
               {estado.senha}
             </code>
+            {estado.avisoEmail && (
+              <p className="text-[11px] text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-2 py-1.5 mt-2 leading-relaxed">
+                O e-mail com a senha não foi enviado ({estado.avisoEmail}). Passe a senha
+                acima por outro canal.
+              </p>
+            )}
 
             {/* O cliente foi criado no portal de qualquer forma; o que pode ter
                 falhado é o espelho no ERP, e isso trava o pedido lá na frente */}

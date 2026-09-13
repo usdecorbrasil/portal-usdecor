@@ -62,9 +62,10 @@ export default function CampoSenha({
   )
 }
 
-/* Ícones inline: são dois traços, não vale uma biblioteca por eles */
+/* Ícones inline: são dois traços, não vale uma biblioteca por eles.
+   Exportados porque o login tem campo próprio (controlado) e usa só o olho. */
 
-function OlhoAberto() {
+export function OlhoAberto() {
   return (
     <svg
       aria-hidden
@@ -83,7 +84,7 @@ function OlhoAberto() {
   )
 }
 
-function OlhoFechado() {
+export function OlhoFechado() {
   return (
     <svg
       aria-hidden

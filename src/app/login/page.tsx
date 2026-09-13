@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { OlhoAberto, OlhoFechado } from '@/components/campo-senha'
 
 export default function LoginPage() {
   return (
@@ -107,15 +108,16 @@ function LoginForm() {
                 onChange={(e) => setSenha(e.target.value)}
                 required
                 autoComplete="current-password"
-                className="w-full border border-[#DDDCD5] rounded-sm pl-3 pr-16 py-2.5 bg-white outline-none focus:border-[#131A2E]"
+                className="w-full border border-[#DDDCD5] rounded-sm pl-3 pr-12 py-2.5 bg-white outline-none focus:border-[#131A2E]"
               />
               <button
                 type="button"
                 onClick={() => setVerSenha((v) => !v)}
                 aria-label={verSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold tracking-wider text-[#6E6E68] hover:text-[#131A2E] px-1.5 py-1"
+                aria-pressed={verSenha}
+                className="absolute inset-y-0 right-0 px-3 flex items-center text-[#6E6E68] hover:text-[#131A2E]"
               >
-                {verSenha ? 'OCULTAR' : 'MOSTRAR'}
+                {verSenha ? <OlhoFechado /> : <OlhoAberto />}
               </button>
             </div>
           </div>

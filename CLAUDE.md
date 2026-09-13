@@ -421,6 +421,15 @@ e o portal não abre até a pessoa criar a dela.
   cliente espera JSON.
 - Usuários que já existiam **não** têm a marca e seguem entrando direto. Para forçar a
   troca em alguém, use "redefinir senha" no painel.
+- **Redefinir senha pelo painel também manda e-mail** (mesmo template do convite, com a
+  primeira frase trocada — `redefinida: true`). A tela continua mostrando a senha, e
+  quando o envio falha aparece um aviso amarelo com o motivo: a pessoa que cadastrou é
+  quem precisa saber que o e-mail não saiu, senão o convidado fica esperando.
+- **Em 13/09/2026 o `RESEND_API_KEY` da Vercel estava inválido**: `email_log` mostra
+  `API key is invalid` no convite da conta Best Color (14:16) e num "em produção" de
+  madrugada. O envio local funcionava, então a chave do `.env.local` é outra — a da
+  Vercel foi perdida ou colada errada na troca de variáveis de 12/09. Sem isso, nenhum
+  e-mail do portal sai, e até este dia a tela não avisava.
 
 ## Quem fez cada alteração
 
