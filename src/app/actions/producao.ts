@@ -233,6 +233,42 @@ async function valorFechado(pedidoId: string): Promise<boolean> {
 const ERRO_FECHADO =
   'O pedido já está pronto: quantidade e preço não mudam mais. Se precisar, cancele e refaça.'
 
+/**
+ * Ajusta a metragem impressa durante a estampa — quebra na estamparia, por
+ * exemplo. Refaz total e parcelas pelo mesmo cálculo do romaneio (a RPC
+ * chama `regenerar_parcelas_pedido`). Só em Estampando / Corte-costura.
+ */
+export async function ajustarMetragem(
+  pedidoId: string,
+  metragem: number,
+  motivo: string
+): Promise<Resultado> {
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    metragem: z.number().positive('Informe a metragem total impressa').max(1000000),
+    motivo: z.string().trim().min(10, 'Descreva o motivo com pelo menos 10 caracteres').max(500),
+  }).safeParse({ pedidoId, metragem, motivo })
+
+  if (!parsed.success) {
+    return { ok: false, erro: parsed.error.issues[0].message }
+  }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('admin_ajustar_metragem', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_metragem: parsed.data.metragem,
+    p_motivo: parsed.data.motivo,
+  })
+
+  if (error) return { ok: false, erro: error.message }
+
+  revalidar()
+  revalidatePath(`/admin/pedidos/${parsed.data.pedidoId}`)
+  revalidatePath('/pedidos')
+  return { ok: true }
+}
+
 export async function ajustarItem(
   itemId: string,
   quantidade: number,

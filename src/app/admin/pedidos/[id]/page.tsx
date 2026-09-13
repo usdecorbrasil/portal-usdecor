@@ -119,6 +119,7 @@ export default async function PedidoAdminPage({
       ),
       pedido_precos(preco_de, preco_para, motivo, created_at, criado_por),
       pedido_nf_historico(emitir_de, emitir_para, motivo, created_at, criado_por),
+      pedido_metragem_historico(metragem_de, metragem_para, motivo, created_at, criado_por),
       pedido_solicitacoes(id, texto, status, resposta, created_at),
       pedido_parcelas(numero, valor, vencimento, pago_em, link_boleto, link_pix, boleto_pdf_path)
     `
@@ -266,6 +267,7 @@ export default async function PedidoAdminPage({
   const ajustesForma = (p.pedido_forma_pagamento_historico ?? []) as any[]
   const ajustesPreco = (p.pedido_precos ?? []) as any[]
   const ajustesNf = (p.pedido_nf_historico ?? []) as any[]
+  const ajustesMetragem = (p.pedido_metragem_historico ?? []) as any[]
   const itemPorId = new Map(itens.map((i) => [i.id, i]))
 
   // Quem fez cada coisa, numa consulta só. Degrada para nada quando o perfil
@@ -276,6 +278,7 @@ export default async function PedidoAdminPage({
     ...ajustesForma.map((a) => a.autor_id),
     ...ajustesPreco.map((a) => a.criado_por),
     ...ajustesNf.map((a) => a.criado_por),
+    ...ajustesMetragem.map((a) => a.criado_por),
     ...hist.map((h: any) => h.criado_por),
     p.cancelado_por,
   ].filter(Boolean) as string[]
@@ -330,6 +333,13 @@ export default async function PedidoAdminPage({
         dono && !antesDoEstampando
           ? `R$ ${brl(Number(a.preco_de))} → R$ ${brl(Number(a.preco_para))} /m`
           : 'Preço por metro alterado',
+      data: a.created_at as string,
+      autor: autorDe(a.criado_por),
+    })),
+    ...ajustesMetragem.map((a) => ({
+      tipo: 'Metragem',
+      motivo: a.motivo as string,
+      detalhe: `${brl(Number(a.metragem_de ?? 0))} m → ${brl(Number(a.metragem_para))} m`,
       data: a.created_at as string,
       autor: autorDe(a.criado_por),
     })),

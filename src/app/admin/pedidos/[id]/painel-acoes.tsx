@@ -7,6 +7,7 @@ import {
   cancelarPedido,
   ajustarItem,
   adicionarItem,
+  ajustarMetragem,
   alterarPrecoPedido,
   alterarFormaPagamento,
 } from '@/app/actions/producao'
@@ -61,7 +62,7 @@ type Solicitacao = {
   criadoEm: string
 }
 
-type Tela = null | 'ajustar' | 'preco' | 'forma' | 'reimprimir' | 'cancelar'
+type Tela = null | 'ajustar' | 'metragem' | 'preco' | 'forma' | 'reimprimir' | 'cancelar'
 
 function dataPadrao(diasAFrente: number) {
   const d = new Date()
@@ -137,6 +138,9 @@ export default function PainelAcoes({
   // A partir de "pronto" o pedido já foi ao Bling com metragem e valor:
   // mexer em quantidade ou preço aqui deixaria o ERP com outro pedido
   const valorFechado = passouNF || idx >= ORDEM.indexOf('pronto')
+  // Com o romaneio lançado, quantidade não muda mais nada; o que pode
+  // mudar é a metragem — quebra na estamparia, por exemplo
+  const emEstampa = statusAtual === 'estampando' || statusAtual === 'corte_costura'
   const ehParcelado = formaPagamento === 'boleto_parcelado'
 
   const precoAtual = itens[0]?.precoMetro ?? 0
@@ -267,6 +271,31 @@ export default function PainelAcoes({
               parcelas,
               primeiroVenc
             )
+            if (!r.ok) {
+              setErro(r.erro)
+              return
+            }
+            setErro('')
+            setTela(null)
+          })
+        }
+      />
+    )
+  }
+
+  if (tela === 'metragem') {
+    return (
+      <TelaMetragem
+        metragemAtual={metragemImpressa ?? 0}
+        pendente={pendente}
+        erro={erro}
+        onVoltar={() => {
+          setErro('')
+          setTela(null)
+        }}
+        onSalvar={(metragem, motivo) =>
+          iniciar(async () => {
+            const r = await ajustarMetragem(pedidoId, metragem, motivo)
             if (!r.ok) {
               setErro(r.erro)
               return
@@ -572,11 +601,18 @@ export default function PainelAcoes({
           </button>
           {ajustesAbertos && (
             <div className="space-y-2 mt-3">
-              {podeCancelarOuAjustar && !valorFechado && (
+              {podeCancelarOuAjustar && antesDoEstampando && (
                 <BotaoAcao
                   titulo="Ajustar quantidades"
                   legenda="reduz ou aumenta o que será faturado"
                   onClick={() => setTela('ajustar')}
+                />
+              )}
+              {emEstampa && (
+                <BotaoAcao
+                  titulo="Ajustar metragem"
+                  legenda={`hoje ${brl(metragemImpressa ?? 0)} m · para quebra na estamparia, por exemplo`}
+                  onClick={() => setTela('metragem')}
                 />
               )}
               {podeCancelarOuAjustar && !valorFechado && (
@@ -1850,5 +1886,122 @@ function OpcaoCusto({
         {legenda}
       </span>
     </button>
+  )
+}
+
+/* ------------------------------- metragem ------------------------------- */
+
+/**
+ * Corrige a metragem impressa depois do romaneio. Não mostra valor: quem
+ * ajusta costuma ser a produção, que não enxerga preço — e o valor é
+ * consequência, recalculado pelo banco.
+ */
+function TelaMetragem({
+  metragemAtual,
+  pendente,
+  erro,
+  onVoltar,
+  onSalvar,
+}: {
+  metragemAtual: number
+  pendente: boolean
+  erro: string
+  onVoltar: () => void
+  onSalvar: (metragem: number, motivo: string) => void
+}) {
+  const [valor, setValor] = useState(metragemAtual.toFixed(2).replace('.', ','))
+  const [motivo, setMotivo] = useState('')
+  const [aviso, setAviso] = useState('')
+
+  const nova = Number(valor.replace(',', '.'))
+  const valida = Number.isFinite(nova) && nova > 0
+
+  function salvar() {
+    if (!valida) return setAviso('Informe uma metragem maior que zero.')
+    if (nova === metragemAtual) return setAviso('A metragem informada é igual à atual.')
+    if (motivo.trim().length < 10) {
+      return setAviso('Descreva o motivo com pelo menos 10 caracteres.')
+    }
+    setAviso('')
+    onSalvar(nova, motivo.trim())
+  }
+
+  return (
+    <div className="mt-5 bg-white border border-[#131A2E] rounded-sm p-5">
+      <h2 className="font-semibold tracking-tight">Ajustar metragem impressa</h2>
+
+      <div className="bg-[#FBF0D9] border-l-4 border-[#C79600] rounded-r-sm p-3 mt-3 text-xs leading-relaxed">
+        <strong className="block text-[10px] tracking-widest mb-1">
+          O VALOR ACOMPANHA
+        </strong>
+        Total e parcelas são refeitos a partir da nova metragem, do mesmo jeito
+        que no romaneio. A mudança fica registrada com o motivo.
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4 mt-4">
+        <div>
+          <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">
+            METRAGEM ATUAL
+          </label>
+          <div className="font-mono text-[#6E6E68] py-2">{brl(metragemAtual)} m</div>
+        </div>
+        <div>
+          <label
+            htmlFor="nova-metragem"
+            className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+          >
+            NOVA METRAGEM
+          </label>
+          <input
+            id="nova-metragem"
+            inputMode="decimal"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            autoFocus
+            className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm font-mono outline-none focus:border-[#131A2E]"
+          />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label
+          htmlFor="motivo-metragem"
+          className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+        >
+          MOTIVO <span className="text-[#B00063]">*</span>
+        </label>
+        <textarea
+          id="motivo-metragem"
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          rows={3}
+          placeholder="Ex.: quebra de 2 m na estamparia — trecho descartado"
+          className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E]"
+        />
+      </div>
+
+      {(aviso || erro) && (
+        <p className="text-sm text-[#B00063] mt-3">{aviso || erro}</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 mt-5">
+        <button
+          type="button"
+          onClick={onVoltar}
+          disabled={pendente}
+          className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+        >
+          VOLTAR
+        </button>
+        <button
+          type="button"
+          onClick={salvar}
+          disabled={pendente}
+          className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+        >
+          {pendente ? 'SALVANDO...' : 'SALVAR'}
+        </button>
+      </div>
+    </div>
   )
 }

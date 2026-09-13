@@ -390,6 +390,17 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
   o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
   etapas para o banco e ajustar essas três pontas juntas.
 
+## Ajuste de metragem (13/09/2026, `docs/sql/016`)
+
+Em **Estampando** e **Corte/costura** o botão "Ajustar quantidades" dá lugar a
+**Ajustar metragem**: com o romaneio lançado, peça não muda mais nada — o valor é
+metragem × preço, e o que pode mudar é a metragem (quebra na estamparia). A RPC
+`admin_ajustar_metragem` repete o cálculo de `confirmar_romaneio` (total, custos por
+metro, `regenerar_parcelas_pedido`) e grava em `pedido_metragem_historico`, que aparece
+em Alterações no pedido. Portão `is_admin_producao()`, o mesmo do romaneio: quem sabe da
+quebra é a produção. Antes de Estampando continua sendo quantidade; de Pronto em diante,
+nada.
+
 ## "Pedido pronto": o que acontece e o que trava (13/09/2026)
 
 - **Boleto abaixo do mínimo por documento bloqueia** a etapa — no servidor
