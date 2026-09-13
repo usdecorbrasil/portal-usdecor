@@ -83,6 +83,7 @@ export default async function PedidoAdminPage({
     .select(`
       id, numero, notas, created_at, metragem_impressa,
       cancelado_em, cancelado_motivo,
+      bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       forma_pagamento, parcelas_solicitadas, cliente_id,
       ${camposFinanceiros}
       clientes(razao_social, cnpj, preco_metro),
@@ -222,6 +223,28 @@ export default async function PedidoAdminPage({
         {cliente.razao_social} ·{' '}
         {new Date(p.created_at).toLocaleDateString('pt-BR')}
       </p>
+
+      {/* Sem isto, uma falha de sincronia com o ERP passaria despercebida */}
+      {dono && p.bling_sync_status === 'erro' && (
+        <div className="bg-[#FFF6FA] border border-[#B00063] rounded-sm px-3 py-2.5 mt-3">
+          <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#B00063]">
+            Não foi enviado ao Bling
+          </p>
+          <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">
+            {p.bling_erro}
+          </p>
+          <p className="text-[11px] text-[#6E6E68] mt-1.5">
+            O pedido seguiu normalmente no portal. Corrija o que falta no Bling
+            e relance a etapa para tentar de novo.
+          </p>
+        </div>
+      )}
+
+      {dono && p.bling_pedido_id && (
+        <p className="text-[11px] font-mono text-[#6E6E68] mt-2">
+          Bling: pedido {p.bling_numero ? '#' + p.bling_numero : p.bling_pedido_id}
+        </p>
+      )}
 
       {cancelado ? (
         <div className="mt-5 bg-[#EEEDE7] border-l-4 border-[#6E6E68] rounded-r-sm p-4">

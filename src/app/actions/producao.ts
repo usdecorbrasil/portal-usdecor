@@ -8,6 +8,7 @@ import { templateEmProducao } from '@/lib/resend/templates/em-producao'
 import { templatePedidoPronto } from '@/lib/resend/templates/pedido-pronto'
 import { taxaDoPedido } from '@/lib/pagamento/config'
 import { urlDoSite } from '@/lib/site'
+import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
 
 const ROTULOS_PAGAMENTO: Record<string, string> = {
   boleto_avista: 'Boleto à vista',
@@ -79,8 +80,10 @@ export async function lancarStatus(
     }
   }
 
-  // E-mail de cobrança — é o que fecha o ciclo comercial
+  // Ao ficar pronto: pedido no ERP e cobrança ao cliente. Nenhum dos dois
+  // pode derrubar o lançamento da etapa — a produção não espera sistema externo
   if (parsed.data.status === 'pronto') {
+    await sincronizarPedidoComBling(parsed.data.pedidoId)
     await enviarCobranca(parsed.data.pedidoId)
   }
 
