@@ -220,26 +220,22 @@ ali a imagem é o conteúdo.
 
 ## Pendências conhecidas (checar status atual antes de assumir resolvido)
 
-- **Registrar `bestcolortecidos.com.br`** — domínio já registrado no Registro.br.
-  Falta o acesso de edição de zona DNS (solicitado em 09/09/2026), que trava:
-  - **E-mails**: sem domínio verificado no Resend, só é possível enviar para o próprio
-    endereço cadastrado. Nenhum cliente recebe confirmação, aviso de produção ou boleto.
-  - **Domínio do portal**: o CNAME `portal` → `cname.vercel-dns.com` não pode ser criado
-    enquanto o acesso à zona não sair.
-- **PENDÊNCIA ABERTA — migrar do `.vercel.app` para o domínio próprio.** Decidido em
-  09/09/2026 não esperar o DNS: o Bling foi configurado com o endereço provisório
-  `https://portal-bello-tecido.vercel.app/api/bling/callback` (o `.vercel.app` manteve
-  o nome antigo mesmo após o projeto ser renomeado para `portal-bestcolortecidos`).
-  Quando a zona DNS liberar, revisar **na ordem**:
-  1. Criar o CNAME `portal` no Registro.br e adicionar o domínio no Vercel.
-  2. Atualizar `SITE_URL` e `BLING_REDIRECT_URI` no Vercel para
-     `https://portal.bestcolortecidos.com.br...`.
-  3. Atualizar a URL de redirecionamento **no painel do Bling** — os dois textos
-     precisam ser idênticos, senão o OAuth falha com `token_falhou`
-     (a rota envia o valor na troca de token, `src/app/api/bling/callback/route.ts`).
-  4. Reconectar o Bling (o token atual continua válido, mas o fluxo de reconexão vai
-     usar o endereço novo).
-  5. Redeploy — variável de ambiente só passa a valer em build novo.
+- ~~Registrar e configurar `bestcolortecidos.com.br`~~ — **feito em 12/09/2026**.
+  A zona é hospedada no próprio Registro.br (`d.sec.dns.br` / `e.sec.dns.br`, SOA
+  `hostmaster.registro.br`), com DNSSEC ativo. Registros criados: `portal` CNAME para o
+  alvo específico do projeto na Vercel (`e9f1570091ff32a5.vercel-dns-017.com`, **não** o
+  genérico `cname.vercel-dns.com`), mais `send`/`rsend` CNAME e `resend._domainkey` TXT
+  do Resend e `_dmarc`.
+  - **O domínio raiz e o `www` continuam sem registro** — quem digita
+    `bestcolortecidos.com.br` não chega a lugar nenhum. O site institucional não está
+    nessa zona.
+- ~~Migrar do `.vercel.app` para o domínio próprio~~ — **feito em 12/09/2026**. O portal
+  está em `https://portal.bestcolortecidos.com.br`, com certificado emitido. As
+  variáveis na Vercel (`SITE_URL`, `BLING_REDIRECT_URI`, `RESEND_FROM`,
+  `RESEND_REPLY_TO`) e a URL de redirecionamento no painel do Bling apontam para o
+  endereço novo, e a conexão com o Bling foi testada com HTTP 200 depois da troca.
+  O refresh do token **não** usa `redirect_uri` (só `grant_type=refresh_token` com
+  Basic auth), então trocar o endereço não invalida o token existente.
 - **Portal ficará em `portal.bestcolortecidos.com.br`** (subdomínio, não subpasta).
   Subpasta exigiria proxy reverso no servidor do site institucional, com risco conhecido
   em cookie de sessão, além de `basePath` no Next.
