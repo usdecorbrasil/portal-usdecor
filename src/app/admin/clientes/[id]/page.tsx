@@ -22,7 +22,10 @@ export default async function ClienteDetalhePage({
   const { data: cliente } = await supabase
     .from('clientes')
     .select(
-      'id, razao_social, cnpj, email, contato, telefone, preco_metro, limite_credito, ativo, arquivado'
+      `id, razao_social, cnpj, email, contato, telefone, preco_metro,
+       limite_credito, ativo, arquivado,
+       inscricao_estadual, indicador_ie, cep, endereco, numero, complemento,
+       bairro, municipio, uf`
     )
     .eq('id', id)
     .single()

@@ -212,12 +212,18 @@ ali a imagem é o conteúdo.
 
 ## Integração com o Bling — o que já existe
 
-- **Cliente cadastrado no portal vira contato no Bling** (`src/lib/bling/contato.ts`),
-  no momento do cadastro e não na hora do pedido: quem cadastra está na frente da tela e
-  pode corrigir o que faltar. Se já houver contato com o mesmo documento, só guarda o
-  vínculo em `clientes.bling_contato_id` — nunca sobrescreve, porque contato do ERP tem
-  endereço e IE que o portal não tem. Pessoa jurídica vai com `indicadorIe: 9` (não
-  contribuinte), senão o Bling recusa.
+- **Cliente do portal espelha no Bling** (`src/lib/bling/contato.ts`), no cadastro **e
+  em toda edição**. O portal guarda os campos fiscais necessários para nota fiscal
+  (`inscricao_estadual`, `indicador_ie`, endereço completo — `docs/sql/005`), então ele é
+  a fonte desses dados.
+  - Atualização faz **GET, mescla e PUT**: o PUT do Bling substitui o contato inteiro, e
+    o ERP tem campos que o portal não conhece (vendedor, código, extras). Sem mesclar,
+    eles se perderiam. O bloco `endereco` é mesclado à parte, senão o endereço de
+    cobrança sumiria.
+  - Endereço só é enviado quando há CEP **e** logradouro: mandar bloco vazio apagaria
+    endereço existente.
+  - `indicador_ie` 1 = contribuinte, 2 = isento, 9 = não contribuinte (padrão). Sem ele
+    o Bling recusa pessoa jurídica.
 - **Pedido de venda criado ao lançar "Pedido pronto"** (`src/lib/bling/pedido.ts`), não
   na confirmação: o valor é metragem × preço/metro e a metragem só existe depois da
   estampa. Vai com **uma linha de metragem** (produto genérico `ESTAMPA`, unidade `m`),
@@ -228,8 +234,10 @@ ali a imagem é o conteúdo.
   `formaPagamentoId` (11079000 = "Boleto - Bling Conta").
 - **A API limita 3 requisições por segundo** — daí as pausas entre chamadas.
 - Falha de sincronia **nunca** derruba a operação do portal: fica em
-  `pedidos.bling_erro` / `bling_sync_status` e aparece na tela do pedido; no cadastro de
-  cliente, aparece como aviso no próprio formulário.
+  `pedidos.bling_erro` / `bling_sync_status` e aparece na tela do pedido, com botão
+  **tentar de novo** (`reenviarPedidoAoBling`) — antes só dava para relançar a etapa de
+  produção, mexendo no histórico por causa de falha de integração. No cadastro e na
+  edição de cliente, aparece como aviso no próprio formulário.
 - Já verificado nesta conta: os SKUs do portal **são** os códigos de produto do Bling
   (`D10409` etc.), e o token já vem em **JWT** (a nota de migração abaixo está vencida).
 

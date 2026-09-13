@@ -7,6 +7,7 @@ import {
   buscarValorMinimoBoleto,
 } from '@/app/actions/configuracoes'
 import PainelAcoes from './painel-acoes'
+import ReenviarBling from './reenviar-bling'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -226,18 +227,7 @@ export default async function PedidoAdminPage({
 
       {/* Sem isto, uma falha de sincronia com o ERP passaria despercebida */}
       {dono && p.bling_sync_status === 'erro' && (
-        <div className="bg-[#FFF6FA] border border-[#B00063] rounded-sm px-3 py-2.5 mt-3">
-          <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#B00063]">
-            Não foi enviado ao Bling
-          </p>
-          <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">
-            {p.bling_erro}
-          </p>
-          <p className="text-[11px] text-[#6E6E68] mt-1.5">
-            O pedido seguiu normalmente no portal. Corrija o que falta no Bling
-            e relance a etapa para tentar de novo.
-          </p>
-        </div>
+        <ReenviarBling pedidoId={p.id} erro={p.bling_erro} />
       )}
 
       {dono && p.bling_pedido_id && (

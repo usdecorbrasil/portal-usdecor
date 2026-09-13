@@ -23,6 +23,20 @@ const camposBase = {
         .refine((v) => v === '' || (v.length >= 10 && v.length <= 13), 'Telefone inválido')
         .optional(),
   preco_metro: precoBr,
+
+  // Campos fiscais: sem eles o contato no Bling não serve para faturar
+  inscricao_estadual: z.string().trim().max(30).optional(),
+  indicador_ie: z.string().transform((v) => Number(v || 9))
+        .refine((v) => [1, 2, 9].includes(v), 'Indicador de IE inválido'),
+  cep: z.string().transform((v) => v.replace(/\D/g, ''))
+        .refine((v) => v === '' || v.length === 8, 'CEP deve ter 8 dígitos')
+        .optional(),
+  endereco: z.string().trim().max(200).optional(),
+  numero: z.string().trim().max(20).optional(),
+  complemento: z.string().trim().max(100).optional(),
+  bairro: z.string().trim().max(100).optional(),
+  municipio: z.string().trim().max(100).optional(),
+  uf: z.string().trim().toUpperCase().max(2).optional(),
 }
 
 const schemaCriar = z.object(camposBase)
@@ -31,7 +45,7 @@ const schemaEditar = z.object({ id: z.string().uuid(), ...camposBase })
 type ResultadoCriar =
   | { ok: true; senha: string; avisoBling?: string }
   | { ok: false; erro: string }
-type Resultado = { ok: true } | { ok: false; erro: string }
+type Resultado = { ok: true; avisoBling?: string } | { ok: false; erro: string }
 
 /** Admin e financeiro administram clientes */
 async function exigirAdmin() {
@@ -53,6 +67,15 @@ function lerCampos(formData: FormData) {
     contato: formData.get('contato') || undefined,
     telefone: formData.get('telefone') || undefined,
     preco_metro: formData.get('preco_metro'),
+    inscricao_estadual: formData.get('inscricao_estadual') || undefined,
+    indicador_ie: formData.get('indicador_ie') || '9',
+    cep: formData.get('cep') || undefined,
+    endereco: formData.get('endereco') || undefined,
+    numero: formData.get('numero') || undefined,
+    complemento: formData.get('complemento') || undefined,
+    bairro: formData.get('bairro') || undefined,
+    municipio: formData.get('municipio') || undefined,
+    uf: formData.get('uf') || undefined,
   }
 }
 
@@ -79,6 +102,15 @@ export async function criarCliente(
       contato: dados.contato || null,
       telefone: dados.telefone || null,
       preco_metro: dados.preco_metro,
+      inscricao_estadual: dados.inscricao_estadual || null,
+      indicador_ie: dados.indicador_ie,
+      cep: dados.cep || null,
+      endereco: dados.endereco || null,
+      numero: dados.numero || null,
+      complemento: dados.complemento || null,
+      bairro: dados.bairro || null,
+      municipio: dados.municipio || null,
+      uf: dados.uf || null,
     })
     .select('id')
     .single()
@@ -175,6 +207,15 @@ export async function editarCliente(
       contato: dados.contato || null,
       telefone: dados.telefone || null,
       preco_metro: dados.preco_metro,
+      inscricao_estadual: dados.inscricao_estadual || null,
+      indicador_ie: dados.indicador_ie,
+      cep: dados.cep || null,
+      endereco: dados.endereco || null,
+      numero: dados.numero || null,
+      complemento: dados.complemento || null,
+      bairro: dados.bairro || null,
+      municipio: dados.municipio || null,
+      uf: dados.uf || null,
     })
     .eq('id', id)
 
@@ -203,8 +244,13 @@ export async function editarCliente(
     }
   }
 
+  // Toda alteração espelha no ERP. Falhar aqui não desfaz o salvamento: os
+  // dados já estão certos no portal, mas quem editou precisa saber
+  const avisoBling = await tentarSincronizarContato(id)
+
   revalidatePath('/admin/clientes')
-  return { ok: true }
+  revalidatePath(`/admin/clientes/${id}`)
+  return { ok: true, avisoBling: avisoBling ?? undefined }
 }
 
 export async function alternarClienteAtivo(

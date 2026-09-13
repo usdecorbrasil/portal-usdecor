@@ -23,6 +23,15 @@ type Cliente = {
   em_aberto: number
   ativo: boolean
   arquivado: boolean
+  inscricao_estadual: string | null
+  indicador_ie: number | null
+  cep: string | null
+  endereco: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  municipio: string | null
+  uf: string | null
 }
 
 type Pagamentos = {
@@ -641,13 +650,122 @@ function ModalEditar({
             </div>
           </div>
 
+          {/* Sem estes campos o contato no Bling não serve para faturar */}
+          <div className="border-t border-[#EFEEE8] pt-4">
+            <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9B9A93] mb-3">
+              Dados fiscais — necessários para nota fiscal
+            </p>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="ec-indicador_ie"
+                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+                >
+                  INSCRIÇÃO ESTADUAL
+                </label>
+                <select
+                  id="ec-indicador_ie"
+                  name="indicador_ie"
+                  defaultValue={String(cliente.indicador_ie ?? 9)}
+                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
+                >
+                  <option value="9">Não contribuinte</option>
+                  <option value="1">Contribuinte de ICMS</option>
+                  <option value="2">Contribuinte isento</option>
+                </select>
+              </div>
+              <Campo
+                nome="inscricao_estadual"
+                rotulo="Nº DA INSCRIÇÃO ESTADUAL"
+                valor={cliente.inscricao_estadual ?? ''}
+                opcional
+              />
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4 mt-4">
+              <Campo nome="cep" rotulo="CEP" valor={cliente.cep ?? ''} opcional />
+              <div className="sm:col-span-2">
+                <Campo nome="endereco" rotulo="ENDEREÇO" valor={cliente.endereco ?? ''} opcional />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4 mt-4">
+              <Campo nome="numero" rotulo="NÚMERO" valor={cliente.numero ?? ''} opcional />
+              <div className="sm:col-span-2">
+                <Campo nome="complemento" rotulo="COMPLEMENTO" valor={cliente.complemento ?? ''} opcional />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4 mt-4">
+              <Campo nome="bairro" rotulo="BAIRRO" valor={cliente.bairro ?? ''} opcional />
+              <Campo nome="municipio" rotulo="MUNICÍPIO" valor={cliente.municipio ?? ''} opcional />
+              <div>
+                <label
+                  htmlFor="ec-uf"
+                  className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+                >
+                  UF
+                </label>
+                <select
+                  id="ec-uf"
+                  name="uf"
+                  defaultValue={cliente.uf ?? ''}
+                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
+                >
+                  <option value="">—</option>
+                  <option value="AC">AC</option>
+                  <option value="AL">AL</option>
+                  <option value="AP">AP</option>
+                  <option value="AM">AM</option>
+                  <option value="BA">BA</option>
+                  <option value="CE">CE</option>
+                  <option value="DF">DF</option>
+                  <option value="ES">ES</option>
+                  <option value="GO">GO</option>
+                  <option value="MA">MA</option>
+                  <option value="MT">MT</option>
+                  <option value="MS">MS</option>
+                  <option value="MG">MG</option>
+                  <option value="PA">PA</option>
+                  <option value="PB">PB</option>
+                  <option value="PR">PR</option>
+                  <option value="PE">PE</option>
+                  <option value="PI">PI</option>
+                  <option value="RJ">RJ</option>
+                  <option value="RN">RN</option>
+                  <option value="RS">RS</option>
+                  <option value="RO">RO</option>
+                  <option value="RR">RR</option>
+                  <option value="SC">SC</option>
+                  <option value="SP">SP</option>
+                  <option value="SE">SE</option>
+                  <option value="TO">TO</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           <p className="text-xs text-[#6E6E68] leading-relaxed">
             Alterar o e-mail também altera o login do cliente. Alterar o preço
-            não muda pedidos já feitos.
+            não muda pedidos já feitos. Os dados fiscais são espelhados no Bling.
           </p>
 
           {estado && !estado.ok && (
             <p className="text-sm text-[#B00063]">{estado.erro}</p>
+          )}
+
+          {/* Os dados já estão salvos no portal; o que pode ter falhado é o
+              espelho no ERP, e isso trava a nota fiscal lá na frente */}
+          {estado && estado.ok && estado.avisoBling && (
+            <div className="bg-[#FBF0D9] border border-[#C79600] rounded-sm px-3 py-2">
+              <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#C79600]">
+                Não foi atualizado no Bling
+              </p>
+              <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">
+                {estado.avisoBling}
+              </p>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-3 pt-1">
