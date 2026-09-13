@@ -644,8 +644,8 @@ function ModalEditar({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-[#131A2E]/70" onClick={aoFechar} />
 
-      <div className="relative bg-white rounded-sm w-full max-w-lg my-8">
-        <div className="flex items-center justify-between border-b border-[#DDDCD5] px-5 py-3">
+      <div className="relative bg-white rounded-sm w-full max-w-lg my-8 max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-[#DDDCD5] px-5 py-3 shrink-0">
           <h2 className="font-semibold tracking-tight">Editar cliente</h2>
           <button
             onClick={aoFechar}
@@ -656,8 +656,10 @@ function ModalEditar({
           </button>
         </div>
 
-        <form action={acao} className="p-5 space-y-4">
+        <form action={acao} className="flex flex-col min-h-0 flex-1">
           <input type="hidden" name="id" value={cliente.id} />
+
+          <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
 
           <div className="grid sm:grid-cols-2 gap-4">
             <Campo nome="razao_social" rotulo="RAZÃO SOCIAL" valor={cliente.razao_social} />
@@ -810,7 +812,9 @@ function ModalEditar({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3 pt-1">
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 p-5 pt-3 border-t border-[#EFEEE8] shrink-0">
             <button
               type="button"
               onClick={aoFechar}
