@@ -302,6 +302,9 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
   - **O domínio raiz e o `www` continuam sem registro** — quem digita
     `bestcolortecidos.com.br` não chega a lugar nenhum. O site institucional não está
     nessa zona.
+  - **Site institucional a fazer** (anotado em 13/09/2026): não existe nada em
+    `bestcolortecidos.com.br`. O portal fica no subdomínio e não muda de lugar; o site
+    é projeto separado, e quando existir é ele que ocupa a raiz e o `www`.
 - ~~Migrar do `.vercel.app` para o domínio próprio~~ — **feito em 12/09/2026**. O portal
   está em `https://portal.bestcolortecidos.com.br`, com certificado emitido. As
   variáveis na Vercel (`SITE_URL`, `BLING_REDIRECT_URI`, `RESEND_FROM`,
@@ -400,6 +403,24 @@ Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega
   com quantidade, preço e forma de pagamento. As colunas `emitir_nf_*` em `pedidos`
   continuam guardando a decisão vigente, que é o que a tela lê; a tabela guarda o
   caminho até ela.
+
+## Primeiro acesso: senha provisória
+
+Decidido em 13/09/2026. Vale para **equipe e cliente**: a senha do convite entra uma vez
+e o portal não abre até a pessoa criar a dela.
+
+- A marca é `app_metadata.senha_provisoria`, **não** `user_metadata`: o usuário escreve
+  no segundo pela API do Supabase e poderia limpar a marca sozinho, ficando com a senha
+  que está na caixa de entrada. Em `app_metadata` só a chave de serviço escreve.
+- **Fica no token, não numa tabela.** O proxy já recebe o usuário a cada requisição;
+  consultar uma coluna ali custaria uma ida ao banco em toda navegação do site.
+- Quem marca: `criarCliente`, `criarMembro` e as duas redefinições de senha do painel —
+  senha que o admin gera e manda por e-mail nasce provisória, sempre. Quem limpa é só
+  `definirPrimeiraSenha`, depois de a senha nova já estar valendo.
+- `/api` fica fora do desvio: redirecionar chamada de dados devolveria HTML onde o
+  cliente espera JSON.
+- Usuários que já existiam **não** têm a marca e seguem entrando direto. Para forçar a
+  troca em alguém, use "redefinir senha" no painel.
 
 ## Quem fez cada alteração
 

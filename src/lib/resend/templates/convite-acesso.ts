@@ -48,7 +48,8 @@ export function templateConviteAcesso({
                 </tr>
               </table>
               <p style="font-size:12px; color:#6E6E68; line-height:1.6; margin: 24px 0 0;">
-                Por segurança, recomendamos trocar essa senha após o primeiro acesso.
+                Esta senha vale só para entrar da primeira vez: o portal vai pedir que
+                você crie a sua antes de continuar.
               </p>
             </td>
           </tr>

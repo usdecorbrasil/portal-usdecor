@@ -60,6 +60,8 @@ export async function criarMembro(
     email,
     password: senha,
     email_confirm: true,
+    // Senha gerada aqui e enviada por e-mail: vale só até o primeiro acesso
+    app_metadata: { senha_provisoria: true },
   })
 
   if (erroUser || !novo.user) {
@@ -130,8 +132,11 @@ export async function redefinirSenhaMembro(
 
   const senha = gerarSenha()
 
+  // Volta a ser provisória: a senha nova vai por e-mail e precisa ser trocada
+  // no primeiro acesso, como no convite
   const { error } = await admin.auth.admin.updateUserById(parsed.data, {
     password: senha,
+    app_metadata: { senha_provisoria: true },
   })
 
   if (error) return { ok: false, erro: 'Não foi possível redefinir a senha.' }

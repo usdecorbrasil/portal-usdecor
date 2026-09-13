@@ -48,6 +48,33 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Senha ainda é a provisória do convite: nada do portal abre antes de a
+  // pessoa criar a própria senha. A marca vem em `app_metadata`, que já chega
+  // junto com o usuário — checar isso numa tabela custaria uma consulta a mais
+  // em toda requisição do site.
+  //
+  // `/api` fica de fora: redirecionar uma chamada de dados devolveria HTML
+  // onde o cliente espera JSON. Quem está nesse estado não passa das telas.
+  if (
+    user?.app_metadata?.senha_provisoria === true &&
+    !pathname.startsWith('/primeiro-acesso') &&
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/api')
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/primeiro-acesso'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+
+  // Já criou a senha e tenta voltar para a tela do primeiro acesso: não há
+  // mais o que fazer ali
+  if (user && pathname.startsWith('/primeiro-acesso')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
   // Já logado tentando abrir o login: manda para a raiz,
   // que decide o destino conforme o papel do usuário.
   if (user && pathname === '/login') {

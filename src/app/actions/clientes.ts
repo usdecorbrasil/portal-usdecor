@@ -134,6 +134,8 @@ export async function criarCliente(
       email: dados.email,
       password: senha,
       email_confirm: true,
+      // Senha gerada aqui e enviada por e-mail: vale só até o primeiro acesso
+      app_metadata: { senha_provisoria: true },
     })
 
   if (erroUser || !novoUser.user) {
@@ -317,11 +319,20 @@ export async function redefinirSenha(
 
   const senha = gerarSenha()
 
+  // Volta a ser provisória: quem recebe a senha nova por e-mail precisa
+  // trocá-la no primeiro acesso, como no convite
   const { error } = await admin.auth.admin.updateUserById(perfil.id, {
     password: senha,
+    app_metadata: { senha_provisoria: true },
   })
 
   if (error) return { ok: false, erro: 'Não foi possível redefinir a senha.' }
+
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: clienteId,
+    acao: 'senha',
+  })
 
   return { ok: true, senha }
 }

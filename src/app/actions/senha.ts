@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { urlDoSite } from '@/lib/site'
 
 const schema = z.object({
@@ -126,6 +127,76 @@ export async function alterarMinhaSenha(
 
   if (error) {
     return { ok: false, erro: 'Não foi possível alterar a senha. Tente novamente.' }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Primeiro acesso: quem entrou com a senha provisória do convite define a
+ * própria senha antes de usar o portal.
+ *
+ * A senha do convite trafega por e-mail e fica na caixa de entrada de quem
+ * recebeu — e de quem tiver acesso a ela. Enquanto for essa a senha da conta,
+ * o acesso não é de fato do usuário.
+ *
+ * A marca de "provisória" vive em `app_metadata`, e não em `user_metadata`,
+ * porque o próprio usuário consegue escrever no segundo: ele poderia limpar a
+ * marca e continuar com a senha do e-mail. Em `app_metadata` só a chave de
+ * serviço escreve, e é o que esta ação faz no fim.
+ *
+ * Não pede a senha atual: ela acabou de ser usada para entrar.
+ */
+export async function definirPrimeiraSenha(
+  _prev: unknown,
+  formData: FormData
+): Promise<Resultado> {
+  const parsed = schemaNova.safeParse({
+    senha: formData.get('senha'),
+    confirmacao: formData.get('confirmacao'),
+  })
+
+  if (!parsed.success) {
+    return { ok: false, erro: parsed.error.issues[0].message }
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return { ok: false, erro: 'Sessão expirada. Entre novamente.' }
+
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data.senha,
+  })
+
+  if (error) {
+    // O Supabase recusa repetir a senha anterior — que aqui é justamente a do
+    // e-mail, o caso que esta tela existe para evitar
+    const repetida = error.message.toLowerCase().includes('different')
+    return {
+      ok: false,
+      erro: repetida
+        ? 'Escolha uma senha diferente da que veio no e-mail.'
+        : 'Não foi possível salvar a senha. Tente novamente.',
+    }
+  }
+
+  // Só depois de a senha nova estar valendo. Na ordem inversa, uma falha no
+  // meio liberaria o portal com a senha do e-mail ainda em pé
+  const admin = createAdminClient()
+
+  const { error: erroMarca } = await admin.auth.admin.updateUserById(user.id, {
+    app_metadata: { senha_provisoria: false },
+  })
+
+  if (erroMarca) {
+    return {
+      ok: false,
+      erro: 'A senha foi alterada, mas o portal não liberou o acesso. Entre em contato.',
+    }
   }
 
   return { ok: true }
