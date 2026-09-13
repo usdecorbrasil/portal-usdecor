@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
 import { urlDoSite } from '@/lib/site'
+import { registrar, diferencas, ROTULOS_EQUIPE } from '@/lib/auditoria'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 type ComSenha = { ok: true; senha: string } | { ok: false; erro: string }
@@ -95,6 +96,17 @@ export async function criarMembro(
     }),
   })
 
+  await registrar({
+    entidade: 'equipe',
+    entidadeId: novo.user.id,
+    acao: 'criou',
+    campos: [
+      { campo: 'Nome', de: null, para: nome },
+      { campo: 'E-mail de acesso', de: null, para: email },
+      { campo: 'Papel', de: null, para: papel },
+    ],
+  })
+
   revalidatePath('/admin/configuracoes')
   return { ok: true, senha }
 }
@@ -123,6 +135,13 @@ export async function redefinirSenhaMembro(
   })
 
   if (error) return { ok: false, erro: 'Não foi possível redefinir a senha.' }
+
+  // A senha não é registrada, só o fato de ter sido trocada e por quem
+  await registrar({
+    entidade: 'equipe',
+    entidadeId: parsed.data,
+    acao: 'senha',
+  })
 
   return { ok: true, senha }
 }
@@ -157,11 +176,15 @@ export async function atualizarMembro(
   const admin = createAdminClient()
 
   const { data: perfil } = await admin
-    .from('profiles').select('role').eq('id', parsed.data.usuarioId).single()
+    .from('profiles').select('role, nome').eq('id', parsed.data.usuarioId).single()
 
   if (!perfil || perfil.role === 'cliente') {
     return { ok: false, erro: 'Usuário não é da equipe.' }
   }
+
+  const { data: usuarioAntes } = await admin.auth.admin.getUserById(
+    parsed.data.usuarioId
+  )
 
   // Atualiza e-mail em auth.users
   const { error: erroEmail } = await admin.auth.admin.updateUserById(
@@ -187,6 +210,25 @@ export async function atualizarMembro(
   if (erroPerfil) {
     return { ok: false, erro: 'Não foi possível salvar as alterações.' }
   }
+
+  await registrar({
+    entidade: 'equipe',
+    entidadeId: parsed.data.usuarioId,
+    acao: 'editou',
+    campos: diferencas(
+      {
+        nome: perfil.nome,
+        email: usuarioAntes?.user?.email,
+        role: perfil.role,
+      },
+      {
+        nome: parsed.data.nome,
+        email: parsed.data.email,
+        role: parsed.data.papel,
+      },
+      ROTULOS_EQUIPE
+    ),
+  })
 
   revalidatePath('/admin/configuracoes')
   return { ok: true }
@@ -220,6 +262,12 @@ export async function alternarMembroAtivo(
     .from('profiles').update({ ativo }).eq('id', parsed.data)
 
   if (error) return { ok: false, erro: 'Não foi possível alterar o status.' }
+
+  await registrar({
+    entidade: 'equipe',
+    entidadeId: parsed.data,
+    acao: ativo ? 'ativou' : 'desativou',
+  })
 
   revalidatePath('/admin/configuracoes')
   return { ok: true }
@@ -278,6 +326,12 @@ export async function arquivarMembro(usuarioId: string): Promise<Resultado> {
     autor_id: meuId,
   })
 
+  await registrar({
+    entidade: 'equipe',
+    entidadeId: parsed.data,
+    acao: 'arquivou',
+  })
+
   revalidatePath('/admin/configuracoes')
   return { ok: true }
 }
@@ -328,6 +382,12 @@ export async function restaurarMembro(usuarioId: string): Promise<Resultado> {
   if (erroPerfil) {
     return { ok: false, erro: 'Não foi possível restaurar o acesso.' }
   }
+
+  await registrar({
+    entidade: 'equipe',
+    entidadeId: parsed.data,
+    acao: 'restaurou',
+  })
 
   revalidatePath('/admin/configuracoes')
   return { ok: true }

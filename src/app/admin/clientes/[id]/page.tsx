@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { buscarResumoPagamentos } from '@/app/actions/clientes'
 import DetalheCliente from './detalhe-cliente'
+import HistoricoAlteracoes from '@/components/historico-alteracoes'
 
 export default async function ClienteDetalhePage({
   params,
@@ -52,6 +53,8 @@ export default async function ClienteDetalhePage({
         }}
         pagamentos={resumoPagamentos[id] ?? null}
       />
+
+      <HistoricoAlteracoes entidade="cliente" entidadeId={id} />
     </div>
   )
 }

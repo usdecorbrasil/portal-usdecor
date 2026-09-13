@@ -417,8 +417,32 @@ de cancelamento.
 - A consulta do pedido tem `const campos: string` de propósito: sem a anotação o
   TypeScript monta o tipo do retorno a partir do texto do `select`, e com esta
   quantidade de tabelas embutidas estoura com *union type too complex*.
-- **Fora do pedido ainda não há trilha**: editar cadastro de cliente não registra
-  histórico (só limite de crédito, em `cliente_limite_historico`).
+### Fora do pedido: tabela `auditoria` (`docs/sql/010`)
+
+Cadastro de cliente, equipe e configurações não tinham rastro nenhum. Agora têm, numa
+tabela genérica — `entidade` + `entidade_id` + `acao` + `campos` (JSON
+`[{campo, de, para}]`) + `motivo` + `criado_por`.
+
+- **Uma tabela só, não uma por entidade.** São mudanças de cadastro, sem cálculo em cima
+  delas; a pergunta é sempre "o que houve com este cliente / este usuário". Um cadastro
+  de cliente tem 15 campos — coluna por campo não se sustentaria.
+- **O autor vem da sessão, não do banco.** Estas ações gravam com chave de serviço, onde
+  `auth.uid()` não existe. `src/lib/auditoria.ts` lê o usuário logado e grava junto.
+- **`registrar()` nunca lança e nunca desfaz nada.** Quando ela roda, a mudança já foi
+  salva — devolver erro seria mentir sobre o que aconteceu. Falha vai para o log do
+  servidor. Edição que não mudou campo nenhum não vira linha.
+- **Limite de crédito grava duas vezes** de propósito: a RPC do banco continua
+  alimentando `cliente_limite_historico` (auditoria de verdade) e a ação repete em
+  `auditoria` para a tela do cliente mostrar uma lista só.
+- Coberto: criar/editar/ativar/desativar/arquivar cliente, preço por metro, limite de
+  crédito, criar/editar/ativar/desativar/arquivar/restaurar membro da equipe, redefinir
+  senha (só o fato, nunca a senha) e as formas de pagamento — estas com diferença
+  legível ("Boleto · máximo de parcelas: 3 → 4").
+- **Não coberto de propósito**: catálogo e produtos. São 412 produtos com importação em
+  lote; registrar cada um afogaria o resto do histórico. Se precisar, é melhor tabela
+  própria com a operação em lote como unidade, não linha por produto.
+- Aparece em `src/components/historico-alteracoes.tsx`, usado na tela do cliente
+  (filtrada por ele) e em Configurações (equipe + pagamento, sem filtro de registro).
 
 ## Formas de pagamento — configuráveis
 

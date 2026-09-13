@@ -9,6 +9,53 @@ import {
   PADRAO,
   type ConfigPagamento,
 } from '@/lib/pagamento/config'
+import { registrar, type CampoAlterado } from '@/lib/auditoria'
+
+const NOME_FORMA: Record<string, string> = {
+  boleto: 'Boleto',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+}
+
+const NOME_AJUSTE: Record<string, string> = {
+  ativa: 'ativa',
+  maxParcelas: 'máximo de parcelas',
+  valorMinimoParcela: 'valor mínimo por parcela',
+  percentual: 'percentual',
+  taxaFixa: 'taxa fixa',
+  intervaloDias: 'intervalo entre boletos',
+}
+
+/**
+ * Diferença entre duas configurações de pagamento, em linhas legíveis
+ * ("Boleto · máximo de parcelas: 3 → 4").
+ *
+ * A configuração é um JSON de três formas por seis ajustes; guardar o JSON
+ * inteiro no histórico obrigaria quem consulta a comparar os dois na mão.
+ */
+function diferencasPagamento(
+  antes: ConfigPagamento,
+  depois: ConfigPagamento
+): CampoAlterado[] {
+  const mudou: CampoAlterado[] = []
+
+  for (const [forma, nomeForma] of Object.entries(NOME_FORMA)) {
+    const a = antes[forma as keyof ConfigPagamento] as Record<string, unknown>
+    const d = depois[forma as keyof ConfigPagamento] as Record<string, unknown>
+    if (!a || !d) continue
+
+    for (const [ajuste, nomeAjuste] of Object.entries(NOME_AJUSTE)) {
+      if (String(a[ajuste]) === String(d[ajuste])) continue
+      mudou.push({
+        campo: `${nomeForma} · ${nomeAjuste}`,
+        de: a[ajuste] === undefined ? null : String(a[ajuste]),
+        para: d[ajuste] === undefined ? null : String(d[ajuste]),
+      })
+    }
+  }
+
+  return mudou
+}
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
@@ -88,6 +135,9 @@ export async function atualizarConfigPagamento(
     return { ok: false, erro: 'Deixe ao menos uma forma de pagamento ativa.' }
   }
 
+  // Lida antes de gravar: é o que vira a linha de auditoria
+  const antes = await buscarConfigPagamento()
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -135,6 +185,13 @@ export async function atualizarConfigPagamento(
       .eq('chave', chave)
   }
 
+
+  await registrar({
+    entidade: 'configuracao',
+    entidadeId: null,
+    acao: 'editou',
+    campos: diferencasPagamento(antes, normalizar(parsed.data)),
+  })
 
   revalidatePath('/admin/configuracoes')
   revalidatePath('/carrinho')

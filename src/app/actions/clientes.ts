@@ -8,6 +8,11 @@ import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
 import { urlDoSite } from '@/lib/site'
 import { tentarSincronizarContato } from '@/lib/bling/contato'
+import {
+  registrar,
+  diferencas,
+  ROTULOS_CLIENTE,
+} from '@/lib/auditoria'
 
 const precoBr = z.string()
   .transform((v) => Number(String(v).replace(',', '.')))
@@ -171,6 +176,16 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
     }),
   })
 
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: cliente.id,
+    acao: 'criou',
+    campos: [
+      { campo: 'Razão social', de: null, para: dados.razao_social },
+      { campo: 'Preço por metro', de: null, para: dados.preco_metro.toFixed(2) },
+    ],
+  })
+
   revalidatePath('/admin/clientes')
   return { ok: true, senha, avisoBling: avisoBling ?? undefined }
 }
@@ -193,8 +208,12 @@ export async function editarCliente(
   const { id, ...dados } = parsed.data
   const admin = createAdminClient()
 
+  // Lido antes para comparar depois: é o que vira a linha de auditoria
   const { data: atual } = await admin
-    .from('clientes').select('email').eq('id', id).single()
+    .from('clientes')
+    .select(Object.keys(ROTULOS_CLIENTE).join(', '))
+    .eq('id', id)
+    .single<Record<string, unknown>>()
 
   if (!atual) return { ok: false, erro: 'Cliente não encontrado.' }
 
@@ -224,6 +243,13 @@ export async function editarCliente(
     }
     return { ok: false, erro: 'Não foi possível salvar as alterações.' }
   }
+
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: id,
+    acao: 'editou',
+    campos: diferencas(atual, dados, ROTULOS_CLIENTE),
+  })
 
   if (atual.email !== dados.email) {
     const { data: perfil } = await admin
@@ -267,6 +293,12 @@ export async function alternarClienteAtivo(
 
   await admin.from('profiles').update({ ativo }).eq('cliente_id', clienteId)
 
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: clienteId,
+    acao: ativo ? 'ativou' : 'desativou',
+  })
+
   revalidatePath('/admin/clientes')
   return { ok: true }
 }
@@ -306,6 +338,9 @@ export async function atualizarLimiteCredito(
 ): Promise<Resultado> {
   const supabase = await createClient()
 
+  const { data: antes } = await supabase
+    .from('clientes').select('limite_credito').eq('id', clienteId).maybeSingle()
+
   const { error } = await supabase.rpc('atualizar_limite_credito', {
     p_cliente_id: clienteId,
     p_novo_limite: novoLimite,
@@ -314,7 +349,25 @@ export async function atualizarLimiteCredito(
 
   if (error) return { ok: false, erro: error.message }
 
+  // O banco já guarda isto em `cliente_limite_historico`, com autor e motivo.
+  // Repetir aqui é de propósito: a tela do cliente mostra uma lista só, e ler
+  // de duas tabelas para montá-la sairia mais caro que gravar duas vezes
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: clienteId,
+    acao: 'editou',
+    motivo,
+    campos: [
+      {
+        campo: 'Limite de crédito',
+        de: antes ? Number(antes.limite_credito).toFixed(2) : null,
+        para: novoLimite.toFixed(2),
+      },
+    ],
+  })
+
   revalidatePath('/admin/clientes')
+  revalidatePath(`/admin/clientes/${clienteId}`)
   return { ok: true }
 }
 
@@ -471,6 +524,12 @@ export async function arquivarCliente(clienteId: string): Promise<Resultado> {
     })
   }
 
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: parsed.data,
+    acao: 'arquivou',
+  })
+
   revalidatePath('/admin/clientes')
   return { ok: true }
 }
@@ -497,12 +556,31 @@ export async function atualizarPrecoMetro(
 
   const admin = createAdminClient()
 
+  const { data: antes } = await admin
+    .from('clientes')
+    .select('preco_metro')
+    .eq('id', parsed.data.clienteId)
+    .maybeSingle()
+
   const { error } = await admin
     .from('clientes')
     .update({ preco_metro: parsed.data.novoPreco })
     .eq('id', parsed.data.clienteId)
 
   if (error) return { ok: false, erro: 'Não foi possível salvar o preço.' }
+
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: parsed.data.clienteId,
+    acao: 'editou',
+    campos: [
+      {
+        campo: 'Preço por metro',
+        de: antes ? Number(antes.preco_metro).toFixed(2) : null,
+        para: parsed.data.novoPreco.toFixed(2),
+      },
+    ],
+  })
 
   revalidatePath('/admin/clientes')
   revalidatePath(`/admin/clientes/${parsed.data.clienteId}`)

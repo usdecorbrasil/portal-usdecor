@@ -7,6 +7,7 @@ import ConfigPagamento from './config-pagamento'
 import IntegracaoBling from './integracao-bling'
 import { buscarConfigPagamento } from '@/app/actions/configuracoes'
 import { lerEstadoBling } from '@/lib/bling/cliente'
+import HistoricoAlteracoes from '@/components/historico-alteracoes'
 
 export default async function ConfiguracoesPage() {
   const perfil = await lerPerfil()
@@ -86,6 +87,19 @@ export default async function ConfiguracoesPage() {
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
         <IntegracaoBling estado={estadoBling} />
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-3 flex items-center gap-2">
+          HISTÓRICO
+          <span className="flex-1 h-px bg-[#DDDCD5]" />
+        </h2>
+        {/* Equipe e pagamento na mesma lista: é a pergunta que se faz aqui —
+            o que andou mudando nas configurações, e por quem */}
+        <HistoricoAlteracoes
+          entidade={['configuracao', 'equipe']}
+          titulo="ÚLTIMAS ALTERAÇÕES"
+        />
       </div>
     </div>
   )
