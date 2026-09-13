@@ -208,6 +208,24 @@ export async function cancelarPedido(
   return { ok: true }
 }
 
+/** Etapas em que quantidade e preço não mudam mais: o valor já foi ao Bling. */
+const VALOR_FECHADO = ['pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado']
+
+async function valorFechado(pedidoId: string): Promise<boolean> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('pedido_status_historico')
+    .select('status')
+    .eq('pedido_id', pedidoId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return !!data && VALOR_FECHADO.includes(String(data.status))
+}
+
+const ERRO_FECHADO =
+  'O pedido já está pronto: quantidade e preço não mudam mais. Se precisar, cancele e refaça.'
+
 export async function ajustarItem(
   itemId: string,
   quantidade: number,
@@ -224,6 +242,16 @@ export async function ajustarItem(
   }
 
   const supabase = await createClient()
+
+  const { data: item } = await supabase
+    .from('pedido_itens')
+    .select('pedido_id')
+    .eq('id', parsed.data.itemId)
+    .maybeSingle()
+
+  if (item && (await valorFechado(String(item.pedido_id)))) {
+    return { ok: false, erro: ERRO_FECHADO }
+  }
 
   const { error } = await supabase.rpc('admin_ajustar_item', {
     p_item_id: parsed.data.itemId,
@@ -256,6 +284,10 @@ export async function adicionarItem(
   }
 
   const supabase = await createClient()
+
+  if (await valorFechado(parsed.data.pedidoId)) {
+    return { ok: false, erro: ERRO_FECHADO }
+  }
 
   const { error } = await supabase.rpc('admin_adicionar_item', {
     p_pedido_id: parsed.data.pedidoId,
@@ -291,6 +323,10 @@ export async function alterarPrecoPedido(
   }
 
   const supabase = await createClient()
+
+  if (await valorFechado(parsed.data.pedidoId)) {
+    return { ok: false, erro: ERRO_FECHADO }
+  }
 
   const { error } = await supabase.rpc('admin_alterar_preco_pedido', {
     p_pedido_id: parsed.data.pedidoId,

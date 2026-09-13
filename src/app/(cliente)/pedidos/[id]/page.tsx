@@ -140,10 +140,9 @@ export default async function DetalhePedidoPage({
   const aberta = solicitacoes.find((s) => s.status === 'aberta')
   const recusada = solicitacoes.find((s) => s.status === 'recusada')
 
-  const podeSolicitar =
-    !cancelado &&
-    !aguardando &&
-    !['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(atual)
+  // Só enquanto o pedido está confirmado e ainda não entrou em produção:
+  // depois disso já há papel impresso, e cancelar vira conversa com a equipe
+  const podeSolicitar = !cancelado && atual === 'recebido'
 
   const unidadesTotal = itens.reduce(
     (a, i) => a + Number(i.quantidade_faturada),

@@ -134,6 +134,9 @@ export default function PainelAcoes({
   const passouNF = usados.some((s) =>
     ['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(s)
   )
+  // A partir de "pronto" o pedido já foi ao Bling com metragem e valor:
+  // mexer em quantidade ou preço aqui deixaria o ERP com outro pedido
+  const valorFechado = passouNF || idx >= ORDEM.indexOf('pronto')
   const ehParcelado = formaPagamento === 'boleto_parcelado'
 
   const precoAtual = itens[0]?.precoMetro ?? 0
@@ -565,14 +568,14 @@ export default function PainelAcoes({
           </button>
           {ajustesAbertos && (
             <div className="space-y-2 mt-3">
-              {podeCancelarOuAjustar && !passouNF && (
+              {podeCancelarOuAjustar && !valorFechado && (
                 <BotaoAcao
                   titulo="Ajustar quantidades"
                   legenda="reduz ou aumenta o que será faturado"
                   onClick={() => setTela('ajustar')}
                 />
               )}
-              {podeCancelarOuAjustar && !passouNF && (
+              {podeCancelarOuAjustar && !valorFechado && (
                 <BotaoAcao
                   titulo="Alterar preço deste pedido"
                   legenda={`hoje R$ ${brl(precoAtual)}/m · padrão do cliente R$ ${brl(precoCliente)}/m`}
