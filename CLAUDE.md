@@ -328,6 +328,22 @@ O erro do Bling aparece na própria tela em qualquer um dos três casos.
     e-mail avisa que os boletos chegam em seguida, em vez de mostrar espaço vazio.
 - Pedidos estampados antes da migração de custos não têm custo gravado e aparecem na
   Apuração com lucro igual à receita inteira.
+- **Limpar os dados de teste do banco** (anotado em 12/09/2026). Situação em 12/09:
+  9 clientes, dos quais **5 são de teste** — "Cliente Top", "Cliente Numero Dois",
+  "Cliente Tres", "cliente quatri", "cliente estampa", criados entre 14 e 24/08. Os de
+  26/08 (ROSA D'COR, Mirela Tramare, Ju Decor, Influence) são reais e existem no Bling.
+  Volume total: 19 pedidos, 41 itens, 17 parcelas, 63 lançamentos de status, 20 linhas
+  de `email_log`, 412 produtos, 6 catálogos, 12 profiles.
+  - **Não é um `delete` simples.** Apagar cliente atinge `profiles` **e o usuário em
+    `auth.users`** (que o cascade do banco não alcança — tem que ir pela Admin API),
+    além de `catalogos`, `produtos`, `envios_arte` e todos os pedidos com seus itens,
+    parcelas, histórico e `email_log`.
+  - **Fazer isso antes de a integração começar a escrever no Bling.** Hoje nenhum
+    pedido tem `bling_pedido_id` e nenhum cliente tem `bling_contato_id`, então apagar
+    não deixa órfão no ERP. Depois do primeiro pedido sincronizado, cada exclusão no
+    portal passa a exigir decidir o que fazer com o correspondente no Bling.
+  - Conferir também se algum produto/catálogo pertence só a cliente de teste antes de
+    apagar — 412 produtos é catálogo real de cliente real na maior parte.
 - **Aviso interno de pedido novo (a construir)** — decidido em 12/09/2026: quando entrar
   pedido de qualquer cliente, o administrador recebe e-mail de aviso. Quem recebe e quais
   tipos de e-mail cada um recebe ficam num **setup de notificações dentro de
