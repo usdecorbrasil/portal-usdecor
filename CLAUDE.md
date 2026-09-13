@@ -210,6 +210,29 @@ ali a imagem é o conteúdo.
   pelo servidor, alterações logadas em auditoria. Segurança: sessões ativas, histórico
   de acessos, exportação de dados (LGPD).
 
+## Integração com o Bling — o que já existe
+
+- **Cliente cadastrado no portal vira contato no Bling** (`src/lib/bling/contato.ts`),
+  no momento do cadastro e não na hora do pedido: quem cadastra está na frente da tela e
+  pode corrigir o que faltar. Se já houver contato com o mesmo documento, só guarda o
+  vínculo em `clientes.bling_contato_id` — nunca sobrescreve, porque contato do ERP tem
+  endereço e IE que o portal não tem. Pessoa jurídica vai com `indicadorIe: 9` (não
+  contribuinte), senão o Bling recusa.
+- **Pedido de venda criado ao lançar "Pedido pronto"** (`src/lib/bling/pedido.ts`), não
+  na confirmação: o valor é metragem × preço/metro e a metragem só existe depois da
+  estampa. Vai com **uma linha de metragem** (produto genérico `ESTAMPA`, unidade `m`),
+  não uma por arte — no portal a quantidade de peças serve à produção, não ao preço, e
+  somar peças não fecharia com o total nem com os boletos. A taxa da forma de pagamento
+  entra em `outrasDespesas`.
+- Configuração em `configuracoes.bling` (JSON): `produtoEstampaCodigo` e
+  `formaPagamentoId` (11079000 = "Boleto - Bling Conta").
+- **A API limita 3 requisições por segundo** — daí as pausas entre chamadas.
+- Falha de sincronia **nunca** derruba a operação do portal: fica em
+  `pedidos.bling_erro` / `bling_sync_status` e aparece na tela do pedido; no cadastro de
+  cliente, aparece como aviso no próprio formulário.
+- Já verificado nesta conta: os SKUs do portal **são** os códigos de produto do Bling
+  (`D10409` etc.), e o token já vem em **JWT** (a nota de migração abaixo está vencida).
+
 ## Integração com o Bling
 
 - API v3, OAuth 2.0. Credenciais na área de aplicativos do painel Bling.

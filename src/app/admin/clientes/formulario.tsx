@@ -73,6 +73,23 @@ export default function FormularioCliente() {
             <code className="block bg-white border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm break-all">
               {estado.senha}
             </code>
+
+            {/* O cliente foi criado no portal de qualquer forma; o que pode ter
+                falhado é o espelho no ERP, e isso trava o pedido lá na frente */}
+            {estado.avisoBling && (
+              <div className="bg-[#FBF0D9] border border-[#C79600] rounded-sm px-3 py-2 mt-3">
+                <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#C79600]">
+                  Não foi cadastrado no Bling
+                </p>
+                <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">
+                  {estado.avisoBling}
+                </p>
+                <p className="text-[11px] text-[#6E6E68] mt-1.5">
+                  Cadastre o contato no Bling antes do primeiro pedido deste
+                  cliente, senão o pedido não será enviado ao ERP.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

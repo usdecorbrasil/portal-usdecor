@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
 import { urlDoSite } from '@/lib/site'
+import { tentarSincronizarContato } from '@/lib/bling/contato'
 
 const precoBr = z.string()
   .transform((v) => Number(String(v).replace(',', '.')))
@@ -27,7 +28,9 @@ const camposBase = {
 const schemaCriar = z.object(camposBase)
 const schemaEditar = z.object({ id: z.string().uuid(), ...camposBase })
 
-type ResultadoCriar = { ok: true; senha: string } | { ok: false; erro: string }
+type ResultadoCriar =
+  | { ok: true; senha: string; avisoBling?: string }
+  | { ok: false; erro: string }
 type Resultado = { ok: true } | { ok: false; erro: string }
 
 /** Admin e financeiro administram clientes */
@@ -119,6 +122,10 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
     return { ok: false, erro: 'Não foi possível vincular o acesso.' }
   }
 
+  // Espelha no ERP. Falhar aqui não desfaz o cadastro: o cliente já existe no
+  // portal e o vínculo pode ser refeito depois, mas quem cadastrou precisa saber
+  const avisoBling = await tentarSincronizarContato(cliente.id)
+
   // E-mail de convite — não bloqueia o cadastro se falhar
   await enviarEmail({
     tipo: 'convite_acesso',
@@ -133,7 +140,7 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
   })
 
   revalidatePath('/admin/clientes')
-  return { ok: true, senha }
+  return { ok: true, senha, avisoBling: avisoBling ?? undefined }
 }
 
 export async function editarCliente(
