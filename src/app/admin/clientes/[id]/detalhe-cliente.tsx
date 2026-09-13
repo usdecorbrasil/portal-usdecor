@@ -7,6 +7,7 @@ import {
   alternarClienteAtivo,
   redefinirSenha,
   atualizarLimiteCredito,
+  atualizarPrecoMetro,
   buscarHistoricoPagamentos,
   arquivarCliente,
 } from '@/app/actions/clientes'
@@ -75,7 +76,7 @@ export default function DetalheCliente({
 }) {
   const router = useRouter()
   const [editando, setEditando] = useState(false)
-  const [editandoLimite, setEditandoLimite] = useState(false)
+  const [editandoComercial, setEditandoComercial] = useState(false)
   const [arquivando, setArquivando] = useState(false)
   const [senhaNova, setSenhaNova] = useState<string | null>(null)
   const [confirmando, setConfirmando] = useState(false)
@@ -190,6 +191,21 @@ export default function DetalheCliente({
       </div>
 
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
+        {/* Preço e limite são as duas condições comerciais do cliente e mudam
+            juntas na conversa; editá-las aqui evita abrir o cadastro inteiro,
+            que expunha CNPJ e e-mail de acesso a troca acidental */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9B9A93]">
+            Condições comerciais
+          </p>
+          <button
+            onClick={() => setEditandoComercial(true)}
+            className="text-xs text-[#0090D8] hover:underline"
+          >
+            editar
+          </button>
+        </div>
+
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-sm text-[#6E6E68]">Preço por metro</span>
           <span className="font-mono font-semibold text-lg">
@@ -314,12 +330,6 @@ export default function DetalheCliente({
                 EDITAR
               </button>
               <button
-                onClick={() => setEditandoLimite(true)}
-                className="border border-[#DDDCD5] rounded-sm py-2.5 text-xs tracking-wide text-[#6E6E68] hover:border-[#0090D8] hover:text-[#0090D8]"
-              >
-                LIMITE DE CRÉDITO
-              </button>
-              <button
                 onClick={novaSenha}
                 disabled={pendente}
                 className="border border-[#DDDCD5] rounded-sm py-2.5 text-xs tracking-wide text-[#6E6E68] hover:border-[#131A2E] hover:text-[#131A2E] disabled:opacity-50"
@@ -347,10 +357,10 @@ export default function DetalheCliente({
         <ModalEditar cliente={cliente} aoFechar={() => setEditando(false)} />
       )}
 
-      {editandoLimite && (
-        <ModalLimiteCredito
+      {editandoComercial && (
+        <ModalComercial
           cliente={cliente}
-          aoFechar={() => setEditandoLimite(false)}
+          aoFechar={() => setEditandoComercial(false)}
         />
       )}
     </div>
@@ -490,129 +500,6 @@ function StatusBadge({
   return <span className="text-[#6E6E68]">aguardando</span>
 }
 
-function ModalLimiteCredito({
-  cliente,
-  aoFechar,
-}: {
-  cliente: Cliente
-  aoFechar: () => void
-}) {
-  const [novoLimite, setNovoLimite] = useState(
-    cliente.limite_credito.toFixed(2).replace('.', ',')
-  )
-  const [motivo, setMotivo] = useState('')
-  const [erro, setErro] = useState('')
-  const [pendente, iniciar] = useTransition()
-
-  useEffect(() => {
-    function tecla(e: KeyboardEvent) {
-      if (e.key === 'Escape') aoFechar()
-    }
-    document.addEventListener('keydown', tecla)
-    const overflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', tecla)
-      document.body.style.overflow = overflow
-    }
-  }, [aoFechar])
-
-  function salvar() {
-    setErro('')
-
-    const valor = Number(novoLimite.replace(',', '.'))
-    if (isNaN(valor) || valor < 0) {
-      setErro('Informe um valor válido')
-      return
-    }
-
-    if (motivo.trim().length < 10) {
-      setErro('Motivo precisa ter pelo menos 10 caracteres')
-      return
-    }
-
-    iniciar(async () => {
-      const r = await atualizarLimiteCredito(cliente.id, valor, motivo)
-      if (r.ok) {
-        aoFechar()
-        window.location.reload()
-      } else setErro(r.erro)
-    })
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="absolute inset-0 bg-[#131A2E]/70" onClick={aoFechar} />
-
-      <div className="relative bg-white rounded-sm w-full max-w-md my-8">
-        <div className="flex items-center justify-between border-b border-[#DDDCD5] px-5 py-3">
-          <h2 className="font-semibold tracking-tight">Limite de crédito</h2>
-          <button
-            onClick={aoFechar}
-            aria-label="Fechar"
-            className="text-[#6E6E68] hover:text-[#131A2E] text-xl leading-none"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          <p className="text-sm text-[#6E6E68]">
-            {cliente.razao_social} — hoje com{' '}
-            <span className="font-mono font-semibold text-[#131A2E]">
-              R$ {brl(cliente.em_aberto)}
-            </span>{' '}
-            em aberto
-          </p>
-
-          <div>
-            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
-              NOVO LIMITE
-            </label>
-            <input
-              value={novoLimite}
-              onChange={(e) => setNovoLimite(e.target.value)}
-              inputMode="decimal"
-              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
-              MOTIVO<span className="text-[#B00063] ml-1">*</span>
-            </label>
-            <textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              rows={3}
-              placeholder="Por que o limite está mudando (mín. 10 caracteres)"
-              className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
-            />
-          </div>
-
-          {erro && <p className="text-sm text-[#B00063]">{erro}</p>}
-
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <button
-              type="button"
-              onClick={aoFechar}
-              className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide"
-            >
-              CANCELAR
-            </button>
-            <button
-              onClick={salvar}
-              disabled={pendente}
-              className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
-            >
-              {pendente ? 'SALVANDO...' : 'SALVAR'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function ModalEditar({
   cliente,
@@ -673,25 +560,6 @@ function ModalEditar({
 
           <div className="grid sm:grid-cols-2 gap-4">
             <Campo nome="telefone" rotulo="TELEFONE" valor={cliente.telefone ?? ''} opcional />
-            <div>
-              <label
-                htmlFor="ec-preco_metro"
-                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
-              >
-                PREÇO POR METRO
-              </label>
-              <input
-                id="ec-preco_metro"
-                name="preco_metro"
-                required
-                inputMode="decimal"
-                defaultValue={cliente.preco_metro.toFixed(2).replace('.', ',')}
-                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
-              />
-              <p className="text-xs text-[#6E6E68] mt-1">
-                Vale para todas as artes deste cliente
-              </p>
-            </div>
           </div>
 
           {/* Sem estes campos o contato no Bling não serve para faturar */}
@@ -791,8 +659,9 @@ function ModalEditar({
           </div>
 
           <p className="text-xs text-[#6E6E68] leading-relaxed">
-            Alterar o e-mail também altera o login do cliente. Alterar o preço
-            não muda pedidos já feitos. Os dados fiscais são espelhados no Bling.
+            Alterar o e-mail também altera o login do cliente. Os dados fiscais
+            são espelhados no Bling. O preço por metro é editado na tela do
+            cliente.
           </p>
 
           {estado && !estado.ok && (
@@ -909,4 +778,191 @@ function formatarTelefone(v: string | null) {
   if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
   if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
   return d || null
+}
+
+/* ------------------------- condições comerciais ------------------------- */
+
+/**
+ * Preço por metro e limite de crédito no mesmo lugar: são as duas condições
+ * que se negociam com o cliente, e quase sempre mudam na mesma conversa.
+ *
+ * O motivo só é exigido quando o limite muda. Ele vai para
+ * `cliente_limite_historico` e é obrigação do banco; cobrar justificativa para
+ * corrigir um preço digitado errado seria atrito sem propósito.
+ */
+function ModalComercial({
+  cliente,
+  aoFechar,
+}: {
+  cliente: Cliente
+  aoFechar: () => void
+}) {
+  const [preco, setPreco] = useState(
+    cliente.preco_metro.toFixed(2).replace('.', ',')
+  )
+  const [limite, setLimite] = useState(
+    cliente.limite_credito.toFixed(2).replace('.', ',')
+  )
+  const [motivo, setMotivo] = useState('')
+  const [erro, setErro] = useState('')
+  const [pendente, iniciar] = useTransition()
+  const router = useRouter()
+
+  const precoNum = Number(preco.replace(',', '.'))
+  const limiteNum = Number(limite.replace(',', '.'))
+
+  const mudouPreco =
+    Number.isFinite(precoNum) && precoNum !== cliente.preco_metro
+  const mudouLimite =
+    Number.isFinite(limiteNum) && limiteNum !== cliente.limite_credito
+
+  function salvar() {
+    setErro('')
+
+    if (!Number.isFinite(precoNum) || precoNum <= 0) {
+      return setErro('Informe um preço maior que zero')
+    }
+
+    if (!Number.isFinite(limiteNum) || limiteNum < 0) {
+      return setErro('Informe um limite válido')
+    }
+
+    if (mudouLimite && motivo.trim().length < 10) {
+      return setErro('Descreva o motivo da mudança de limite (mín. 10 caracteres)')
+    }
+
+    if (!mudouPreco && !mudouLimite) {
+      aoFechar()
+      return
+    }
+
+    iniciar(async () => {
+      if (mudouPreco) {
+        const r = await atualizarPrecoMetro(cliente.id, precoNum)
+        if (!r.ok) return setErro(r.erro)
+      }
+
+      if (mudouLimite) {
+        const r = await atualizarLimiteCredito(cliente.id, limiteNum, motivo)
+        if (!r.ok) return setErro(r.erro)
+      }
+
+      aoFechar()
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="absolute inset-0 bg-[#131A2E]/70" onClick={aoFechar} />
+
+      <div className="relative bg-white rounded-sm w-full max-w-md my-8">
+        <div className="flex items-center justify-between border-b border-[#DDDCD5] px-5 py-3">
+          <h2 className="font-semibold tracking-tight">Condições comerciais</h2>
+          <button
+            onClick={aoFechar}
+            aria-label="Fechar"
+            className="text-[#6E6E68] hover:text-[#131A2E] text-xl leading-none"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-[#6E6E68]">
+            {cliente.razao_social} — hoje com{' '}
+            <span className="font-mono font-semibold text-[#131A2E]">
+              R$ {brl(cliente.em_aberto)}
+            </span>{' '}
+            em aberto
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label
+                htmlFor="mc-preco"
+                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+              >
+                PREÇO POR METRO
+              </label>
+              <input
+                id="mc-preco"
+                value={preco}
+                onChange={(e) => setPreco(e.target.value)}
+                inputMode="decimal"
+                autoFocus
+                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="mc-limite"
+                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+              >
+                LIMITE DE CRÉDITO
+              </label>
+              <input
+                id="mc-limite"
+                value={limite}
+                onChange={(e) => setLimite(e.target.value)}
+                inputMode="decimal"
+                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm font-mono"
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-[#6E6E68] leading-relaxed">
+            O preço vale para todas as artes deste cliente. Pedidos já feitos
+            não mudam de valor.
+          </p>
+
+          {/* O motivo só aparece quando faz falta: mudança de limite é
+              registrada em auditoria, correção de preço não */}
+          {mudouLimite && (
+            <div>
+              <label
+                htmlFor="mc-motivo"
+                className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+              >
+                MOTIVO DA MUDANÇA DE LIMITE
+                <span className="text-[#B00063] ml-1">*</span>
+              </label>
+              <textarea
+                id="mc-motivo"
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                rows={3}
+                placeholder="Por que o limite está mudando (mín. 10 caracteres)"
+                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2.5 bg-white outline-none focus:border-[#131A2E] text-sm"
+              />
+              <p className="text-xs text-[#6E6E68] mt-1">
+                Fica registrado no histórico do cliente.
+              </p>
+            </div>
+          )}
+
+          {erro && <p className="text-sm text-[#B00063]">{erro}</p>}
+
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <button
+              type="button"
+              onClick={aoFechar}
+              className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide"
+            >
+              CANCELAR
+            </button>
+            <button
+              type="button"
+              onClick={salvar}
+              disabled={pendente}
+              className="bg-[#131A2E] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+            >
+              {pendente ? 'SALVANDO...' : 'SALVAR'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }

@@ -22,8 +22,6 @@ const camposBase = {
   telefone: z.string().transform((v) => v.replace(/\D/g, ''))
         .refine((v) => v === '' || (v.length >= 10 && v.length <= 13), 'Telefone inválido')
         .optional(),
-  preco_metro: precoBr,
-
   // Campos fiscais: sem eles o contato no Bling não serve para faturar
   inscricao_estadual: z.string().trim().max(30).optional(),
   indicador_ie: z.string().transform((v) => Number(v || 9))
@@ -39,7 +37,9 @@ const camposBase = {
   uf: z.string().trim().toUpperCase().max(2).optional(),
 }
 
-const schemaCriar = z.object(camposBase)
+// O preço é definido no cadastro e, depois, só pela tela do cliente — por isso
+// não faz parte dos campos comuns aos dois formulários
+const schemaCriar = z.object({ ...camposBase, preco_metro: precoBr })
 const schemaEditar = z.object({ id: z.string().uuid(), ...camposBase })
 
 type ResultadoCriar =
@@ -206,7 +206,6 @@ export async function editarCliente(
       email: dados.email,
       contato: dados.contato || null,
       telefone: dados.telefone || null,
-      preco_metro: dados.preco_metro,
       inscricao_estadual: dados.inscricao_estadual || null,
       indicador_ie: dados.indicador_ie,
       cep: dados.cep || null,
@@ -473,5 +472,39 @@ export async function arquivarCliente(clienteId: string): Promise<Resultado> {
   }
 
   revalidatePath('/admin/clientes')
+  return { ok: true }
+}
+
+/**
+ * Preço por metro tem edição própria, ao lado do valor na tela do cliente.
+ * É o campo que mais muda, e abrir o cadastro inteiro para trocar um número
+ * expunha razão social, CNPJ e e-mail de acesso a alteração acidental.
+ */
+export async function atualizarPrecoMetro(
+  clienteId: string,
+  novoPreco: number
+): Promise<Resultado> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+
+  const parsed = z.object({
+    clienteId: z.string().uuid(),
+    novoPreco: z.number().positive('Preço deve ser maior que zero').max(100000),
+  }).safeParse({ clienteId, novoPreco })
+
+  if (!parsed.success) {
+    return { ok: false, erro: parsed.error.issues[0].message }
+  }
+
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('clientes')
+    .update({ preco_metro: parsed.data.novoPreco })
+    .eq('id', parsed.data.clienteId)
+
+  if (error) return { ok: false, erro: 'Não foi possível salvar o preço.' }
+
+  revalidatePath('/admin/clientes')
+  revalidatePath(`/admin/clientes/${parsed.data.clienteId}`)
   return { ok: true }
 }
