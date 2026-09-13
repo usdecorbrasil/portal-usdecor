@@ -1,5 +1,5 @@
 import 'server-only'
-import { resend, REMETENTE } from './client'
+import { resend, REMETENTE, RESPONDER_PARA } from './client'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type ParametrosEmail = {
@@ -32,6 +32,7 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
   try {
     const { data, error } = await resend.emails.send({
       from: REMETENTE,
+      replyTo: RESPONDER_PARA,
       to: params.destinatario,
       subject: params.assunto,
       html: params.html,

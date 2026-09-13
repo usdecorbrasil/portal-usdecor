@@ -122,6 +122,12 @@ primeiro acesso, recuperação de senha).
 
 `email_log` tem chave única por pedido + tipo → evita disparo duplicado (idempotência).
 
+**Remetente e resposta são coisas separadas.** `RESEND_FROM` precisa ser de um domínio
+verificado no Resend (`@bestcolortecidos.com.br`) — o provedor recusa enviar como
+`@gmail.com`, e o e-mail falharia em SPF/DKIM de qualquer jeito. Para a resposta do
+cliente cair numa caixa que alguém lê, existe `RESEND_REPLY_TO`, aplicado como
+`replyTo` em `src/lib/resend/enviar.ts`; aí sim pode ser Gmail.
+
 ## Banco de dados (Supabase) — pontos de atenção
 
 - Schema `public`. Ao investigar estrutura, consultar `information_schema.tables` /
