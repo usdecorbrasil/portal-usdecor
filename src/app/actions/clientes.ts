@@ -7,10 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateConviteAcesso } from '@/lib/resend/templates/convite-acesso'
 import { urlDoSite } from '@/lib/site'
-import {
-  tentarSincronizarContato,
-  importarContatoDoBling,
-} from '@/lib/bling/contato'
+import { tentarSincronizarContato } from '@/lib/bling/contato'
 
 const precoBr = z.string()
   .transform((v) => Number(String(v).replace(',', '.')))
@@ -477,30 +474,4 @@ export async function arquivarCliente(clienteId: string): Promise<Resultado> {
 
   revalidatePath('/admin/clientes')
   return { ok: true }
-}
-/**
- * Puxa do Bling os dados fiscais de um cliente que já existe lá, em vez de
- * redigitá-los. Não toca em e-mail nem preço — o e-mail é o login do cliente.
- */
-export async function importarDadosDoBling(
-  clienteId: string
-): Promise<{ ok: true; detalhe: string } | { ok: false; erro: string }> {
-  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
-
-  const parsed = z.string().uuid().safeParse(clienteId)
-  if (!parsed.success) return { ok: false, erro: 'Cliente inválido.' }
-
-  const r = await importarContatoDoBling(parsed.data)
-
-  if (!r.ok) return { ok: false, erro: r.erro }
-
-  revalidatePath('/admin/clientes')
-  revalidatePath(`/admin/clientes/${parsed.data}`)
-
-  return {
-    ok: true,
-    detalhe: r.campos.length
-      ? `Importado do Bling: ${r.campos.join(', ')}.`
-      : 'Contato vinculado, mas o cadastro no Bling não tem dados fiscais preenchidos.',
-  }
 }

@@ -224,6 +224,13 @@ ali a imagem é o conteúdo.
     endereço existente.
   - `indicador_ie` 1 = contribuinte, 2 = isento, 9 = não contribuinte (padrão). Sem ele
     o Bling recusa pessoa jurídica.
+  - Os 4 clientes reais tiveram os dados fiscais **importados do Bling em 12/09/2026**
+    (IE, indicador, endereço completo) e já estão vinculados por `bling_contato_id`.
+    Foi uma importação pontual, feita por script; não existe tela para isso.
+- **Limite de crédito não é alterável por fora.** Há trava no banco exigindo
+  `atualizar_limite_credito()`, e a função identifica quem chama pela sessão — chave de
+  serviço não passa. Só pelo portal, logado como admin/financeiro, e com motivo, que vai
+  para `cliente_limite_historico`.
 - **Pedido de venda criado ao lançar "Pedido pronto"** (`src/lib/bling/pedido.ts`), não
   na confirmação: o valor é metragem × preço/metro e a metragem só existe depois da
   estampa. Vai com **uma linha de metragem** (produto genérico `ESTAMPA`, unidade `m`),
