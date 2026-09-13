@@ -226,6 +226,13 @@ ali a imagem é o conteúdo.
   alvo específico do projeto na Vercel (`e9f1570091ff32a5.vercel-dns-017.com`, **não** o
   genérico `cname.vercel-dns.com`), mais `send`/`rsend` CNAME e `resend._domainkey` TXT
   do Resend e `_dmarc`.
+  - **E-mail validado ponta a ponta em 12/09/2026**: domínio verificado no Resend, envio
+    real de `pedidos@bestcolortecidos.com.br` chegou na **caixa de entrada** (não spam),
+    e a resposta do cliente voltou para `bestcolortecidos@gmail.com` via `Reply-To`.
+    O DMARC está em `p=none` (só monitora) — se um dia cair em spam, é o primeiro lugar
+    a apertar.
+  - A `RESEND_API_KEY` é restrita a envio: consultas à API de domínios são recusadas com
+    `restricted_api_key`. Para ver status de domínio, só pelo painel.
   - **O domínio raiz e o `www` continuam sem registro** — quem digita
     `bestcolortecidos.com.br` não chega a lugar nenhum. O site institucional não está
     nessa zona.
