@@ -158,3 +158,45 @@ export function parcelasDisponiveis(
 
   return opcoes
 }
+
+/* ------------------------- taxa de um pedido gravado ------------------------- */
+
+/**
+ * A taxa fica congelada no pedido (`taxa_pagamento_percentual` e
+ * `taxa_pagamento_fixa`), e não é lida da configuração atual: mudar a taxa em
+ * Configurações não pode alterar o que já foi cobrado de um pedido antigo.
+ *
+ * Espelha `valor_cobranca_pedido` no Postgres — se um mudar, o outro muda.
+ */
+export function taxaDoPedido(
+  total: number,
+  percentual: number,
+  taxaFixa: number,
+  formaPagamento: string,
+  parcelas: number
+): number {
+  if (total <= 0) return 0
+
+  // Boleto se paga por documento; cartão, por transação
+  const documentos =
+    formaPagamento === 'boleto_parcelado' ? Math.max(1, parcelas) : 1
+
+  const percentualEmReais = Math.round(((total * percentual) / 100) * 100) / 100
+
+  return Math.round((percentualEmReais + taxaFixa * documentos) * 100) / 100
+}
+
+/** Valor que o cliente paga: mercadoria + taxa da forma escolhida. */
+export function valorCobranca(
+  total: number,
+  percentual: number,
+  taxaFixa: number,
+  formaPagamento: string,
+  parcelas: number
+): number {
+  return (
+    Math.round(
+      (total + taxaDoPedido(total, percentual, taxaFixa, formaPagamento, parcelas)) * 100
+    ) / 100
+  )
+}

@@ -309,12 +309,19 @@ quem edita é a de Pagamento, que grava as duas como ponte, porque `parcelar_ped
 Postgres ainda valida por elas. `buscarMaxParcelas()` e `buscarValorMinimoBoleto()`
 continuam existindo, mas agora leem do JSON.
 
-**PENDENTE**: a taxa ainda não entra no `total` nem nas parcelas. `pedidos.total` é
-recalculado e `pedido_parcelas.valor` é gerado por funções no Postgres
-(`confirmar_romaneio`, `parcelar_pedido`) que não estão neste repositório. Para fechar,
-é preciso ler o código dessas duas funções e passar a gravar a taxa no pedido (uma
-coluna nova em `pedidos`), aplicando-a no recálculo — senão o recálculo da metragem
-apaga o acréscimo.
+**Onde a taxa entra.** `pedidos.total` continua sendo a **mercadoria** (metragem ×
+preço) — é o que o Faturamento e a Apuração comparam com o custo por metro. A taxa fica
+congelada no pedido (`taxa_pagamento_percentual`, `taxa_pagamento_fixa`, preenchidas por
+gatilho quando a forma é escolhida) e entra só no **valor cobrado**:
+
+- No Postgres: `valor_cobranca_pedido()` e `parcelar_pedido`, que divide o valor com
+  taxa e usa o intervalo configurado (`docs/sql/001` e `002`).
+- No app: `taxaDoPedido()` / `valorCobranca()` em `src/lib/pagamento/config.ts`.
+  **Espelham a função SQL — mexeu em um, mexa no outro.**
+
+O cliente vê valores a partir de **Pedido pronto** (não da NF), que é quando sai o
+e-mail de cobrança — confirmado em 12/09/2026. Nas telas dele, quando há taxa, aparece
+mercadoria + acréscimo + total cobrado.
 
 ## Custo estimado
 

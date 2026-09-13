@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { valorCobranca } from '@/lib/pagamento/config'
 import BuscaPagina from '@/components/busca-pagina'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, VAZIO } from '@/components/estilo-lista'
 
@@ -31,7 +32,10 @@ export default async function PedidosPage() {
     .from('pedidos')
     .select(`
       id, numero, total, created_at, cancelado_em, metragem_impressa,
+      forma_pagamento, parcelas_solicitadas,
+      taxa_pagamento_percentual, taxa_pagamento_fixa,
       pedido_itens(quantidade_faturada),
+      pedido_parcelas(numero),
       pedido_status_historico(status, created_at)
     `)
     .order('created_at', { ascending: false })
@@ -128,7 +132,19 @@ export default async function PedidosPage() {
                   </span>
 
                   <span className={NUM + ' w-20 shrink-0 text-right font-semibold text-[#131A2E]'}>
-                    {liberadoValor ? 'R$ ' + brl(Number(p.total)) : '—'}
+                    {liberadoValor
+                      ? 'R$ ' +
+                        brl(
+                          valorCobranca(
+                            Number(p.total),
+                            Number(p.taxa_pagamento_percentual ?? 0),
+                            Number(p.taxa_pagamento_fixa ?? 0),
+                            p.forma_pagamento,
+                            (p.pedido_parcelas ?? []).length ||
+                              Number(p.parcelas_solicitadas ?? 1)
+                          )
+                        )
+                      : '—'}
                   </span>
 
                   <span className="text-[#DDDCD5] shrink-0 leading-none">›</span>

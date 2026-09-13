@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import BotaoVoltar from '@/components/botao-voltar'
 import { createClient } from '@/lib/supabase/server'
 import AcoesCliente from './acoes-cliente'
+import { taxaDoPedido } from '@/lib/pagamento/config'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -58,6 +59,7 @@ export default async function DetalhePedidoPage({
     .select(`
       id, numero, total, notas, created_at, cancelado_em, cancelado_motivo,
       forma_pagamento, parcelas_solicitadas, metragem_impressa,
+      taxa_pagamento_percentual, taxa_pagamento_fixa,
       pedido_itens(
         id, produto_id, sku, nome,
         quantidade_pedida, quantidade_faturada
@@ -122,6 +124,16 @@ export default async function DetalhePedidoPage({
 
   // Valor só é exibido ao cliente a partir de "Pedido pronto"
   const liberadoValor = ORDEM.indexOf(atual) >= ORDEM.indexOf('pronto')
+
+  // `total` é a mercadoria; a forma de pagamento pode acrescentar taxa
+  const taxa = taxaDoPedido(
+    Number(p.total),
+    Number(p.taxa_pagamento_percentual ?? 0),
+    Number(p.taxa_pagamento_fixa ?? 0),
+    p.forma_pagamento,
+    parcelas.length || Number(p.parcelas_solicitadas ?? 1)
+  )
+  const totalCobrado = Math.round((Number(p.total) + taxa) * 100) / 100
 
   const solicitacoes = (p.pedido_solicitacoes ?? []) as any[]
   const aberta = solicitacoes.find((s) => s.status === 'aberta')
@@ -381,12 +393,26 @@ export default async function DetalhePedidoPage({
         )}
 
         {liberadoValor ? (
-          <div className="flex justify-between items-baseline mt-2">
-            <span className="font-semibold tracking-tight">TOTAL</span>
-            <strong className="font-mono text-2xl">
-              R$ {brl(Number(p.total))}
-            </strong>
-          </div>
+          <>
+            {taxa > 0 && (
+              <>
+                <div className="flex justify-between items-baseline text-sm text-[#6E6E68] mt-2">
+                  <span>Produtos</span>
+                  <span className="font-mono">R$ {brl(Number(p.total))}</span>
+                </div>
+                <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
+                  <span>{ROTULOS_PAGAMENTO[p.forma_pagamento] ?? 'Pagamento'}</span>
+                  <span className="font-mono">+ R$ {brl(taxa)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between items-baseline mt-2">
+              <span className="font-semibold tracking-tight">TOTAL</span>
+              <strong className="font-mono text-2xl">
+                R$ {brl(totalCobrado)}
+              </strong>
+            </div>
+          </>
         ) : (
           <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
             O valor será informado após finalizar a estampa, com base na
