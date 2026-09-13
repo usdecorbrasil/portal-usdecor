@@ -4,6 +4,17 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { MAX_PARCELAS } from '@/lib/pagamento/config'
+import { notificarEquipe } from '@/lib/notificacoes/enviar'
+import { templateInterno } from '@/lib/resend/templates/interno'
+import { urlDoSite } from '@/lib/site'
+
+const ROTULOS_PAGAMENTO: Record<string, string> = {
+  boleto_avista: 'Boleto à vista',
+  boleto_parcelado: 'Boleto parcelado',
+  pix: 'Pix',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+}
 
 const schema = z.object({
   itens: z.array(
@@ -80,6 +91,10 @@ export async function criarPedido(dados: {
     return { ok: false, erro: 'Não foi possível registrar o pedido.' }
   }
 
+  // Aviso para a equipe. Depois do pedido existir, e sem poder derrubá-lo:
+  // quem lista os destinatários é Configurações → Avisos
+  await avisarPedidoNovo(pedido.pedido_id as string)
+
   revalidatePath('/pedidos')
   revalidatePath('/admin')
 
@@ -87,6 +102,47 @@ export async function criarPedido(dados: {
     ok: true,
     numero: Number(pedido.numero),
     total: Number(pedido.total),
+  }
+}
+
+async function avisarPedidoNovo(pedidoId: string) {
+  try {
+    const supabase = await createClient()
+
+    // Um literal só: concatenar quebra a inferência de tipos do select
+    const { data: p } = await supabase
+      .from('pedidos')
+      .select('numero, notas, forma_pagamento, parcelas_solicitadas, clientes(razao_social), pedido_itens(quantidade_pedida)')
+      .eq('id', pedidoId)
+      .maybeSingle()
+
+    if (!p) return
+
+    const cliente = p.clientes as unknown as { razao_social: string } | null
+    const itens = (p.pedido_itens ?? []) as { quantidade_pedida: number }[]
+    const unidades = itens.reduce((a, i) => a + Number(i.quantidade_pedida), 0)
+    const forma =
+      (ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento) +
+      (p.parcelas_solicitadas ? ` (${p.parcelas_solicitadas}x)` : '')
+
+    await notificarEquipe('pedido_novo', {
+      pedidoId,
+      assunto: `Pedido novo #${p.numero} — ${cliente?.razao_social ?? 'cliente'}`,
+      html: templateInterno({
+        titulo: `Pedido #${p.numero} recebido`,
+        linhas: [
+          { rotulo: 'Cliente', valor: cliente?.razao_social ?? '—' },
+          { rotulo: 'Artes', valor: String(itens.length) },
+          { rotulo: 'Unidades', valor: String(unidades) },
+          { rotulo: 'Pagamento', valor: forma },
+        ],
+        texto: p.notas ? `Notas do cliente: ${p.notas}` : undefined,
+        urlAcao: `${urlDoSite()}/admin/pedidos/${pedidoId}`,
+        rotuloAcao: 'ABRIR O PEDIDO',
+      }),
+    })
+  } catch (e) {
+    console.error('[pedido_novo]', e)
   }
 }
 

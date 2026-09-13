@@ -4,7 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 type ParametrosEmail = {
   tipo: string
-  destinatario: string
+  /** Lista = um e-mail so com varios "para" (avisos internos). */
+  destinatario: string | string[]
   assunto: string
   html: string
   pedidoId?: string
@@ -17,6 +18,11 @@ type ResultadoEnvio =
 
 export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnvio> {
   const admin = createAdminClient()
+
+  // O log guarda texto: a lista vira "a@x, b@y"
+  const destinatarioLog = Array.isArray(params.destinatario)
+    ? params.destinatario.join(', ')
+    : params.destinatario
 
   if (params.pedidoId) {
     const { data: jaEnviado } = await admin.rpc('email_ja_enviado', {
@@ -43,7 +49,7 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
       await admin.rpc('registrar_email_log', {
         p_pedido_id: params.pedidoId ?? null,
         p_tipo: params.tipo,
-        p_destinatario: params.destinatario,
+        p_destinatario: destinatarioLog,
         p_provider_id: null,
         p_erro: error.message,
       })
@@ -53,7 +59,7 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
     await admin.rpc('registrar_email_log', {
       p_pedido_id: params.pedidoId ?? null,
       p_tipo: params.tipo,
-      p_destinatario: params.destinatario,
+      p_destinatario: destinatarioLog,
       p_provider_id: data?.id ?? null,
       p_erro: null,
     })
@@ -65,7 +71,7 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
     await admin.rpc('registrar_email_log', {
       p_pedido_id: params.pedidoId ?? null,
       p_tipo: params.tipo,
-      p_destinatario: params.destinatario,
+      p_destinatario: destinatarioLog,
       p_provider_id: null,
       p_erro: mensagem,
     })

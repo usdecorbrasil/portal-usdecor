@@ -367,10 +367,18 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
     portal passa a exigir decidir o que fazer com o correspondente no Bling.
   - Conferir também se algum produto/catálogo pertence só a cliente de teste antes de
     apagar — 412 produtos é catálogo real de cliente real na maior parte.
-- **Aviso interno de pedido novo (a construir)** — decidido em 12/09/2026: quando entrar
-  pedido de qualquer cliente, o administrador recebe e-mail de aviso. Quem recebe e quais
-  tipos de e-mail cada um recebe ficam num **setup de notificações dentro de
-  Configurações** (lista de destinatários × tipo de gatilho), não no código.
+- ~~Aviso interno de pedido novo~~ — **feito em 13/09/2026**. Configurações → Notificações
+  ("Avisos para a equipe"): lista de e-mails por tipo, em `configuracoes.notificacoes`
+  (JSON, `docs/sql/014` cria a linha já com `bestcolortecidos@gmail.com`). Tipos hoje:
+  `pedido_novo` (dispara em `criarPedido`, depois de o pedido existir) e
+  `cancelamento_solicitado` (em `solicitarCancelamento`). Regras em
+  `src/lib/notificacoes/config.ts` (puro) e envio em `src/lib/notificacoes/enviar.ts`.
+  - **Um e-mail só, com todos os destinatários no "para"**: assim `email_log` fica com uma
+    linha por pedido + tipo e a trava de duplicidade continua valendo. `enviarEmail`
+    passou a aceitar lista em `destinatario`.
+  - **Nunca derruba a operação.** Falha de aviso vai para o log do servidor.
+  - Quem não está na lista não recebe — inclusive o administrador. Tipo novo = adicionar
+    em `TIPOS`/`ROTULOS` e chamar `notificarEquipe` no ponto certo; a tela se ajusta.
 - **Setup de automação / editor de etapas (a construir)** — decidido em 12/09/2026:
   área dentro de Configurações para **incluir, excluir e editar os status/estágios** do
   pedido. Hoje as etapas são constantes espalhadas pelo código

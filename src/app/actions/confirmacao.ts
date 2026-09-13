@@ -7,6 +7,8 @@ import { enviarEmail } from '@/lib/resend/enviar'
 import { templatePedidoConfirmado } from '@/lib/resend/templates/pedido-confirmado'
 import { urlDoSite } from '@/lib/site'
 import { MAX_PARCELAS } from '@/lib/pagamento/config'
+import { notificarEquipe } from '@/lib/notificacoes/enviar'
+import { templateInterno } from '@/lib/resend/templates/interno'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
@@ -131,6 +133,33 @@ export async function solicitarCancelamento(
   })
 
   if (error) return { ok: false, erro: error.message }
+
+  // A solicitação fica aberta esperando alguém responder; sem aviso ela só
+  // seria vista por quem abrisse o pedido por acaso
+  try {
+    const { data: p } = await supabase
+      .from('pedidos')
+      .select('numero, clientes(razao_social)')
+      .eq('id', parsed.data.pedidoId)
+      .maybeSingle()
+
+    if (p) {
+      const cliente = p.clientes as unknown as { razao_social: string } | null
+      await notificarEquipe('cancelamento_solicitado', {
+        pedidoId: parsed.data.pedidoId,
+        assunto: `Cancelamento solicitado — pedido #${p.numero}`,
+        html: templateInterno({
+          titulo: `Pedido #${p.numero}: cliente pede cancelamento`,
+          linhas: [{ rotulo: 'Cliente', valor: cliente?.razao_social ?? '—' }],
+          texto: `Motivo: ${parsed.data.motivo}`,
+          urlAcao: `${urlDoSite()}/admin/pedidos/${parsed.data.pedidoId}`,
+          rotuloAcao: 'RESPONDER',
+        }),
+      })
+    }
+  } catch (e) {
+    console.error('[cancelamento_solicitado]', e)
+  }
 
   revalidar()
   return { ok: true }

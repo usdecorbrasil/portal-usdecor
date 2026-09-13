@@ -4,8 +4,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { lerPerfil } from '@/lib/auth/perfil'
 import Equipe from './equipe'
 import ConfigPagamento from './config-pagamento'
+import ConfigNotificacoes from './config-notificacoes'
 import IntegracaoBling from './integracao-bling'
-import { buscarConfigPagamento } from '@/app/actions/configuracoes'
+import {
+  buscarConfigPagamento,
+  buscarConfigNotificacoes,
+} from '@/app/actions/configuracoes'
 import { lerEstadoBling } from '@/lib/bling/cliente'
 import HistoricoAlteracoes from '@/components/historico-alteracoes'
 
@@ -40,8 +44,9 @@ export default async function ConfiguracoesPage() {
     (usuarios?.users ?? []).map((u) => [u.id, u.email ?? ''])
   )
 
-  const [configPagamento, estadoBling] = await Promise.all([
+  const [configPagamento, configNotificacoes, estadoBling] = await Promise.all([
     buscarConfigPagamento(),
+    buscarConfigNotificacoes(),
     lerEstadoBling(),
   ])
 
@@ -79,6 +84,14 @@ export default async function ConfiguracoesPage() {
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
         <ConfigPagamento configAtual={configPagamento} />
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-3 flex items-center gap-2">
+          NOTIFICAÇÕES
+          <span className="flex-1 h-px bg-[#DDDCD5]" />
+        </h2>
+        <ConfigNotificacoes configAtual={configNotificacoes} />
       </div>
 
       <div className="mt-8">
