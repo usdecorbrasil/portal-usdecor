@@ -23,12 +23,35 @@ export default function ConfigPagamento({
 }: {
   configAtual: ConfigPagamento
 }) {
+  const [aberto, setAberto] = useState(false)
   const [config, setConfig] = useState<ConfigPagamento>(configAtual)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
   const [pendente, iniciar] = useTransition()
 
   const mudou = JSON.stringify(config) !== JSON.stringify(configAtual)
+
+  const ativas = FORMAS.filter((f) => configAtual[f].ativa)
+
+  const resumo =
+    ativas.length === 0
+      ? 'Nenhuma forma ativa'
+      : ativas
+          .map((f) => {
+            const c = configAtual[f]
+            const vezes = c.maxParcelas > 1 ? ` até ${c.maxParcelas}x` : ''
+            const taxa =
+              c.percentual > 0 || c.taxaFixa > 0
+                ? ` (${[
+                    c.percentual > 0 ? `+${c.percentual}%` : '',
+                    c.taxaFixa > 0 ? `+R$ ${brl(c.taxaFixa)}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')})`
+                : ''
+            return ROTULOS_FORMA[f] + vezes + taxa
+          })
+          .join(' · ')
 
   function alterar(forma: Forma, campo: keyof ConfigForma, valor: number | boolean) {
     setSucesso(false)
@@ -50,15 +73,35 @@ export default function ConfigPagamento({
 
   return (
     <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-3">
-      <h3 className="font-semibold tracking-tight text-sm">
-        Formas de pagamento
-      </h3>
-      <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
-        O que o cliente pode escolher no carrinho, em quantas vezes, e quanto a
-        forma escolhida acrescenta ao pedido. A taxa entra como acréscimo no
-        valor cobrado — não altera o preço por metro.
-      </p>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        className="w-full flex items-start justify-between gap-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block font-semibold tracking-tight text-sm">
+            Formas de pagamento
+          </span>
+          {/* Fechado, o resumo já responde a pergunta mais comum */}
+          <span className="block text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            {aberto
+              ? 'O que o cliente pode escolher no carrinho, em quantas vezes, e quanto a forma escolhida acrescenta ao pedido. A taxa entra como acréscimo no valor cobrado — não altera o preço por metro.'
+              : resumo}
+          </span>
+        </span>
+        <span
+          aria-hidden
+          className={`text-[#6E6E68] text-xs shrink-0 mt-0.5 transition-transform ${
+            aberto ? 'rotate-180' : ''
+          }`}
+        >
+          ▾
+        </span>
+      </button>
 
+      {aberto && (
+      <>
       <div className="mt-4 space-y-3">
         {FORMAS.map((forma) => (
           <BlocoForma
@@ -100,6 +143,8 @@ export default function ConfigPagamento({
           </button>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }
