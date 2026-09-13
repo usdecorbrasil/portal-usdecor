@@ -470,9 +470,13 @@ export default function PainelAcoes({
                 </div>
               </div>
 
+              {/* Na confirmação o valor ainda não existe (vem da metragem):
+                  mostrar "2x de R$ 0,00" só confunde */}
               <p className="text-xs text-[#6E6E68] mt-2.5">
-                {qtdParcelas}x de R$ {brl(total / qtdParcelas)} · vencimentos a
-                cada {intervaloBoleto} dias a partir da data escolhida
+                {qtdParcelas}x
+                {total > 0 ? ` de R$ ${brl(total / qtdParcelas)}` : ''} · vencimentos
+                a cada {intervaloBoleto} dias a partir da data escolhida. O valor de
+                cada parcela é definido ao fim da estampa.
               </p>
             </div>
           )}
