@@ -52,12 +52,14 @@ export async function updateSession(request: NextRequest) {
   // pessoa criar a própria senha. A marca vem em `app_metadata`, que já chega
   // junto com o usuário — checar isso numa tabela custaria uma consulta a mais
   // em toda requisição do site.
-  //
+  const senhaProvisoria = user?.app_metadata?.senha_provisoria === true
+  const naTelaDeSenha = pathname.startsWith('/primeiro-acesso')
+
   // `/api` fica de fora: redirecionar uma chamada de dados devolveria HTML
   // onde o cliente espera JSON. Quem está nesse estado não passa das telas.
   if (
-    user?.app_metadata?.senha_provisoria === true &&
-    !pathname.startsWith('/primeiro-acesso') &&
+    senhaProvisoria &&
+    !naTelaDeSenha &&
     !pathname.startsWith('/auth') &&
     !pathname.startsWith('/api')
   ) {
@@ -68,8 +70,11 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Já criou a senha e tenta voltar para a tela do primeiro acesso: não há
-  // mais o que fazer ali
-  if (user && pathname.startsWith('/primeiro-acesso')) {
+  // mais o que fazer ali.
+  //
+  // O `!senhaProvisoria` é o que impede o laço: sem ele, quem ainda precisa da
+  // tela era mandado para a raiz, que mandava de volta para cá, sem fim.
+  if (user && !senhaProvisoria && naTelaDeSenha) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
