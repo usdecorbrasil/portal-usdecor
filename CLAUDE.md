@@ -404,6 +404,24 @@ Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega
   continuam guardando a decisão vigente, que é o que a tela lê; a tabela guarda o
   caminho até ela.
 
+## Papéis: `admin` e `financeiro` são o mesmo acesso
+
+Decidido em 13/09/2026: os dois papéis têm exatamente as mesmas permissões. Conferido
+nas duas camadas:
+
+- **Banco**: `is_admin()` testa `role in ('admin', 'financeiro') and ativo`, e é o portão
+  de todas as RPCs e políticas. As funções `admin_lancar_status`, `admin_reimprimir` e
+  `confirmar_pedido` citam `'admin'`, mas como **origem** do registro em
+  `pedido_status_historico` (`sistema` / `admin` / `bling`), não como teste de papel.
+- **App**: toda checagem faz `papel === 'admin' || papel === 'financeiro'`, e
+  `veValores` é verdadeiro para os dois. A única exceção era a trava contra rebaixar a si
+  mesmo em `atualizarMembro`, que exigia `admin` — corrigida para barrar só `funcionario`.
+- `funcionario` (rótulo "Produção") é o único papel restrito: sem valores, sem clientes,
+  sem configurações.
+
+Em 13/09/2026 as três contas ativas da equipe são `financeiro`; nenhuma é `admin`. Não
+faz diferença funcional.
+
 ## Primeiro acesso: senha provisória
 
 Decidido em 13/09/2026. Vale para **equipe e cliente**: a senha do convite entra uma vez

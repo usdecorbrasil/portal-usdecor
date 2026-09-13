@@ -134,7 +134,7 @@ export default function Equipe({
                   Produção — sem acesso a valores
                 </option>
                 <option value="financeiro">
-                  Financeiro — contas a receber e limites de crédito
+                  Financeiro — acesso total, igual ao administrador
                 </option>
                 <option value="admin">Administrador — acesso total</option>
               </select>
@@ -516,7 +516,7 @@ function FormEditarMembro({
           className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 bg-white text-sm outline-none focus:border-[#131A2E] disabled:opacity-50"
         >
           <option value="funcionario">Produção — sem acesso a valores</option>
-          <option value="financeiro">Financeiro — contas a receber e limites de crédito</option>
+          <option value="financeiro">Financeiro — acesso total, igual ao administrador</option>
           <option value="admin">Administrador — acesso total</option>
         </select>
         {membro.souEu && (
