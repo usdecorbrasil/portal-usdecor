@@ -91,40 +91,48 @@ export async function atualizarConfigPagamento(
     data: { user },
   } = await supabase.auth.getUser()
 
-  // upsert porque esta chave pode ainda não existir na tabela
-  const { error } = await supabase.from('configuracoes').upsert(
-    {
-      chave: 'formas_pagamento',
-      valor: JSON.stringify(normalizar(parsed.data)),
-      descricao: 'Formas de pagamento aceitas, parcelamento e taxas',
-      atualizado_em: new Date().toISOString(),
-      atualizado_por: user?.id,
-    },
-    { onConflict: 'chave' }
-  )
+  // `update`, não `upsert`: a RLS de `configuracoes` permite atualizar, mas
+  // não inserir. A linha é criada pela migração (docs/sql/003).
+  const { error, count } = await supabase
+    .from('configuracoes')
+    .update(
+      {
+        valor: JSON.stringify(normalizar(parsed.data)),
+        atualizado_em: new Date().toISOString(),
+        atualizado_por: user?.id,
+      },
+      { count: 'exact' }
+    )
+    .eq('chave', 'formas_pagamento')
 
-  if (error) return { ok: false, erro: 'Não foi possível salvar.' }
+  if (error) return { ok: false, erro: 'Não foi possível salvar: ' + error.message }
+
+  if (!count) {
+    return {
+      ok: false,
+      erro:
+        'A configuração de pagamento ainda não existe no banco. ' +
+        'Rode docs/sql/003-semear-formas-pagamento.sql no Supabase.',
+    }
+  }
 
   // Ponte: `parcelar_pedido` no Postgres ainda valida por estas duas chaves.
   // Enquanto a migração da taxa não roda, elas precisam refletir o boleto,
   // senão a tela permite 6x e o banco recusa na hora de parcelar.
-  await supabase.from('configuracoes').upsert(
-    [
-      {
-        chave: 'max_parcelas',
-        valor: String(parsed.data.boleto.maxParcelas),
+  for (const [chave, valor] of [
+    ['max_parcelas', String(parsed.data.boleto.maxParcelas)],
+    ['valor_minimo_boleto', parsed.data.boleto.valorMinimoParcela.toFixed(2)],
+  ]) {
+    await supabase
+      .from('configuracoes')
+      .update({
+        valor,
         atualizado_em: new Date().toISOString(),
         atualizado_por: user?.id,
-      },
-      {
-        chave: 'valor_minimo_boleto',
-        valor: parsed.data.boleto.valorMinimoParcela.toFixed(2),
-        atualizado_em: new Date().toISOString(),
-        atualizado_por: user?.id,
-      },
-    ],
-    { onConflict: 'chave' }
-  )
+      })
+      .eq('chave', chave)
+  }
+
 
   revalidatePath('/admin/configuracoes')
   revalidatePath('/carrinho')
