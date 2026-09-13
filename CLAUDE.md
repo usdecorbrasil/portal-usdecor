@@ -241,6 +241,21 @@ ali a imagem é o conteúdo.
 - Já verificado nesta conta: os SKUs do portal **são** os códigos de produto do Bling
   (`D10409` etc.), e o token já vem em **JWT** (a nota de migração abaixo está vencida).
 
+**NADA DISSO FOI TESTADO CONTRA O ERP** (12/09/2026). Só operações de leitura foram
+executadas — contatos, produtos, pedidos e formas de pagamento foram consultados e a
+estrutura veio de dados reais da conta. Nenhum `POST` ou `PUT` rodou: criar contato,
+atualizar contato e criar pedido de venda estão escritos a partir do formato observado,
+mas podem esbarrar em campo obrigatório não previsto. Ordem sugerida para validar, do
+mais barato ao mais caro de reverter:
+
+1. Editar um cliente que já exista no Bling, preenchendo os dados fiscais (exercita
+   `GET` + mescla + `PUT`).
+2. Cadastrar um cliente novo (exercita `POST /contatos`).
+3. Levar um pedido até "Pedido pronto" (exercita `POST /pedidos/vendas`, o e-mail de
+   cobrança e a geração de parcelas com taxa, tudo de uma vez).
+
+O erro do Bling aparece na própria tela em qualquer um dos três casos.
+
 ## Integração com o Bling
 
 - API v3, OAuth 2.0. Credenciais na área de aplicativos do painel Bling.
