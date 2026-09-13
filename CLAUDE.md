@@ -417,6 +417,17 @@ de cancelamento.
 - A consulta do pedido tem `const campos: string` de propósito: sem a anotação o
   TypeScript monta o tipo do retorno a partir do texto do `select`, e com esta
   quantidade de tabelas embutidas estoura com *union type too complex*.
+### Tabela nova precisa de `GRANT` explícito (aprendido em 13/09/2026)
+
+Este banco **não** usa os grants padrão do Supabase: `anon` não lê nem `pedidos`, e cada
+tabela tem `grant select ... to authenticated` próprio. Tabela criada pelo SQL Editor nasce
+sem isso. O sintoma é traiçoeiro: com a chave de serviço tudo funciona, mas a sessão do
+usuário recebe `permission denied` — e se a tabela está **embutida** num select
+(`pedidos(..., pedido_nf_historico(...))`), o PostgREST recusa a consulta inteira. Foi o que
+transformou a tela do pedido em 404 por algumas horas. Toda migração que cria tabela leva
+o grant junto (`docs/sql/011` corrigiu 009 e 010). A tela do pedido agora lança erro em
+qualquer falha que não seja "nenhuma linha", em vez de traduzir tudo em 404.
+
 ### Fora do pedido: tabela `auditoria` (`docs/sql/010`)
 
 Cadastro de cliente, equipe e configurações não tinham rastro nenhum. Agora têm, numa

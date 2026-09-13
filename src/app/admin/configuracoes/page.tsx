@@ -98,7 +98,7 @@ export default async function ConfiguracoesPage() {
             o que andou mudando nas configurações, e por quem */}
         <HistoricoAlteracoes
           entidade={['configuracao', 'equipe']}
-          titulo="ÚLTIMAS ALTERAÇÕES"
+          recolhido
         />
       </div>
     </div>

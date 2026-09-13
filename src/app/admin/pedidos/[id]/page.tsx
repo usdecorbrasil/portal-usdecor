@@ -113,11 +113,18 @@ export default async function PedidoAdminPage({
     `
 
   // As configurações não dependem do pedido: buscar em paralelo
-  const [{ data: pedido }, maxParcelas, valorMinimoBoleto] = await Promise.all([
+  const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto] = await Promise.all([
     supabase.from('pedidos').select(campos).eq('id', id).single(),
     buscarMaxParcelas(),
     buscarValorMinimoBoleto(),
   ])
+
+  // Só "nenhuma linha" é 404. Qualquer outra falha da consulta (permissão,
+  // tabela embutida sem grant, coluna inexistente) precisa aparecer como erro
+  // — virar 404 já escondeu um "permission denied" por horas
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Falha ao carregar o pedido: ${error.message}`)
+  }
 
   if (!pedido) notFound()
 

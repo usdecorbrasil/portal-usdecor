@@ -6,6 +6,12 @@ import { createClient } from '@/lib/supabase/server'
  * A mesma peça serve o cliente e as Configurações: o que muda é o filtro.
  * Sem `entidadeId` mostra tudo da entidade — é o caso das Configurações, onde
  * a pergunta é "o que andou mudando aqui", não "neste registro".
+ *
+ * `recolhido` esconde a lista atrás de um botão. No pedido o histórico fica
+ * sempre à vista, porque lá ele é parte do trabalho; no cadastro é consulta
+ * eventual e ocupava a tela de quem só queria ver o telefone. É um
+ * `<details>` nativo: abre e fecha sem JavaScript, e a página continua sendo
+ * componente de servidor.
  */
 
 const ROTULO_ACAO: Record<string, string> = {
@@ -41,11 +47,13 @@ export default async function HistoricoAlteracoes({
   entidadeId,
   titulo = 'ALTERAÇÕES',
   limite = 30,
+  recolhido = false,
 }: {
   entidade: string | string[]
   entidadeId?: string
   titulo?: string
   limite?: number
+  recolhido?: boolean
 }) {
   const supabase = await createClient()
 
@@ -64,7 +72,9 @@ export default async function HistoricoAlteracoes({
   const { data } = await consulta
   const linhas = (data ?? []) as unknown as Linha[]
 
-  if (linhas.length === 0) return null
+  // Sem nada para mostrar e sem botão para abrir, o bloco não tem razão de
+  // ocupar espaço. Recolhido, o botão fica: é ele que diz que existe histórico
+  if (linhas.length === 0 && !recolhido) return null
 
   // Quem fez, numa consulta só. Sem nome a linha continua valendo: data e
   // conteúdo da mudança são o essencial
@@ -82,53 +92,76 @@ export default async function HistoricoAlteracoes({
     })
   }
 
+  const lista = (
+    <div className="bg-white border border-[#DDDCD5] rounded-sm divide-y divide-[#EFEEE8]">
+      {linhas.length === 0 && (
+        <p className="px-3 py-2.5 text-xs text-[#6E6E68]">
+          Nenhuma alteração registrada ainda.
+        </p>
+      )}
+      {linhas.map((l) => {
+        const autor = l.criado_por ? nomes.get(l.criado_por) : null
+
+        return (
+          <div key={l.id} className="px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-semibold tracking-tight">
+                {ROTULO_ACAO[l.acao] ?? l.acao}
+              </span>
+              <span className="text-[10px] font-mono text-[#9B9A93] whitespace-nowrap">
+                {dataHora(l.created_at)}
+                {autor && ` · ${autor}`}
+              </span>
+            </div>
+
+            {(l.campos ?? []).length > 0 && (
+              <ul className="mt-1.5 space-y-0.5">
+                {(l.campos ?? []).map((c, i) => (
+                  <li key={i} className="text-[11px] text-[#6E6E68] leading-relaxed">
+                    <span className="text-[#131A2E]">{c.campo}</span>
+                    {': '}
+                    <span className="font-mono">{c.de ?? '—'}</span>
+                    {' → '}
+                    <span className="font-mono text-[#131A2E]">
+                      {c.para ?? '—'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {l.motivo && (
+              <p className="text-[11px] italic text-[#6E6E68] mt-1 leading-relaxed">
+                &ldquo;{l.motivo}&rdquo;
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  if (recolhido) {
+    return (
+      <details className="mt-6 group">
+        <summary className="list-none cursor-pointer select-none inline-flex items-center gap-2 border border-[#DDDCD5] rounded-sm px-3 py-2 text-xs tracking-wide text-[#6E6E68] hover:border-[#0090D8] hover:text-[#0090D8] [&::-webkit-details-marker]:hidden">
+          <span className="transition-transform group-open:rotate-90">›</span>
+          HISTÓRICO DE ALTERAÇÕES
+          <span className="font-mono text-[10px] bg-[#EEEDE7] rounded-sm px-1.5 py-0.5">
+            {linhas.length}
+          </span>
+        </summary>
+        <div className="mt-2">{lista}</div>
+      </details>
+    )
+  }
+
   return (
     <div className="mt-6">
       <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9B9A93] mb-2">
         {titulo}
       </p>
-
-      <div className="bg-white border border-[#DDDCD5] rounded-sm divide-y divide-[#EFEEE8]">
-        {linhas.map((l) => {
-          const autor = l.criado_por ? nomes.get(l.criado_por) : null
-
-          return (
-            <div key={l.id} className="px-3 py-2.5">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-xs font-semibold tracking-tight">
-                  {ROTULO_ACAO[l.acao] ?? l.acao}
-                </span>
-                <span className="text-[10px] font-mono text-[#9B9A93] whitespace-nowrap">
-                  {dataHora(l.created_at)}
-                  {autor && ` · ${autor}`}
-                </span>
-              </div>
-
-              {(l.campos ?? []).length > 0 && (
-                <ul className="mt-1.5 space-y-0.5">
-                  {(l.campos ?? []).map((c, i) => (
-                    <li key={i} className="text-[11px] text-[#6E6E68] leading-relaxed">
-                      <span className="text-[#131A2E]">{c.campo}</span>
-                      {': '}
-                      <span className="font-mono">{c.de ?? '—'}</span>
-                      {' → '}
-                      <span className="font-mono text-[#131A2E]">
-                        {c.para ?? '—'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {l.motivo && (
-                <p className="text-[11px] italic text-[#6E6E68] mt-1 leading-relaxed">
-                  &ldquo;{l.motivo}&rdquo;
-                </p>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {lista}
     </div>
   )
 }

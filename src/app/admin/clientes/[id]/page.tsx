@@ -54,7 +54,7 @@ export default async function ClienteDetalhePage({
         pagamentos={resumoPagamentos[id] ?? null}
       />
 
-      <HistoricoAlteracoes entidade="cliente" entidadeId={id} />
+      <HistoricoAlteracoes entidade="cliente" entidadeId={id} recolhido />
     </div>
   )
 }
