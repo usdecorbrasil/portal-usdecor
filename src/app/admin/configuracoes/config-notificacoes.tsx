@@ -32,10 +32,9 @@ export default function ConfigNotificacoes({
   const [sucesso, setSucesso] = useState(false)
   const [pendente, iniciar] = useTransition()
 
-  const nova: ConfigNotificacoes = {
-    pedido_novo: listarEmails(textos.pedido_novo),
-    cancelamento_solicitado: listarEmails(textos.cancelamento_solicitado),
-  }
+  const nova = Object.fromEntries(
+    TIPOS.map((tipo) => [tipo, listarEmails(textos[tipo])])
+  ) as ConfigNotificacoes
 
   const mudou = JSON.stringify(nova) !== JSON.stringify(configAtual)
 

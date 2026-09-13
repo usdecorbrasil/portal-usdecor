@@ -108,6 +108,33 @@ export async function clienteCancelar(
 
   if (error) return { ok: false, erro: error.message }
 
+  // Pedido que ainda aguardava confirmação some da fila sem ninguém decidir
+  // nada; o aviso é para a equipe saber que ele existiu e por que saiu
+  try {
+    const { data: p } = await supabase
+      .from('pedidos')
+      .select('numero, clientes(razao_social)')
+      .eq('id', parsed.data.pedidoId)
+      .maybeSingle()
+
+    if (p) {
+      const cliente = p.clientes as unknown as { razao_social: string } | null
+      await notificarEquipe('pedido_cancelado', {
+        pedidoId: parsed.data.pedidoId,
+        assunto: `Pedido #${p.numero} cancelado pelo cliente`,
+        html: templateInterno({
+          titulo: `Pedido #${p.numero}: cancelado antes da confirmação`,
+          linhas: [{ rotulo: 'Cliente', valor: cliente?.razao_social ?? '—' }],
+          texto: `Motivo: ${parsed.data.motivo}`,
+          urlAcao: `${urlDoSite()}/admin/pedidos/${parsed.data.pedidoId}`,
+          rotuloAcao: 'VER O PEDIDO',
+        }),
+      })
+    }
+  } catch (e) {
+    console.error('[pedido_cancelado]', e)
+  }
+
   revalidar()
   return { ok: true }
 }

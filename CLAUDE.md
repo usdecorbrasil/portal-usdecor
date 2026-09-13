@@ -370,8 +370,12 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 - ~~Aviso interno de pedido novo~~ — **feito em 13/09/2026**. Configurações → Notificações
   ("Avisos para a equipe"): lista de e-mails por tipo, em `configuracoes.notificacoes`
   (JSON, `docs/sql/014` cria a linha já com `bestcolortecidos@gmail.com`). Tipos hoje:
-  `pedido_novo` (dispara em `criarPedido`, depois de o pedido existir) e
-  `cancelamento_solicitado` (em `solicitarCancelamento`). Regras em
+  `pedido_novo` (dispara em `criarPedido`, depois de o pedido existir),
+  `pedido_cancelado` (em `clienteCancelar` — cliente cancela pedido ainda aguardando
+  confirmação; não exige resposta) e `cancelamento_solicitado` (em
+  `solicitarCancelamento` — pedido já confirmado; exige resposta). São dois eventos
+  distintos no banco (`cliente_cancelar_pedido` × `cliente_solicitar_cancelamento`), por
+  isso dois avisos. Regras em
   `src/lib/notificacoes/config.ts` (puro) e envio em `src/lib/notificacoes/enviar.ts`.
   - **Um e-mail só, com todos os destinatários no "para"**: assim `email_log` fica com uma
     linha por pedido + tipo e a trava de duplicidade continua valendo. `enviarEmail`

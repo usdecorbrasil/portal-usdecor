@@ -10,7 +10,7 @@
  * deploy toda vez que entrasse um segundo administrador.
  */
 
-export const TIPOS = ['pedido_novo', 'cancelamento_solicitado'] as const
+export const TIPOS = ['pedido_novo', 'pedido_cancelado', 'cancelamento_solicitado'] as const
 
 export type TipoNotificacao = (typeof TIPOS)[number]
 
@@ -19,9 +19,14 @@ export const ROTULOS: Record<TipoNotificacao, { titulo: string; descricao: strin
     titulo: 'Pedido novo',
     descricao: 'Quando qualquer cliente envia um pedido pelo carrinho.',
   },
+  pedido_cancelado: {
+    titulo: 'Pedido cancelado pelo cliente',
+    descricao:
+      'Quando o cliente cancela um pedido que ainda aguardava confirmação. Não exige resposta.',
+  },
   cancelamento_solicitado: {
     titulo: 'Cancelamento solicitado',
-    descricao: 'Quando um cliente pede para cancelar um pedido já confirmado.',
+    descricao: 'Quando um cliente pede para cancelar um pedido já confirmado. Exige resposta.',
   },
 }
 
@@ -29,6 +34,7 @@ export type ConfigNotificacoes = Record<TipoNotificacao, string[]>
 
 export const PADRAO: ConfigNotificacoes = {
   pedido_novo: [],
+  pedido_cancelado: [],
   cancelamento_solicitado: [],
 }
 

@@ -230,10 +230,11 @@ export async function atualizarConfigNotificacoes(
   if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
 
   const parsed = z
-    .object({
-      pedido_novo: z.array(z.string().email()).max(20),
-      cancelamento_solicitado: z.array(z.string().email()).max(20),
-    })
+    .object(
+      Object.fromEntries(
+        TIPOS.map((tipo) => [tipo, z.array(z.string().email()).max(20)])
+      ) as Record<(typeof TIPOS)[number], z.ZodArray<z.ZodString>>
+    )
     .safeParse(nova)
 
   if (!parsed.success) {
