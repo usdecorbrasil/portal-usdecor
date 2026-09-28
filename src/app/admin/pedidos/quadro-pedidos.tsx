@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { lancarStatus, ajustarItem } from '@/app/actions/producao'
 import { confirmarRomaneio } from '@/app/actions/romaneio'
 import { buscarItensPedido } from '@/app/actions/pedido-admin'
+import { agruparPedidos } from '@/app/actions/agrupamento'
 import {
   ModalRomaneio,
   ModalConfirmarValor,
@@ -38,6 +39,8 @@ const TOLERANCIA_TOQUE = 10
 export type PedidoQuadro = {
   id: string
   numero: number
+  /** Necessário para o agrupamento: só pedidos do mesmo cliente. */
+  clienteId: string
   cliente: string
   status: string
   unidades: number
@@ -94,6 +97,8 @@ export default function QuadroPedidos({
   const [erro, setErro] = useState('')
   const [recado, setRecado] = useState('')
   const [pendente, iniciar] = useTransition()
+  /** Pedidos prontos marcados para agrupar, aguardando confirmação. */
+  const [agrupando, setAgrupando] = useState<PedidoQuadro[] | null>(null)
 
   // Os handlers de ponteiro rodam fora do ciclo do React e precisam do valor
   // atual sem esperar re-render
@@ -117,6 +122,11 @@ export default function QuadroPedidos({
   const ordemSecoes = ATIVOS.filter(
     (s) => estagiosNaTela.includes(s) || extras.includes(s)
   )
+
+  /** Seções com checkbox: romaneio em Estampando; agrupamento em Pronto (só dono). */
+  function selecionavelEm(status: string) {
+    return status === 'estampando' || (status === 'pronto' && dono)
+  }
 
   function alternarSelecao(id: string) {
     setSelecionados((atual) => {
@@ -491,6 +501,23 @@ export default function QuadroPedidos({
     })
   }
 
+  /** Os pedidos prontos marcados viram um único pedido para cobrança e nota. */
+  function executarAgrupamento() {
+    if (!agrupando) return
+    const ids = agrupando.map((p) => p.id)
+    setErro('')
+    iniciar(async () => {
+      const r = await agruparPedidos(ids)
+      if (!r.ok) {
+        setErro(r.erro)
+        return
+      }
+      setAgrupando(null)
+      setSelecionados(new Set())
+      router.push('/admin/pedidos/' + r.pedidoId)
+    })
+  }
+
   /* ------------------------------ render ------------------------------ */
 
   const carregandoItens =
@@ -518,7 +545,7 @@ export default function QuadroPedidos({
         </div>
       )}
 
-      {erro && !movimento && (
+      {erro && !movimento && !agrupando && (
         <p className="text-sm text-[#B00063] bg-white border border-[#B00063] rounded-sm p-3">
           {erro}
         </p>
@@ -531,6 +558,7 @@ export default function QuadroPedidos({
         const destinoValido = !!arrasto && arrasto.destinos.includes(status)
         const sobreEste = !!arrasto && alvo === status
         const ehOrigem = arrasto?.pedido.status === status
+        const selecionavel = selecionavelEm(status)
 
         return (
           <section
@@ -590,11 +618,21 @@ export default function QuadroPedidos({
                 />
               )}
 
-              {lista.length > 0 && (
-                <CabecalhoColunas
-                  dono={dono}
-                  selecionavel={status === 'estampando'}
+              {status === 'pronto' && dono && lista.length > 1 && (
+                <BarraAgrupar
+                  itens={lista}
+                  selecionados={selecionados}
+                  pendente={pendente}
+                  onLimpar={() => setSelecionados(new Set())}
+                  onAgrupar={(marcados) => {
+                    setErro('')
+                    setAgrupando(marcados)
+                  }}
                 />
+              )}
+
+              {lista.length > 0 && (
+                <CabecalhoColunas dono={dono} selecionavel={selecionavel} />
               )}
 
               <div className="divide-y divide-[#EFEEE8]">
@@ -613,7 +651,7 @@ export default function QuadroPedidos({
                         houveArraste.current = false
                       }
                     }}
-                    selecionavel={status === 'estampando'}
+                    selecionavel={selecionavel}
                     marcado={selecionados.has(p.id)}
                     onMarcar={() => alternarSelecao(p.id)}
                   />
@@ -716,6 +754,161 @@ export default function QuadroPedidos({
           onConfirmar={() => avancar(movimento.destino)}
         />
       )}
+
+      {agrupando && (
+        <ModalAgrupar
+          pedidos={agrupando}
+          pendente={pendente}
+          erro={erro}
+          onCancelar={() => {
+            setAgrupando(null)
+            setErro('')
+          }}
+          onConfirmar={executarAgrupamento}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ---------------------------- barra do agrupamento ---------------------------- */
+
+/**
+ * Regras aplicadas na seleção: dois ou mais pedidos, todos do mesmo cliente,
+ * todos com romaneio confirmado. O banco valida de novo ao agrupar.
+ */
+function BarraAgrupar({
+  itens,
+  selecionados,
+  pendente,
+  onLimpar,
+  onAgrupar,
+}: {
+  itens: PedidoQuadro[]
+  selecionados: Set<string>
+  pendente: boolean
+  onLimpar: () => void
+  onAgrupar: (marcados: PedidoQuadro[]) => void
+}) {
+  const marcados = itens.filter((p) => selecionados.has(p.id))
+  const clientes = new Set(marcados.map((p) => p.clienteId))
+
+  let aviso = ''
+  if (marcados.length === 0) aviso = 'Selecione pedidos do mesmo cliente para agrupar em uma única cobrança'
+  else if (clientes.size > 1) aviso = 'Só é possível agrupar pedidos do mesmo cliente'
+  else if (marcados.length === 1) aviso = 'Marque ao menos mais um pedido de ' + marcados[0].cliente
+
+  const pronto = marcados.length >= 2 && clientes.size === 1
+  const total = marcados.reduce((s, p) => s + p.total, 0)
+
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap bg-[#FAFAF8] border-b border-[#EFEEE8] px-2.5 py-1.5">
+      <div className="text-[11px] text-[#6E6E68]">
+        {pronto ? (
+          <>
+            <strong className="text-[#131A2E]">{marcados.length}</strong> pedidos de{' '}
+            <strong className="text-[#131A2E]">{marcados[0].cliente}</strong> · R$ {brl(total)}
+          </>
+        ) : (
+          aviso
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        {marcados.length > 0 && (
+          <button
+            type="button"
+            onClick={onLimpar}
+            className="text-[11px] text-[#6E6E68] hover:text-[#131A2E]"
+          >
+            limpar
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={!pronto || pendente}
+          onClick={() => pronto && onAgrupar(marcados)}
+          className="bg-[#131A2E] text-white text-[10px] font-semibold tracking-wide rounded-sm px-2.5 py-1 disabled:opacity-40"
+        >
+          AGRUPAR
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ModalAgrupar({
+  pedidos,
+  pendente,
+  erro,
+  onCancelar,
+  onConfirmar,
+}: {
+  pedidos: PedidoQuadro[]
+  pendente: boolean
+  erro: string
+  onCancelar: () => void
+  onConfirmar: () => void
+}) {
+  const total = pedidos.reduce((s, p) => s + p.total, 0)
+  const metros = pedidos.reduce((s, p) => s + (p.metragemImpressa ?? 0), 0)
+  const precoMedio = metros > 0 ? total / metros : 0
+  const numeros = pedidos.map((p) => '#' + p.numero).join(', ')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#131A2E]/70" onClick={pendente ? undefined : onCancelar} />
+      <div className="relative bg-white rounded-sm px-6 py-5 w-full max-w-sm">
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6E6E68]">
+          Agrupar pedidos
+        </h3>
+        <p className="mt-2 text-sm font-semibold tracking-tight">
+          {numeros} · {pedidos[0].cliente}
+        </p>
+
+        <dl className="mt-3 text-xs text-[#6E6E68] space-y-1">
+          <div className="flex justify-between">
+            <dt>Metragem</dt>
+            <dd className="font-mono text-[#131A2E]">{brl(metros)} m</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Preço médio</dt>
+            <dd className="font-mono text-[#131A2E]">R$ {precoMedio.toFixed(4)}/m</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Total</dt>
+            <dd className="font-mono font-bold text-[#131A2E]">R$ {brl(total)}</dd>
+          </div>
+        </dl>
+
+        <ul className="mt-3 text-xs leading-relaxed text-[#6E6E68] list-disc pl-4 space-y-0.5">
+          <li>Nasce um pedido novo, já em Pedido pronto, para cobrança e nota.</li>
+          <li>Os pedidos originais saem daqui e ficam como Faturado.</li>
+          <li>Dá para desfazer enquanto o novo pedido não tiver cobrança nem nota.</li>
+        </ul>
+
+        {erro && (
+          <p className="mt-3 text-xs text-[#B00063] border border-[#B00063] rounded-sm px-3 py-2">
+            {erro}
+          </p>
+        )}
+
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={onCancelar}
+            disabled={pendente}
+            className="flex-1 border border-[#131A2E] rounded-sm py-2 text-sm font-semibold tracking-wide"
+          >
+            VOLTAR
+          </button>
+          <button
+            onClick={onConfirmar}
+            disabled={pendente}
+            className="flex-1 bg-[#131A2E] text-white rounded-sm py-2 text-sm font-semibold tracking-wide disabled:opacity-50"
+          >
+            {pendente ? 'AGRUPANDO…' : 'AGRUPAR'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

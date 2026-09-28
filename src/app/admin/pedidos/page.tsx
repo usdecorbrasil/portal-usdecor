@@ -59,7 +59,7 @@ export default async function PedidosAdminPage({
       .from('pedidos')
       .select(`
         id, numero, total, cliente_id, created_at, cancelado_em, metragem_impressa,
-        forma_pagamento, emitir_nf,
+        forma_pagamento, emitir_nf, agrupado_em,
         taxa_pagamento_percentual, taxa_pagamento_fixa,
         pedido_parcelas(valor),
         clientes(razao_social),
@@ -68,6 +68,8 @@ export default async function PedidosAdminPage({
         pedido_solicitacoes(id, status)
       `)
       .is('cancelado_em', null)
+      // Pedidos agrupados em outro saem da lista: quem segue é o agrupador
+      .is('agrupado_em', null)
       .order('created_at', { ascending: false }),
     dono
       ? supabase

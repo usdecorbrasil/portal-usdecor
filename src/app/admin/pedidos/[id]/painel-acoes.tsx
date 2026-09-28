@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import {
   lancarStatus,
+  faturarPedido,
   reimprimir,
   cancelarPedido,
   ajustarItem,
@@ -36,7 +37,7 @@ const MANUAIS = [
 
 const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
 
 const ROTULOS_PAGAMENTO: Record<string, string> = {
@@ -127,6 +128,7 @@ export default function PainelAcoes({
   )
   const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(intervaloBoleto))
   const [statusPendente, setStatusPendente] = useState<string | null>(null)
+  const [confirmandoFatura, setConfirmandoFatura] = useState(false)
 
   const idx = ORDEM.indexOf(statusAtual)
   const aguardando = statusAtual === 'aguardando'
@@ -135,8 +137,8 @@ export default function PainelAcoes({
   const passouNF = usados.some((s) =>
     ['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(s)
   )
-  // A partir de "pronto" o pedido já foi ao Bling com metragem e valor:
-  // mexer em quantidade ou preço aqui deixaria o ERP com outro pedido
+  // A partir de "pronto" o valor não muda mais: é o que vai ao Bling ao
+  // faturar. Mexer em quantidade ou preço deixaria o ERP com outro pedido
   const valorFechado = passouNF || idx >= ORDEM.indexOf('pronto')
   // Com o romaneio lançado, quantidade não muda mais nada; o que pode
   // mudar é a metragem — quebra na estamparia, por exemplo
@@ -157,6 +159,18 @@ export default function PainelAcoes({
       const r = await lancarStatus(pedidoId, chave)
       if (!r.ok) setErro(r.erro)
       setStatusPendente(null)
+    })
+  }
+
+  function faturar() {
+    setErro('')
+    iniciar(async () => {
+      const r = await faturarPedido(pedidoId)
+      if (!r.ok) {
+        setErro(r.erro)
+        return
+      }
+      setConfirmandoFatura(false)
     })
   }
 
@@ -554,6 +568,74 @@ export default function PainelAcoes({
             </div>
           </div>
         )
+      )}
+
+      {statusAtual === 'pronto' && podeCancelarOuAjustar && (
+        <div className="bg-[#FFF3F8] border-2 border-[#E8A9C7] rounded-sm p-4">
+          <h2 className="font-semibold tracking-tight text-sm text-[#8A2856]">
+            Faturar pedido
+          </h2>
+          <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            Envia o pedido ao Bling, gera a cobrança e avisa o cliente. Se
+            houver outros pedidos prontos deste cliente, agrupe antes na lista
+            de pedidos — depois de faturado não dá mais.
+          </p>
+
+          <dl className="mt-3 text-xs text-[#6E6E68] space-y-1">
+            <div className="flex justify-between">
+              <dt>Forma de pagamento</dt>
+              <dd className="text-[#131A2E]">
+                {ROTULOS_PAGAMENTO[formaPagamento] ?? formaPagamento}
+                {ehParcelado && parcelasAtuais > 0 ? ` (${parcelasAtuais}x)` : ''}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Nota fiscal</dt>
+              <dd className="text-[#131A2E]">{emitirNf ? 'emite' : 'sem nota'}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Total</dt>
+              <dd className="font-mono font-semibold text-[#131A2E]">R$ {brl(total)}</dd>
+            </div>
+          </dl>
+
+          {confirmandoFatura ? (
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <button
+                onClick={() => setConfirmandoFatura(false)}
+                disabled={pendente}
+                className="border border-[#131A2E] bg-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+              >
+                VOLTAR
+              </button>
+              <button
+                onClick={faturar}
+                disabled={pendente}
+                className="bg-[#B00063] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
+              >
+                {pendente ? 'FATURANDO...' : 'CONFIRMAR'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmandoFatura(true)}
+              disabled={pendente}
+              className="w-full mt-3 bg-[#B00063] text-white rounded-sm py-3 text-sm font-bold tracking-wider disabled:opacity-50"
+            >
+              FATURAR
+            </button>
+          )}
+        </div>
+      )}
+
+      {statusAtual === 'faturado' && (
+        <div className="bg-[#F4FAFD] border border-[#0090D8] rounded-sm p-4">
+          <h2 className="font-semibold tracking-tight text-sm">Pedido faturado</h2>
+          <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            Cobrança enviada ao cliente. As próximas etapas chegam pelo Bling
+            {emitirNf ? ': nota fiscal, expedição e baixa.' : ': expedição e baixa.'}
+          </p>
+        </div>
       )}
 
       {statusAtual === 'estampando' && (

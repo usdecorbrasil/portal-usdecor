@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 // As ações desta tela falam com o Bling e com o Resend; o padrão da
@@ -14,6 +15,7 @@ import {
 import PainelAcoes from './painel-acoes'
 import ReenviarBling from './reenviar-bling'
 import Faturamento, { type CobrancaLinha } from './faturamento'
+import Desagrupar from './desagrupar'
 import { urlDocumento } from '@/lib/storage/documentos'
 import { taxaDoPedido } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
@@ -28,6 +30,7 @@ const ROTULOS: Record<string, string> = {
   estampando: 'Estampando',
   corte_costura: 'Em corte / costura',
   pronto: 'Pedido pronto',
+  faturado: 'Faturado',
   nf_emitida: 'Nota fiscal emitida',
   expedido: 'Expedido',
   entregue: 'Entregue',
@@ -95,7 +98,7 @@ export default async function PedidoAdminPage({
   // tabelas embutidas a união fica grande demais para ele representar.
   // O retorno já é tratado como `any` logo abaixo.
   const campos: string = `
-      id, numero, notas, created_at, metragem_impressa,
+      id, numero, notas, created_at, metragem_impressa, agrupado_em,
       cancelado_em, cancelado_motivo, cancelado_por,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       bling_nf_id, nf_numero, nf_chave, nf_emitida_em, nf_pdf_path, nf_xml_path, nf_link_danfe,
@@ -125,12 +128,18 @@ export default async function PedidoAdminPage({
     `
 
   // As configurações não dependem do pedido: buscar em paralelo
-  const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto, configPagamento] =
+  const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto, configPagamento, { data: agrupamento }] =
     await Promise.all([
       supabase.from('pedidos').select(campos).eq('id', id).single(),
       buscarMaxParcelas(),
       buscarValorMinimoBoleto(),
       buscarConfigPagamento(),
+      // Se este pedido for um agrupador, a view traz os pedidos que ele reúne
+      supabase
+        .from('pedidos_agrupamento')
+        .select('pedidos_numeros, pedidos_ids')
+        .eq('agrupador_id', id)
+        .maybeSingle(),
     ])
 
   // Só "nenhuma linha" é 404. Qualquer outra falha da consulta (permissão,
@@ -148,7 +157,16 @@ export default async function PedidoAdminPage({
     cnpj: string
     preco_metro: number
   }
-  
+
+  // Agrupamento: este pedido reúne outros (agrupador) ou foi reunido em outro
+  const pedidosAgrupados = ((agrupamento?.pedidos_numeros ?? []) as number[]).map(Number)
+  const agrupadoEm = p.agrupado_em
+    ? await supabase.from('pedidos').select('id, numero').eq('id', p.agrupado_em).maybeSingle()
+    : null
+  const agrupador = agrupadoEm?.data
+    ? { id: String(agrupadoEm.data.id), numero: Number(agrupadoEm.data.numero) }
+    : null
+
   const itens = (p.pedido_itens ?? []) as any[]
   const parcelas = ((p.pedido_parcelas ?? []) as any[]).sort(
     (a, b) => a.numero - b.numero
@@ -372,9 +390,28 @@ export default async function PedidoAdminPage({
         {new Date(p.created_at).toLocaleDateString('pt-BR')}
       </p>
 
+      {/* Pedido original que foi reunido em outro: tudo segue pelo agrupador */}
+      {agrupador && (
+        <div className="mt-4 bg-[#F4F1F7] border border-[#A08FBF] rounded-sm p-4">
+          <p className="font-semibold tracking-tight text-sm text-[#5E4A80]">
+            Agrupado no pedido #{agrupador.numero}
+          </p>
+          <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            Cobrança, nota fiscal e expedição saem pelo pedido agrupador. Este
+            pedido fica aqui como registro do que foi produzido.
+          </p>
+          <Link
+            href={'/admin/pedidos/' + agrupador.id}
+            className="inline-block mt-3 bg-[#131A2E] text-white text-xs font-semibold tracking-wide rounded-sm px-3 py-2"
+          >
+            ABRIR PEDIDO #{agrupador.numero}
+          </Link>
+        </div>
+      )}
+
       {/* Sem isto, uma falha de sincronia com o ERP passaria despercebida —
-          e "pendente" depois de pronto é falha também: o envio morreu no meio */}
-      {dono && !cancelado && usados.includes('pronto') && p.bling_sync_status !== 'enviado' && (
+          e "pendente" depois de faturado é falha também: o envio morreu no meio */}
+      {dono && !cancelado && usados.includes('faturado') && !agrupador && p.bling_sync_status !== 'enviado' && (
         <ReenviarBling pedidoId={p.id} erro={p.bling_erro ?? null} />
       )}
 
@@ -514,7 +551,7 @@ export default async function PedidoAdminPage({
       {p.notas && (
         <>
           <Titulo>NOTAS DO CLIENTE</Titulo>
-          <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 text-sm leading-relaxed">
+          <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 text-sm leading-relaxed whitespace-pre-line">
             {p.notas}
           </div>
         </>
@@ -549,7 +586,7 @@ export default async function PedidoAdminPage({
         )}
       </div>
 
-      {!cancelado && (
+      {!cancelado && !agrupador && (
         <PainelAcoes
           pedidoId={p.id}
           numero={Number(p.numero)}
@@ -594,6 +631,16 @@ export default async function PedidoAdminPage({
         />
       )}
 
+      {/* Agrupador: mostra os pedidos reunidos e permite desfazer */}
+      {!cancelado && dono && pedidosAgrupados.length > 0 && (
+        <Desagrupar
+          pedidoId={p.id}
+          numero={Number(p.numero)}
+          pedidosNumeros={pedidosAgrupados}
+          bloqueado={!!p.cobranca_gerada_em || !!p.nf_numero || !!p.link_boleto}
+        />
+      )}
+
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-5">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="font-semibold tracking-tight text-sm">
@@ -634,7 +681,7 @@ export default async function PedidoAdminPage({
         )}
       </div>
 
-      {dono && (
+      {dono && !agrupador && (
         <NotaFiscal
           pedidoId={p.id}
           emitirNf={p.emitir_nf !== false}

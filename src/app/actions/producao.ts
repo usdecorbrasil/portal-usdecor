@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateEmProducao } from '@/lib/resend/templates/em-producao'
 import { MAX_PARCELAS, taxaDoPedido } from '@/lib/pagamento/config'
@@ -35,8 +36,8 @@ export async function lancarStatus(
 
   if (!parsed.success) return { ok: false, erro: 'Dados inválidos.' }
 
-  // Boleto abaixo do mínimo não fecha: "Pedido pronto" é o último momento em
-  // que ainda dá para trocar forma ou parcelas sem mexer em cobrança emitida
+  // Boleto abaixo do mínimo não fecha: avisa já em "Pedido pronto" para o
+  // dono ajustar forma ou parcelas antes de faturar
   if (parsed.data.status === 'pronto') {
     const bloqueio = await boletoAbaixoDoMinimo(parsed.data.pedidoId)
     if (bloqueio) return { ok: false, erro: bloqueio }
@@ -82,18 +83,9 @@ export async function lancarStatus(
     }
   }
 
-  // Ao ficar pronto: pedido no ERP e cobrança ao cliente. Em `after()`, depois
-  // de a resposta sair: são três chamadas ao Bling com pausa entre elas mais
-  // um e-mail, e esperar por isso dentro da requisição estourava o tempo da
-  // função na Vercel — o pedido 1006 ficou "pendente" sem nunca ser enviado.
-  // Nenhum dos dois pode derrubar o lançamento da etapa
-  if (parsed.data.status === 'pronto') {
-    const id = parsed.data.pedidoId
-    after(async () => {
-      await sincronizarPedidoComBling(id)
-      await enviarCobrancaPedido(id)
-    })
-  }
+  // "Pedido pronto" não envia mais ao Bling nem gera cobrança sozinho.
+  // Isso passou a ser decisão do dono, em `faturarPedido` — assim os pedidos
+  // prontos do mesmo cliente podem ser agrupados antes de faturar.
 
   revalidar()
   return { ok: true }
@@ -148,8 +140,57 @@ async function boletoAbaixoDoMinimo(pedidoId: string): Promise<string | null> {
 
   return (
     `Cada boleto ficaria em R$ ${brl(documento)}, abaixo do mínimo de R$ ${brl(minimo)}. ` +
-    'Altere a forma de pagamento — menos parcelas ou outra forma — antes de dar o pedido como pronto.'
+    'Altere a forma de pagamento — menos parcelas ou outra forma — antes de faturar.'
   )
+}
+
+/**
+ * Faturar: pedido no Bling, cobrança ao cliente e etapa "faturado".
+ * Substitui o que antes acontecia sozinho ao lançar "Pedido pronto" —
+ * agora é decisão do dono, e vale para pedido avulso ou agrupado.
+ * Roda em `after()` pelo mesmo motivo de antes: três chamadas ao Bling
+ * mais e-mail não cabem no tempo de uma requisição.
+ */
+export async function faturarPedido(pedidoId: string): Promise<Resultado> {
+  const parsed = z.string().uuid().safeParse(pedidoId)
+  if (!parsed.success) return { ok: false, erro: 'Pedido inválido.' }
+  const id = parsed.data
+
+  // Última chance de trocar forma ou parcelas antes de emitir cobrança
+  const bloqueio = await boletoAbaixoDoMinimo(id)
+  if (bloqueio) return { ok: false, erro: bloqueio }
+
+  const supabase = await createClient()
+  const { data: pedido, error } = await supabase
+    .from('pedidos')
+    .select('id, agrupado_em, cobranca_gerada_em')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error || !pedido) return { ok: false, erro: 'Pedido não encontrado.' }
+  if (pedido.agrupado_em) return { ok: false, erro: 'Pedido agrupado — fature pelo agrupador.' }
+  if (pedido.cobranca_gerada_em) return { ok: false, erro: 'Cobrança já gerada para este pedido.' }
+
+  after(async () => {
+    await sincronizarPedidoComBling(id)
+    await enviarCobrancaPedido(id)
+
+    // Só marca "faturado" se a cobrança de fato saiu
+    const admin = createAdminClient()
+    const { data: p } = await admin
+      .from('pedidos')
+      .select('bling_sync_status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (p?.bling_sync_status === 'enviado') {
+      await admin.rpc('marcar_pedido_faturado', { p_pedido_id: id })
+    }
+  })
+
+  revalidar()
+  revalidatePath(`/admin/pedidos/${id}`)
+  return { ok: true }
 }
 
 export async function reimprimir(
@@ -216,7 +257,7 @@ export async function cancelarPedido(
 }
 
 /** Etapas em que quantidade e preço não mudam mais: o valor já foi ao Bling. */
-const VALOR_FECHADO = ['pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado']
+const VALOR_FECHADO = ['pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado']
 
 async function valorFechado(pedidoId: string): Promise<boolean> {
   const supabase = await createClient()
@@ -383,6 +424,7 @@ export async function alterarPrecoPedido(
   revalidatePath('/pedidos')
   return { ok: true }
 }
+
 export async function alterarFormaPagamento(
   pedidoId: string,
   formaNova: string,
@@ -432,9 +474,10 @@ export async function alterarFormaPagamento(
 /**
  * Define se o pedido sai com ou sem nota fiscal.
  *
- * A decisão vale até "Pedido pronto": é a etapa que cria o pedido de venda no
- * Bling, e quem fatura lê a decisão de lá. Depois da nota emitida o banco
- * recusa a troca — mudar viraria divergência com o que já foi para a SEFAZ.
+ * A decisão vale até o faturamento: é `faturarPedido` que cria o pedido de
+ * venda no Bling, e quem fatura lê a decisão de lá. Depois da nota emitida o
+ * banco recusa a troca — mudar viraria divergência com o que já foi para a
+ * SEFAZ.
  *
  * O motivo só é exigido para dispensar a nota. Emitir é o caminho normal e não
  * precisa de justificativa; a exceção é que precisa ficar registrada.

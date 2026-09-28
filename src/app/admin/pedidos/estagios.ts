@@ -10,6 +10,7 @@ export const ROTULOS: Record<string, string> = {
   estampando: 'Estampando',
   corte_costura: 'Em corte / costura',
   pronto: 'Pedido pronto',
+  faturado: 'Faturado',
   nf_emitida: 'Nota fiscal emitida',
   expedido: 'Expedido',
   entregue: 'Entregue',
@@ -17,7 +18,7 @@ export const ROTULOS: Record<string, string> = {
 
 export const ATIVOS = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'nf_emitida', 'expedido', 'entregue',
+  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue',
 ]
 
 export const EM_PRODUCAO = [
@@ -30,7 +31,8 @@ export const MANUAIS = ['impressao', 'estampando', 'corte_costura', 'pronto']
 /**
  * Para onde um pedido em `origem` pode ser arrastado. Espelha a regra do
  * painel do pedido: uma etapa por vez, exceto saindo de Estampando, onde a
- * costura pode ser pulada.
+ * costura pode ser pulada. "Faturado" é lançado pelo botão Faturar, não
+ * por arraste.
  */
 export function destinosPermitidos(origem: string): string[] {
   if (origem === 'aguardando') return []
@@ -42,6 +44,9 @@ export function destinosPermitidos(origem: string): string[] {
 export function sinal(status: string, dias: number) {
   if (status === 'aguardando') {
     return { cl: 'novo', tx: 'Aguardando sua confirmação' }
+  }
+  if (status === 'faturado') {
+    return { cl: 'bling', tx: 'Faturado — aguardando nota e expedição' }
   }
   if (!EM_PRODUCAO.includes(status)) {
     return { cl: 'bling', tx: 'Aguardando o Bling' }
@@ -57,6 +62,7 @@ export function sinal(status: string, dias: number) {
 /** Versão curta do sinal, para a etiqueta compacta da linha. */
 export function sinalCurto(status: string, dias: number) {
   if (status === 'aguardando') return 'confirmar'
+  if (status === 'faturado') return 'faturado'
   if (!EM_PRODUCAO.includes(status)) return 'bling'
   if (dias === 0) return 'hoje'
   if (dias === 1) return 'ontem'
@@ -71,8 +77,11 @@ export function motivoSemDestino(status: string): string | null {
   if (status === 'aguardando') {
     return 'Este pedido ainda aguarda confirmação. Confirme-o na tela do pedido — depois ele pode ser arrastado.'
   }
+  if (status === 'pronto') {
+    return 'Pedido pronto é faturado pelo botão Faturar na tela do pedido — ou agrupado com outros do mesmo cliente antes disso.'
+  }
   if (destinosPermitidos(status).length === 0) {
-    return 'A partir de Pedido pronto as etapas são lançadas pelo Bling (nota fiscal, expedição, entrega); não dá para mover à mão.'
+    return 'A partir do faturamento as etapas são lançadas pelo Bling (nota fiscal, expedição, entrega); não dá para mover à mão.'
   }
   return null
 }
@@ -163,6 +172,17 @@ export const CORES_ESTAGIO: { [key: string]: CorEstagio } = {
       leve: 'bg-[#E1EDE4] text-[#4F7358]',
       medio: 'bg-[#BDD9C6] text-[#2F4E37]',
       forte: 'bg-[#8CB399] text-[#1D3323]',
+    },
+  },
+  faturado: {
+    fundo: 'bg-[#F4F1F7]',
+    borda: 'border-[#A08FBF]',
+    faixa: 'bg-[#A08FBF]',
+    texto: 'text-[#5E4A80]',
+    tarja: {
+      leve: 'bg-[#EAE4F1] text-[#6A578C]',
+      medio: 'bg-[#D2C6E3] text-[#4A386A]',
+      forte: 'bg-[#A08FBF] text-[#2E1F4A]',
     },
   },
   nf_emitida: {
