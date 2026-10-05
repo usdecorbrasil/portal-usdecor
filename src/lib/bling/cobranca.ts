@@ -143,3 +143,24 @@ export async function buscarLinksCobranca(
 ): Promise<LinkCobranca[]> {
   return buscarCobrancasDoPedido(contatoId, 0, esperados)
 }
+
+/**
+ * Cartão: lança as contas a receber e lê o que o Bling criou, sem esperar
+ * link — não há boleto nem Pix a emitir. A conta fica lá, com a forma de
+ * pagamento do cartão, para o financeiro dar baixa quando o dinheiro cair.
+ */
+export async function lancarEObterContas(
+  contatoId: number,
+  blingPedidoId: number,
+  esperados: { valor: number; vencimento: string }[]
+): Promise<
+  | { ok: true; contas: LinkCobranca[]; jaLancadas: boolean }
+  | { ok: false; erro: string }
+> {
+  const l = await lancarContas(blingPedidoId)
+  if (!l.ok) return l
+
+  await pausa()
+  const contas = await buscarCobrancasDoPedido(contatoId, blingPedidoId, esperados)
+  return { ok: true, contas, jaLancadas: l.jaLancadas }
+}
