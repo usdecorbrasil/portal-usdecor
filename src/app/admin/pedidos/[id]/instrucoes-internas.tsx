@@ -9,15 +9,31 @@ import { salvarInstrucoesInternas } from '@/app/actions/producao'
  * mas com cara diferente de propósito: a do cliente é imutável e o cliente
  * vê; esta é da equipe, editável, e o cliente nunca vê.
  */
+export type MudancaInstrucao = {
+  acao: 'editado' | 'apagado'
+  textoAnterior: string | null
+  textoNovo: string | null
+  autor: string | null
+  data: string
+}
+
+function dataHora(iso: string) {
+  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
 export default function InstrucoesInternas({
   pedidoId,
   texto,
+  historico,
 }: {
   pedidoId: string
   texto: string | null
+  /** Mudanças anteriores, da mais recente para a mais antiga (gatilho no banco). */
+  historico: MudancaInstrucao[]
 }) {
   const router = useRouter()
   const [editando, setEditando] = useState(false)
+  const [mostrarHistorico, setMostrarHistorico] = useState(false)
   const [rascunho, setRascunho] = useState(texto ?? '')
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
@@ -94,6 +110,44 @@ export default function InstrucoesInternas({
         <p className="text-xs text-[#9B9A93] border border-dashed border-[#E8D9A8] rounded-sm px-4 py-3">
           Nenhuma anotação da equipe neste pedido.
         </p>
+      )}
+
+      {/* Nada se perde ao substituir: cada versão anterior fica aqui, com quem
+          mudou e quando. Recolhido por padrão para não competir com o texto atual */}
+      {historico.length > 0 && (
+        <div className="mt-2">
+          <button
+            onClick={() => setMostrarHistorico((v) => !v)}
+            className="text-[11px] text-[#8A6A00] hover:underline"
+          >
+            {mostrarHistorico ? 'ocultar histórico' : `histórico (${historico.length})`}
+          </button>
+
+          {mostrarHistorico && (
+            <ol className="mt-2 space-y-1.5">
+              {historico.map((h, i) => (
+                <li key={i} className="border border-[#E8D9A8] rounded-sm p-3 text-xs">
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-[#8A6A00]">
+                    {h.acao === 'apagado' ? 'Apagado' : h.textoAnterior ? 'Editado' : 'Anotado'} · {dataHora(h.data)}
+                    {h.autor && ` · por ${h.autor}`}
+                  </p>
+                  {h.textoAnterior && (
+                    <p className="mt-1.5 text-[#6E6E68] whitespace-pre-line">
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-[#9B9A93]">antes: </span>
+                      <span className="line-through decoration-[#C9B98A]">{h.textoAnterior}</span>
+                    </p>
+                  )}
+                  {h.textoNovo && (
+                    <p className="mt-1 text-[#131A2E] whitespace-pre-line">
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-[#9B9A93]">depois: </span>
+                      {h.textoNovo}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       )}
     </>
   )
