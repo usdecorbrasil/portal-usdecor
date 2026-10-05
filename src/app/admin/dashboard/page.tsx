@@ -2,11 +2,15 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
+import FiltroPeriodo from './filtro-periodo'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'corte_costura', 'pronto']
+
+// "Em andamento" termina em Pedido pronto. Faturar já emite nota e cobrança,
+// então daí em diante o pedido é assunto do financeiro e do Bling, não deste bloco
 
 const MESES = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -20,16 +24,89 @@ type ResumoCliente = {
   pedidos: number
 }
 
-export default async function DashboardPage() {
+function iso(d: Date) {
+  const ano = d.getFullYear()
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
+
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
+
+function dataValida(s: string | undefined): string | null {
+  if (!s || !DATA_ISO.test(s)) return null
+  return isNaN(new Date(s + 'T00:00:00').getTime()) ? null : s
+}
+
+function dataCurta(s: string) {
+  return new Date(s + 'T00:00:00').toLocaleDateString('pt-BR')
+}
+
+/**
+ * Período de comparação. Quando o filtro começa no dia 1, compara com o mês
+ * anterior **até o mesmo dia**: no dia 5, o faturamento de 1 a 5 contra o de
+ * 1 a 5 do mês passado — comparar com o mês passado inteiro faria o mês
+ * corrente parecer sempre pior. Com datas soltas, usa a janela de mesmo
+ * tamanho imediatamente antes.
+ */
+function periodoAnterior(de: Date, ate: Date) {
+  if (de.getDate() === 1) {
+    const inicio = new Date(de.getFullYear(), de.getMonth() - 1, 1)
+    const ultimoDia = new Date(de.getFullYear(), de.getMonth(), 0).getDate()
+    // Dia 31 num mês de 30: fica no último dia que o mês anterior tem
+    const dia = Math.min(ate.getDate(), ultimoDia)
+    return {
+      de: inicio,
+      ate: new Date(inicio.getFullYear(), inicio.getMonth(), dia),
+      rotulo: `1 a ${dia} de ${MESES[inicio.getMonth()].slice(0, 3)}`,
+    }
+  }
+
+  const dias = Math.round((ate.getTime() - de.getTime()) / 86_400_000) + 1
+  const inicio = new Date(de)
+  inicio.setDate(inicio.getDate() - dias)
+  const fim = new Date(de)
+  fim.setDate(fim.getDate() - 1)
+  return { de: inicio, ate: fim, rotulo: `${dias} dias antes` }
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ de?: string; ate?: string }>
+}) {
   const perfil = await lerPerfil()
 
   if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) redirect('/admin/pedidos')
 
-  const supabase = await createClient()
+  const params = await searchParams
+  const hoje = new Date()
 
-  const agora = new Date()
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const inicioMesAnterior = new Date(agora.getFullYear(), agora.getMonth() - 1, 1)
+  // Sem filtro, o mês corrente. Data inválida ou invertida cai no padrão
+  let dataDe = dataValida(params.de) ?? iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
+  let dataAte = dataValida(params.ate) ?? iso(hoje)
+  if (dataDe > dataAte) {
+    dataDe = iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
+    dataAte = iso(hoje)
+  }
+
+  const inicio = new Date(dataDe + 'T00:00:00')
+  const fim = new Date(dataAte + 'T23:59:59.999')
+  const anterior = periodoAnterior(inicio, new Date(dataAte + 'T00:00:00'))
+  const inicioAnterior = anterior.de
+  const fimAnterior = new Date(iso(anterior.ate) + 'T23:59:59.999')
+
+  const mesCalendario =
+    inicio.getDate() === 1 &&
+    (dataAte === iso(new Date(inicio.getFullYear(), inicio.getMonth() + 1, 0)) ||
+      (inicio.getFullYear() === hoje.getFullYear() &&
+        inicio.getMonth() === hoje.getMonth() &&
+        dataAte === iso(hoje)))
+  const tituloPeriodo = mesCalendario
+    ? `${MESES[inicio.getMonth()]} de ${inicio.getFullYear()}`
+    : `${dataCurta(dataDe)} a ${dataCurta(dataAte)}`
+
+  const supabase = await createClient()
 
   // A contagem de clientes não depende dos pedidos: busca junto
   const [{ data: pedidos }, { count: clientesAtivos }] = await Promise.all([
@@ -79,28 +156,37 @@ export default async function DashboardPage() {
   // Pedidos aguardando confirmação não entram no faturamento
   const confirmados = validos.filter((p) => p.status !== 'aguardando')
 
-  const doMes = confirmados.filter((p) => p.criado >= inicioMes)
-  const doMesAnterior = confirmados.filter(
-    (p) => p.criado >= inicioMesAnterior && p.criado < inicioMes
+  const doPeriodo = confirmados.filter((p) => p.criado >= inicio && p.criado <= fim)
+  const doAnterior = confirmados.filter(
+    (p) => p.criado >= inicioAnterior && p.criado <= fimAnterior
   )
 
-  const fatMes = doMes.reduce((a, p) => a + p.total, 0)
-  const fatAnterior = doMesAnterior.reduce((a, p) => a + p.total, 0)
+  const fatPeriodo = doPeriodo.reduce((a, p) => a + p.total, 0)
+  const fatAnterior = doAnterior.reduce((a, p) => a + p.total, 0)
   const variacao =
-    fatAnterior > 0 ? ((fatMes - fatAnterior) / fatAnterior) * 100 : null
+    fatAnterior > 0 ? ((fatPeriodo - fatAnterior) / fatAnterior) * 100 : null
 
-  const metrosMes = doMes.reduce((a, p) => a + p.metros, 0)
-  const emProducao = validos.filter((p) => EM_PRODUCAO.includes(p.status))
-  const metrosProducao = emProducao.reduce((a, p) => a + p.metros, 0)
-  const ticket = doMes.length > 0 ? fatMes / doMes.length : 0
+  const metrosPeriodo = doPeriodo.reduce((a, p) => a + p.metros, 0)
+  const ticket = doPeriodo.length > 0 ? fatPeriodo / doPeriodo.length : 0
 
+  /* ---- em andamento: até pedido pronto, qualquer que seja a data ---- */
   const aguardando = validos.filter((p) => p.status === 'aguardando')
   const solicitacoes = validos.filter((p) => p.temSolicitacao)
   const valorAguardando = aguardando.reduce((a, p) => a + p.total, 0)
 
+  const emProducao = validos.filter((p) => EM_PRODUCAO.includes(p.status))
+  const metrosProducao = emProducao.reduce((a, p) => a + p.metros, 0)
+  const valorProducao = emProducao.reduce((a, p) => a + p.total, 0)
+
+  const andamento = validos.filter(
+    (p) => p.status === 'aguardando' || EM_PRODUCAO.includes(p.status)
+  )
+  const emAndamento = andamento.length
+  const valorEmAndamento = andamento.reduce((a, p) => a + p.total, 0)
+
   const porCliente: Record<string, ResumoCliente> = {}
 
-  doMes.forEach((p) => {
+  doPeriodo.forEach((p) => {
     if (!porCliente[p.clienteId]) {
       porCliente[p.clienteId] = {
         nome: p.cliente,
@@ -125,9 +211,12 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
         Dashboard
       </h1>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-6">
-        {MESES[agora.getMonth()]} de {agora.getFullYear()}
+      <p className="text-sm text-[#6E6E68] mt-1 mb-4">
+        {tituloPeriodo}
+        {clientesAtivos ? ` · ${clientesAtivos} cliente${clientesAtivos > 1 ? 's' : ''} ativo${clientesAtivos > 1 ? 's' : ''}` : ''}
       </p>
+
+      <FiltroPeriodo de={dataDe} ate={dataAte} />
 
       {/* ---- pendências ---- */}
       {(aguardando.length > 0 || solicitacoes.length > 0) && (
@@ -178,14 +267,14 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* ---- indicadores ---- */}
+      {/* ---- indicadores do período ---- */}
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
           <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
-            FATURAMENTO DO MÊS
+            FATURAMENTO NO PERÍODO
           </div>
           <div className="font-mono font-semibold text-base sm:text-xl mt-0.5 sm:mt-1">
-            R$ {brl(fatMes)}
+            R$ {brl(fatPeriodo)}
           </div>
           {variacao !== null && (
             <div
@@ -194,61 +283,102 @@ export default async function DashboardPage() {
               }`}
             >
               {variacao >= 0 ? '↑' : '↓'} {Math.abs(variacao).toFixed(1)}% vs{' '}
-              {MESES[inicioMesAnterior.getMonth()].slice(0, 3)}
+              {anterior.rotulo}
             </div>
           )}
         </div>
 
-        <Cartao rotulo="PEDIDOS NO MÊS" valor={String(doMes.length)} />
+        <Cartao rotulo="PEDIDOS NO PERÍODO" valor={String(doPeriodo.length)} />
         <Cartao rotulo="TICKET MÉDIO" valor={`R$ ${brl(ticket)}`} />
-        <Cartao rotulo="METRAGEM NO MÊS" valor={`${brl(metrosMes)} m`} />
+        <Cartao rotulo="METRAGEM NO PERÍODO" valor={`${brl(metrosPeriodo)} m`} />
       </div>
 
-      {/* ---- em andamento ---- */}
-      <Titulo>EM ANDAMENTO</Titulo>
+      {/* ---- em andamento: não depende do período ---- */}
+      <Titulo>EM ANDAMENTO — QUALQUER DATA</Titulo>
 
-      <Link
-        href="/admin/pedidos"
-        className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
-      >
+      <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
         <div className="flex items-baseline justify-between gap-3">
           <div>
             <div className="font-mono text-lg sm:text-2xl font-semibold">
-              {emProducao.length}
+              {emAndamento}
             </div>
             <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
-              pedidos em produção
+              pedido{emAndamento !== 1 ? 's' : ''} em andamento
             </div>
           </div>
           <div className="text-right">
             <div className="font-mono text-sm sm:text-lg font-semibold">
-              {brl(metrosProducao)} m
+              R$ {brl(valorEmAndamento)}
             </div>
-            <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">a estampar</div>
+            <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
+              a confirmar ou produzir
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-[#DDDCD5] flex flex-wrap gap-x-3 gap-y-1 sm:gap-x-4">
-          {EM_PRODUCAO.map((e) => {
-            const n = emProducao.filter((p) => p.status === e).length
-            if (n === 0) return null
-            return (
-              <span key={e} className="text-[10px] sm:text-xs text-[#6E6E68]">
-                {rotuloEtapa(e)}{' '}
-                <strong className="font-mono text-[#131A2E]">{n}</strong>
-              </span>
-            )
-          })}
-        </div>
-      </Link>
+      <div className="grid sm:grid-cols-2 gap-2 sm:gap-3 mt-2 sm:mt-3">
+        <Link
+          href="/admin/pedidos?etapa=aguardando"
+          className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
+        >
+          <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
+            AGUARDANDO CONFIRMAÇÃO
+          </div>
+          <div className="flex items-baseline justify-between gap-2 mt-0.5 sm:mt-1">
+            <span className="font-mono font-semibold text-base sm:text-xl">
+              {aguardando.length}
+            </span>
+            <span className="font-mono text-xs sm:text-sm text-[#6E6E68]">
+              R$ {brl(valorAguardando)}
+            </span>
+          </div>
+        </Link>
+
+        <Link
+          href="/admin/pedidos"
+          className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
+        >
+          <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
+            EM PRODUÇÃO
+          </div>
+          <div className="flex items-baseline justify-between gap-2 mt-0.5 sm:mt-1">
+            <span className="font-mono font-semibold text-base sm:text-xl">
+              {emProducao.length}
+            </span>
+            <span className="font-mono text-xs sm:text-sm text-[#6E6E68]">
+              R$ {brl(valorProducao)}
+            </span>
+          </div>
+          <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-1 font-mono">
+            {brl(metrosProducao)} m a estampar
+          </div>
+          <div className="mt-2 pt-2 border-t border-[#DDDCD5] flex flex-wrap gap-x-3 gap-y-1">
+            {EM_PRODUCAO.map((e) => {
+              const n = emProducao.filter((p) => p.status === e).length
+              if (n === 0) return null
+              return (
+                <span key={e} className="text-[10px] sm:text-xs text-[#6E6E68]">
+                  {rotuloEtapa(e)}{' '}
+                  <strong className="font-mono text-[#131A2E]">{n}</strong>
+                </span>
+              )
+            })}
+            {emProducao.length === 0 && (
+              <span className="text-[10px] sm:text-xs text-[#6E6E68]">nada em produção</span>
+            )}
+          </div>
+        </Link>
+
+      </div>
 
       {/* ---- ranking ---- */}
-      <Titulo>PRINCIPAIS CLIENTES DO MÊS</Titulo>
+      <Titulo>PRINCIPAIS CLIENTES NO PERÍODO</Titulo>
 
       {ranking.length === 0 ? (
         <div className="border border-dashed border-[#DDDCD5] rounded-sm py-10 text-center">
           <p className="text-sm text-[#6E6E68]">
-            Nenhum pedido confirmado este mês.
+            Nenhum pedido confirmado neste período.
           </p>
         </div>
       ) : (
