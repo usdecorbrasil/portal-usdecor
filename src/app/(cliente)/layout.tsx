@@ -44,7 +44,7 @@ export default async function ClienteLayout({
         <header className="bg-white border-b border-[#DDDCD5]">
           <div className="max-w-3xl mx-auto px-5 py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <Link href="/catalogo" aria-label="Ir para o catálogo">
+              <Link href="/pedidos" aria-label="Ir para os pedidos">
                 <Image
                   src="/logo-horizontal.png"
                   alt="Best Color Tecidos"
