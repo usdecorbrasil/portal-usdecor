@@ -9,9 +9,8 @@ const brl = (v: number) =>
 
 const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'corte_costura', 'pronto']
 
-// "Em andamento" vai até Faturado. Daí em diante (NF, expedição, entrega, baixa)
-// o pedido é do Bling e deixa de ser acompanhado aqui
-const EM_ANDAMENTO = [...EM_PRODUCAO, 'faturado']
+// "Em andamento" termina em Pedido pronto. Faturar já emite nota e cobrança,
+// então daí em diante o pedido é assunto do financeiro e do Bling, não deste bloco
 
 const MESES = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -170,7 +169,7 @@ export default async function DashboardPage({
   const metrosPeriodo = doPeriodo.reduce((a, p) => a + p.metros, 0)
   const ticket = doPeriodo.length > 0 ? fatPeriodo / doPeriodo.length : 0
 
-  /* ---- em andamento: até faturado, qualquer que seja a data ---- */
+  /* ---- em andamento: até pedido pronto, qualquer que seja a data ---- */
   const aguardando = validos.filter((p) => p.status === 'aguardando')
   const solicitacoes = validos.filter((p) => p.temSolicitacao)
   const valorAguardando = aguardando.reduce((a, p) => a + p.total, 0)
@@ -179,11 +178,8 @@ export default async function DashboardPage({
   const metrosProducao = emProducao.reduce((a, p) => a + p.metros, 0)
   const valorProducao = emProducao.reduce((a, p) => a + p.total, 0)
 
-  const faturados = validos.filter((p) => p.status === 'faturado')
-  const valorFaturados = faturados.reduce((a, p) => a + p.total, 0)
-
   const andamento = validos.filter(
-    (p) => p.status === 'aguardando' || EM_ANDAMENTO.includes(p.status)
+    (p) => p.status === 'aguardando' || EM_PRODUCAO.includes(p.status)
   )
   const emAndamento = andamento.length
   const valorEmAndamento = andamento.reduce((a, p) => a + p.total, 0)
@@ -298,7 +294,7 @@ export default async function DashboardPage({
       </div>
 
       {/* ---- em andamento: não depende do período ---- */}
-      <Titulo>EM ANDAMENTO — ATÉ FATURADO, QUALQUER DATA</Titulo>
+      <Titulo>EM ANDAMENTO — QUALQUER DATA</Titulo>
 
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
         <div className="flex items-baseline justify-between gap-3">
@@ -315,13 +311,13 @@ export default async function DashboardPage({
               R$ {brl(valorEmAndamento)}
             </div>
             <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
-              a confirmar, produzir ou faturar
+              a confirmar ou produzir
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-2 sm:gap-3 mt-2 sm:mt-3">
+      <div className="grid sm:grid-cols-2 gap-2 sm:gap-3 mt-2 sm:mt-3">
         <Link
           href="/admin/pedidos?etapa=aguardando"
           className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
@@ -374,25 +370,6 @@ export default async function DashboardPage({
           </div>
         </Link>
 
-        <Link
-          href="/admin/pedidos?etapa=faturado"
-          className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
-        >
-          <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
-            FATURADOS
-          </div>
-          <div className="flex items-baseline justify-between gap-2 mt-0.5 sm:mt-1">
-            <span className="font-mono font-semibold text-base sm:text-xl">
-              {faturados.length}
-            </span>
-            <span className="font-mono text-xs sm:text-sm text-[#6E6E68]">
-              R$ {brl(valorFaturados)}
-            </span>
-          </div>
-          <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-1">
-            aguardando nota e expedição
-          </div>
-        </Link>
       </div>
 
       {/* ---- ranking ---- */}
