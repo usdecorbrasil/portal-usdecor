@@ -276,7 +276,7 @@ export default async function DashboardPage({
           <div className="font-mono font-semibold text-base sm:text-xl mt-0.5 sm:mt-1">
             R$ {brl(fatPeriodo)}
           </div>
-          {variacao !== null && (
+          {variacao !== null ? (
             <div
               className={`text-[9px] sm:text-[10px] font-mono mt-0.5 sm:mt-1 ${
                 variacao >= 0 ? 'text-[#2E7D4F]' : 'text-[#B00063]'
@@ -284,6 +284,11 @@ export default async function DashboardPage({
             >
               {variacao >= 0 ? '↑' : '↓'} {Math.abs(variacao).toFixed(1)}% vs{' '}
               {anterior.rotulo}
+            </div>
+          ) : (
+            // Sem base de comparação a linha some sem explicar; melhor dizer
+            <div className="text-[9px] sm:text-[10px] font-mono mt-0.5 sm:mt-1 text-[#6E6E68]">
+              sem faturamento em {anterior.rotulo} para comparar
             </div>
           )}
         </div>
