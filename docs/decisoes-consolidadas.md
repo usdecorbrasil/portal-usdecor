@@ -336,13 +336,13 @@ Logo Bello Tecido aplicado: horizontal no cabeçalho, símbolo como favicon, ver
 
 10. Infraestrutura
 Item	Escolha	Custo
-Hospedagem	Cloudflare Workers	US$ 0
-Banco / auth / storage	Supabase Free	US$ 0
+Hospedagem	Vercel (deploy automático a cada push na main)	Pro ~US$ 20/mês
+Banco / auth / storage	Supabase	Pro ~US$ 25/mês
 E-mails	Resend	US$ 0 até 3.000/mês
-Backup	GitHub Actions diário	US$ 0
-Domínio	Registro.br	~R$ 40/ano
+Backup	Não configurado — não há workflow de backup no repositório	—
+Domínio	Registro.br (portal.bestcolortecidos.com.br)	~R$ 40/ano
 
-Vercel Hobby descartado: proíbe uso comercial. Supabase Pro dispensado por ora; backup diário externo cobre a lacuna.
+Atualizado em 05/10/2026: a escolha original era Cloudflare Workers, com a Vercel Hobby descartada por proibir uso comercial. O projeto acabou indo para a Vercel (plano pago), que é quem publica o portal. A integração do Cloudflare Workers com o repositório ("Workers Builds: portal-bello-tecido") ficou para trás e falha em todo PR — deve ser desconectada no painel do Cloudflare; não afeta o deploy.
 
 3h. REVISÃO — confirmação de pedido e alterações
 
@@ -626,13 +626,13 @@ Logo Bello Tecido aplicado: horizontal no cabeçalho, símbolo como favicon, ver
 
 10. Infraestrutura
 Item	Escolha	Custo
-Hospedagem	Cloudflare Workers	US$ 0
-Banco / auth / storage	Supabase Free	US$ 0
+Hospedagem	Vercel (deploy automático a cada push na main)	Pro ~US$ 20/mês
+Banco / auth / storage	Supabase	Pro ~US$ 25/mês
 E-mails	Resend	US$ 0 até 3.000/mês
-Backup	GitHub Actions diário	US$ 0
-Domínio	Registro.br	~R$ 40/ano
+Backup	Não configurado — não há workflow de backup no repositório	—
+Domínio	Registro.br (portal.bestcolortecidos.com.br)	~R$ 40/ano
 
-Vercel Hobby descartado: proíbe uso comercial. Supabase Pro dispensado por ora; backup diário externo cobre a lacuna.
+Atualizado em 05/10/2026: a escolha original era Cloudflare Workers, com a Vercel Hobby descartada por proibir uso comercial. O projeto acabou indo para a Vercel (plano pago), que é quem publica o portal. A integração do Cloudflare Workers com o repositório ("Workers Builds: portal-bello-tecido") ficou para trás e falha em todo PR — deve ser desconectada no painel do Cloudflare; não afeta o deploy.
 
 Fila de impressão (a construir)
 
