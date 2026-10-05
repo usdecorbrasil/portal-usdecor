@@ -99,6 +99,18 @@ const styles = StyleSheet.create({
     color: '#6E6E68',
     textAlign: 'center',
   },
+  blocoNotas: {
+    borderWidth: 1,
+    borderColor: '#0090D8',
+    borderLeftWidth: 3,
+    padding: 8,
+    marginBottom: 12,
+  },
+  textoNotas: {
+    fontSize: 10,
+    color: '#131A2E',
+    lineHeight: 1.4,
+  },
 })
 
 export type ItemRomaneio = {
@@ -114,6 +126,8 @@ export type DadosRomaneio = {
   rolos: number | null
   saldo: string | null
   metragemImpressa: number
+  /** Observação do cliente ao enviar o pedido — quem estampa precisa ler. */
+  notas: string | null
   itens: ItemRomaneio[]
 }
 
@@ -154,6 +168,13 @@ export function RomaneioDocumento({ pedidos }: { pedidos: DadosRomaneio[] }) {
               </View>
             )}
           </View>
+
+          {p.notas && (
+            <View style={styles.blocoNotas}>
+              <Text style={styles.rotuloResumo}>Observação do cliente</Text>
+              <Text style={styles.textoNotas}>{p.notas}</Text>
+            </View>
+          )}
 
           <View style={styles.tabelaCabecalho}>
             <Text style={[styles.tabelaCabecalhoTexto, { width: 66 }]}>Img</Text>

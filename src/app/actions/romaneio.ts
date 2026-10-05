@@ -43,7 +43,7 @@ export async function buscarDadosRomaneio(pedidoId: string) {
   const { data: pedido } = await supabase
     .from('pedidos')
     .select(`
-      id, numero, total, romaneio_rolos, romaneio_saldo, metragem_impressa,
+      id, numero, total, romaneio_rolos, romaneio_saldo, metragem_impressa, notas,
       clientes(razao_social),
       pedido_itens(id, sku, nome, produto_id, quantidade_faturada)
     `)
@@ -104,6 +104,7 @@ export async function buscarDadosRomaneio(pedidoId: string) {
     rolos: p.romaneio_rolos as number | null,
     saldo: p.romaneio_saldo as string | null,
     metragemImpressa: p.metragem_impressa ? Number(p.metragem_impressa) : null,
+    notas: ((p.notas as string | null) ?? '').trim() || null,
     itens: itens.map((i) => ({
       sku: i.sku,
       nome: i.nome,

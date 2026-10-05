@@ -59,7 +59,7 @@ export default async function PedidosAdminPage({
       .from('pedidos')
       .select(`
         id, numero, total, cliente_id, created_at, cancelado_em, metragem_impressa,
-        forma_pagamento, emitir_nf, agrupado_em,
+        forma_pagamento, emitir_nf, agrupado_em, notas,
         taxa_pagamento_percentual, taxa_pagamento_fixa,
         pedido_parcelas(valor),
         clientes(razao_social),
@@ -122,6 +122,7 @@ export default async function PedidosAdminPage({
         temSolicitacao: (p.pedido_solicitacoes ?? []).some(
           (s: any) => s.status === 'aberta'
         ),
+        notas: (p.notas as string | null)?.trim() || null,
       }
     })
     .filter((p) => ATIVOS.includes(p.status))
