@@ -48,6 +48,8 @@ export type PedidoQuadro = {
   metragemImpressa: number | null
   liberadoMetragem: boolean
   temSolicitacao: boolean
+  /** Observação escrita pelo cliente ao enviar; a produção precisa ver. */
+  notas: string | null
   entrada: string
   dias: number
   formaPagamento: string
@@ -1094,6 +1096,15 @@ function LinhaPedido({
         {p.temSolicitacao && (
           <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-wider text-[#B00063] border border-[#B00063] rounded-sm px-1 shrink-0">
             cancelar
+          </span>
+        )}
+
+        {p.notas && (
+          <span
+            title={'Observação do cliente: ' + p.notas}
+            className="text-[9px] font-mono uppercase tracking-wider text-[#0090D8] border border-[#0090D8] rounded-sm px-1 shrink-0"
+          >
+            obs
           </span>
         )}
 

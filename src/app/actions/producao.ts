@@ -465,3 +465,33 @@ export async function definirEmissaoNf(
   revalidatePath(`/admin/pedidos/${parsed.data.pedidoId}`)
   return { ok: true }
 }
+
+/**
+ * Anotações da equipe sobre o pedido. Separado de `notas` (a observação do
+ * cliente, imutável): a regra de quem pode escrever está no banco
+ * (`admin_definir_instrucoes_internas`, portão `is_admin_producao()`).
+ */
+export async function salvarInstrucoesInternas(
+  pedidoId: string,
+  texto: string
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    texto: z.string().max(4000, 'No máximo 4000 caracteres'),
+  }).safeParse({ pedidoId, texto })
+
+  if (!parsed.success) {
+    return { ok: false, erro: parsed.error.issues[0].message }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('admin_definir_instrucoes_internas', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_texto: parsed.data.texto,
+  })
+
+  if (error) return { ok: false, erro: error.message }
+
+  revalidatePath(`/admin/pedidos/${parsed.data.pedidoId}`)
+  return { ok: true }
+}

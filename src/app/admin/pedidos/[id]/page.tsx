@@ -19,6 +19,7 @@ import Desagrupar from './desagrupar'
 import { urlDocumento } from '@/lib/storage/documentos'
 import { taxaDoPedido } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
+import InstrucoesInternas from './instrucoes-internas'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -103,7 +104,7 @@ export default async function PedidoAdminPage({
   // tabelas embutidas a união fica grande demais para ele representar.
   // O retorno já é tratado como `any` logo abaixo.
   const campos: string = `
-      id, numero, notas, created_at, metragem_impressa, agrupado_em,
+      id, numero, notas, instrucoes_internas, created_at, metragem_impressa, agrupado_em,
       cancelado_em, cancelado_motivo, cancelado_por,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       bling_nf_id, nf_numero, nf_chave, nf_emitida_em, nf_pdf_path, nf_xml_path, nf_link_danfe,
@@ -559,14 +560,18 @@ export default async function PedidoAdminPage({
         })}
       </div>
 
+      {/* A observação do cliente é imutável (gatilho no banco); o que a
+          equipe precisa anotar vai no bloco seguinte, separado */}
       {p.notas && (
         <>
-          <Titulo>NOTAS DO CLIENTE</Titulo>
-          <div className="bg-white border border-[#DDDCD5] rounded-sm p-4 text-sm leading-relaxed whitespace-pre-line">
+          <Titulo>OBSERVAÇÃO DO CLIENTE</Titulo>
+          <div className="bg-white border-l-4 border-[#0090D8] border border-[#DDDCD5] rounded-sm p-4 text-sm leading-relaxed whitespace-pre-line">
             {p.notas}
           </div>
         </>
       )}
+
+      <InstrucoesInternas pedidoId={p.id} texto={(p.instrucoes_internas as string | null) ?? null} />
 
       <div className="mt-6 border-t-2 border-[#131A2E] pt-4">
         <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
