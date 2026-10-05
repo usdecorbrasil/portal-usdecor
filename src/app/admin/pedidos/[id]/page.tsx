@@ -74,10 +74,15 @@ function dataBr(iso: string) {
 
 export default async function PedidoAdminPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ erro?: string }>
 }) {
   const { id } = await params
+  // Erro vindo de outra tela (ex.: unificar e faturar criou este agrupador,
+  // mas o faturamento falhou): aparece no painel de ações, onde se repete
+  const { erro: erroInicial } = await searchParams
   const perfil = await lerPerfil()
 
   if (!perfil || perfil.papel === 'cliente') redirect('/')
@@ -224,6 +229,12 @@ export default async function PedidoAdminPage({
 
   // Faturamento: só o dono, e só depois de o pedido existir no Bling
   const mostrarFaturamento = dono && usados.includes('pronto') && !!p.bling_pedido_id
+
+  // Outros pedidos prontos do mesmo cliente: o Faturar oferece reunir tudo
+  // numa cobrança só. Só interessa a quem fatura, e só em "pronto"
+  const outrosProntos = dono && atual === 'pronto' && !cancelado && !p.agrupado_em
+    ? await buscarOutrosProntos(supabase, p.cliente_id, p.id)
+    : []
 
   const nf = p.nf_numero
     ? {
@@ -610,6 +621,8 @@ export default async function PedidoAdminPage({
             p.metragem_impressa != null ? Number(p.metragem_impressa) : null
           }
           linkPagamentoAtual={(p.link_pagamento as string | null) ?? null}
+          outrosProntos={outrosProntos}
+          erroInicial={erroInicial?.slice(0, 500) ?? ''}
           solicitacao={
             aberta
               ? {
@@ -811,4 +824,41 @@ function ParcelaBadge({
   }
 
   return <span className="text-[#6E6E68]">aguardando</span>
+}
+
+/**
+ * Pedidos do cliente cujo status atual é "pronto", fora o pedido aberto, os
+ * cancelados e os já reunidos em outro. O status é derivado do histórico,
+ * como em toda a aplicação.
+ */
+async function buscarOutrosProntos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clienteId: string,
+  pedidoId: string
+) {
+  const { data } = await supabase
+    .from('pedidos')
+    .select('id, numero, total, metragem_impressa, pedido_status_historico(status, created_at)')
+    .eq('cliente_id', clienteId)
+    .neq('id', pedidoId)
+    .is('cancelado_em', null)
+    .is('agrupado_em', null)
+
+  return ((data ?? []) as any[])
+    .filter((o) => {
+      const hist = (o.pedido_status_historico ?? [])
+        .slice()
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+      return hist[0]?.status === 'pronto'
+    })
+    .map((o) => ({
+      id: String(o.id),
+      numero: Number(o.numero),
+      metros: o.metragem_impressa != null ? Number(o.metragem_impressa) : null,
+      total: Number(o.total ?? 0),
+    }))
+    .sort((a, b) => a.numero - b.numero)
 }
