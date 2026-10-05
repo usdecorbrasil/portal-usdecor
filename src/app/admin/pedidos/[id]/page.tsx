@@ -102,7 +102,7 @@ export default async function PedidoAdminPage({
       cancelado_em, cancelado_motivo, cancelado_por,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       bling_nf_id, nf_numero, nf_chave, nf_emitida_em, nf_pdf_path, nf_xml_path, nf_link_danfe,
-      link_boleto, link_pix, boleto_pdf_path, cobranca_gerada_em,
+      link_boleto, link_pix, boleto_pdf_path, cobranca_gerada_em, link_pagamento,
       forma_pagamento, parcelas_solicitadas, cliente_id,
       emitir_nf, emitir_nf_motivo,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
@@ -609,6 +609,7 @@ export default async function PedidoAdminPage({
           metragemImpressa={
             p.metragem_impressa != null ? Number(p.metragem_impressa) : null
           }
+          linkPagamentoAtual={(p.link_pagamento as string | null) ?? null}
           solicitacao={
             aberta
               ? {

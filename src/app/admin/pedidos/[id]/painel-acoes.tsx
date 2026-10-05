@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react'
 import {
   lancarStatus,
-  faturarPedido,
   reimprimir,
   cancelarPedido,
   ajustarItem,
@@ -12,6 +11,7 @@ import {
   alterarPrecoPedido,
   alterarFormaPagamento,
 } from '@/app/actions/producao'
+import { faturarPedido, enviarLinkPagamento } from '@/app/actions/faturamento'
 import {
   confirmarPedido,
   responderSolicitacao,
@@ -92,6 +92,7 @@ export default function PainelAcoes({
   solicitacao,
   precoCliente,
   metragemImpressa,
+  linkPagamentoAtual,
   itens,
 }: {
   pedidoId: string
@@ -116,6 +117,8 @@ export default function PainelAcoes({
   solicitacao: Solicitacao | null
   precoCliente: number
   metragemImpressa: number | null
+  /** Cartão: link já enviado ao cliente, ou null. */
+  linkPagamentoAtual: string | null
   itens: Item[]
 }) {
   const [tela, setTela] = useState<Tela>(null)
@@ -129,6 +132,8 @@ export default function PainelAcoes({
   const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(intervaloBoleto))
   const [statusPendente, setStatusPendente] = useState<string | null>(null)
   const [confirmandoFatura, setConfirmandoFatura] = useState(false)
+  const [recadoFatura, setRecadoFatura] = useState('')
+  const [linkPagamento, setLinkPagamento] = useState('')
 
   const idx = ORDEM.indexOf(statusAtual)
   const aguardando = statusAtual === 'aguardando'
@@ -144,6 +149,7 @@ export default function PainelAcoes({
   // mudar é a metragem — quebra na estamparia, por exemplo
   const emEstampa = statusAtual === 'estampando' || statusAtual === 'corte_costura'
   const ehParcelado = formaPagamento === 'boleto_parcelado'
+  const ehCartao = formaPagamento.startsWith('cartao')
 
   const precoAtual = itens[0]?.precoMetro ?? 0
 
@@ -164,13 +170,37 @@ export default function PainelAcoes({
 
   function faturar() {
     setErro('')
+    const link = linkPagamento.trim()
+    if (ehCartao && link && !link.startsWith('https://')) {
+      setErro('O link de pagamento precisa começar com https://')
+      return
+    }
     iniciar(async () => {
-      const r = await faturarPedido(pedidoId)
+      const r = await faturarPedido(pedidoId, ehCartao && link ? link : undefined)
       if (!r.ok) {
         setErro(r.erro)
         return
       }
       setConfirmandoFatura(false)
+      setRecadoFatura(r.detalhe)
+    })
+  }
+
+  function enviarLink() {
+    setErro('')
+    const link = linkPagamento.trim()
+    if (!link.startsWith('https://')) {
+      setErro('Informe o link de pagamento (começando com https://).')
+      return
+    }
+    iniciar(async () => {
+      const r = await enviarLinkPagamento(pedidoId, link)
+      if (!r.ok) {
+        setErro(r.erro)
+        return
+      }
+      setLinkPagamento('')
+      setRecadoFatura(r.detalhe)
     })
   }
 
@@ -576,9 +606,10 @@ export default function PainelAcoes({
             Faturar pedido
           </h2>
           <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
-            Envia o pedido ao Bling, gera a cobrança e avisa o cliente. Se
-            houver outros pedidos prontos deste cliente, agrupe antes na lista
-            de pedidos — depois de faturado não dá mais.
+            Pedido de venda no Bling, cobrança (boleto/Pix) e nota fiscal
+            quando o pedido é com nota, com e-mails ao cliente. Se houver
+            outros pedidos prontos deste cliente, agrupe antes na lista de
+            pedidos — depois de faturado não dá mais.
           </p>
 
           <dl className="mt-3 text-xs text-[#6E6E68] space-y-1">
@@ -598,6 +629,34 @@ export default function PainelAcoes({
               <dd className="font-mono font-semibold text-[#131A2E]">R$ {brl(total)}</dd>
             </div>
           </dl>
+
+          {ehCartao && (
+            <div className="mt-3">
+              <label
+                htmlFor="link-pagamento"
+                className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+              >
+                LINK DE PAGAMENTO DO CARTÃO (opcional aqui)
+              </label>
+              <input
+                id="link-pagamento"
+                type="url"
+                inputMode="url"
+                value={linkPagamento}
+                onChange={(e) => {
+                  setLinkPagamento(e.target.value)
+                  setErro('')
+                }}
+                placeholder="https://..."
+                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm font-mono outline-none focus:border-[#131A2E] bg-white"
+              />
+              <p className="text-[11px] text-[#6E6E68] mt-1 leading-relaxed">
+                Se já tiver o link (maquininha), cole aqui. Se for gerar no
+                Bling, fature primeiro — o pedido precisa existir lá — e envie
+                o link em seguida, no bloco Pedido faturado.
+              </p>
+            </div>
+          )}
 
           {confirmandoFatura ? (
             <div className="grid grid-cols-2 gap-2 mt-3">
@@ -632,9 +691,53 @@ export default function PainelAcoes({
         <div className="bg-[#F4FAFD] border border-[#0090D8] rounded-sm p-4">
           <h2 className="font-semibold tracking-tight text-sm">Pedido faturado</h2>
           <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
-            Cobrança enviada ao cliente. As próximas etapas chegam pelo Bling
-            {emitirNf ? ': nota fiscal, expedição e baixa.' : ': expedição e baixa.'}
+            {recadoFatura ||
+              (ehCartao && !linkPagamentoAtual
+                ? 'Pedido no Bling. Gere o link de pagamento por cartão e envie abaixo.'
+                : 'Pedido no Bling e cobrança enviada. Nota fiscal, expedição e baixa seguem pelo Bling.')}
           </p>
+
+          {ehCartao && podeCancelarOuAjustar && (
+            <div className="mt-3 pt-3 border-t border-[#DDDCD5]">
+              {linkPagamentoAtual && (
+                <p className="text-[11px] font-mono text-[#6E6E68] break-all mb-2">
+                  Link enviado: {linkPagamentoAtual}
+                </p>
+              )}
+              <label
+                htmlFor="link-pagamento-faturado"
+                className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+              >
+                {linkPagamentoAtual ? 'TROCAR LINK DE PAGAMENTO' : 'LINK DE PAGAMENTO DO CARTÃO'}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="link-pagamento-faturado"
+                  type="url"
+                  inputMode="url"
+                  value={linkPagamento}
+                  onChange={(e) => {
+                    setLinkPagamento(e.target.value)
+                    setErro('')
+                  }}
+                  placeholder="https://..."
+                  className="flex-1 min-w-0 border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm font-mono outline-none focus:border-[#131A2E] bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={enviarLink}
+                  disabled={pendente}
+                  className="shrink-0 bg-[#B00063] text-white text-xs font-semibold tracking-wide rounded-sm px-3 py-2 disabled:opacity-50"
+                >
+                  {pendente ? '...' : 'ENVIAR'}
+                </button>
+              </div>
+              <p className="text-[11px] text-[#6E6E68] mt-1 leading-relaxed">
+                No Bling: Contas a receber → conta deste pedido → link de pagamento.
+                O cliente recebe o e-mail com o botão e vê o link no pedido.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

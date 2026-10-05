@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { gerarNfe, transmitirEEsperar, NF_SITUACAO } from '@/lib/bling/nfe'
 import { gerarEObterCobrancas } from '@/lib/bling/cobranca'
+import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
 import { salvarDocumento, baixarArquivo } from '@/lib/storage/documentos'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateNfEmitida } from '@/lib/resend/templates/nf-emitida'
@@ -14,11 +15,15 @@ import { taxaDoPedido } from '@/lib/pagamento/config'
 import { urlDoSite } from '@/lib/site'
 
 /**
- * Faturamento a partir de "Pedido pronto": NF-e e cobrança, cada uma no seu
- * botão. O pedido de venda já existe no Bling quando estes rodam.
+ * Faturamento a partir de "Pedido pronto".
  *
- * Os dois nunca mudam o pedido no portal antes de o Bling confirmar — e os
- * dois podem ser repetidos: NF que ficou "processando" é consultada de novo,
+ * `faturarPedido` é o botão único: pedido de venda no Bling, cobrança
+ * (boleto/Pix), NF-e quando o pedido é com nota, e-mails ao cliente e a
+ * etapa "Faturado". `emitirNotaFiscal` e `gerarCobranca` continuam
+ * disponíveis para repetir um passo que ficou pela metade.
+ *
+ * Nenhum passo muda o pedido no portal antes de o Bling confirmar — e todos
+ * podem ser repetidos: NF que ficou "processando" é consultada de novo,
  * cobrança já lançada só relê os links.
  */
 
@@ -52,8 +57,12 @@ type Pedido = {
   taxa_pagamento_fixa: number | string | null
   emitir_nf: boolean | null
   bling_pedido_id: number | string | null
+  bling_sync_status: string | null
   bling_nf_id: number | string | null
   nf_numero: string | null
+  cobranca_gerada_em: string | null
+  agrupado_em: string | null
+  link_pagamento: string | null
   clientes: { email: string; razao_social: string; bling_contato_id: number | string | null } | null
   pedido_parcelas: {
     id: string
@@ -71,13 +80,169 @@ async function carregar(pedidoId: string): Promise<Pedido | null> {
     .from('pedidos')
     .select(
       'id, numero, forma_pagamento, total, taxa_pagamento_percentual, taxa_pagamento_fixa, ' +
-        'emitir_nf, bling_pedido_id, bling_nf_id, nf_numero, ' +
+        'emitir_nf, bling_pedido_id, bling_sync_status, bling_nf_id, nf_numero, cobranca_gerada_em, agrupado_em, link_pagamento, ' +
         'clientes(email, razao_social, bling_contato_id), ' +
         'pedido_parcelas(id, numero, valor, vencimento, link_boleto, link_pix)'
     )
     .eq('id', pedidoId)
     .maybeSingle()
   return (data as unknown as Pedido) ?? null
+}
+
+/* --------------------------------- faturar --------------------------------- */
+
+/**
+ * Botão único. Cada passo é retomável: se algo parar no meio (SEFAZ lenta,
+ * Bling sem link ainda), o retorno diz o que faltou e clicar de novo continua
+ * de onde parou, sem duplicar pedido, cobrança ou nota.
+ */
+export async function faturarPedido(
+  pedidoId: string,
+  /** Cartão: link de pagamento gerado fora do portal (Bling ou maquininha). */
+  linkPagamento?: string
+): Promise<Resultado> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    linkPagamento: z.string().trim().url().startsWith('https://').max(500).optional(),
+  }).safeParse({ pedidoId, linkPagamento: linkPagamento || undefined })
+  if (!parsed.success) return { ok: false, erro: 'Link de pagamento inválido — precisa começar com https://' }
+
+  let p = await carregar(parsed.data.pedidoId)
+  if (!p) return { ok: false, erro: 'Pedido não encontrado.' }
+  if (p.agrupado_em) return { ok: false, erro: 'Pedido agrupado — fature pelo agrupador.' }
+
+
+  const supabase = await createClient()
+  const { data: statusAtual } = await supabase.rpc('status_atual', { p_pedido_id: p.id })
+  if (statusAtual !== 'pronto' && statusAtual !== 'faturado') {
+    return { ok: false, erro: `Só é possível faturar um pedido em "Pedido pronto" (atual: ${statusAtual}).` }
+  }
+
+  const feito: string[] = []
+
+  // 1. Pedido de venda no Bling (idempotente: adota o que já existe)
+  if (!p.bling_pedido_id) {
+    await sincronizarPedidoComBling(p.id)
+    p = (await carregar(p.id)) ?? p
+    if (!p.bling_pedido_id) {
+      return { ok: false, erro: 'O Bling não aceitou o pedido de venda. Veja o erro no topo da tela e tente de novo.' }
+    }
+    feito.push('pedido no Bling')
+  }
+
+  // 2. Cobrança — boleto/Pix pelo Bling; cartão é cobrado fora e só avisa
+  const forma = p.forma_pagamento
+  if (forma.startsWith('boleto') || forma === 'pix') {
+    if (!p.cobranca_gerada_em) {
+      const c = await gerarCobrancaInterno(p)
+      if (!c.ok) return { ok: false, erro: `Pedido no Bling, mas a cobrança falhou: ${c.erro}` }
+      feito.push('cobrança enviada')
+    }
+  } else if (!p.cobranca_gerada_em) {
+    // Cartão: o link é gerado fora do portal (o Bling não expõe pela API) e
+    // normalmente só existe depois do pedido de venda. Com link em mãos,
+    // envia agora; sem link, o pedido fica "Faturado" aguardando o envio
+    const link = parsed.data.linkPagamento ?? p.link_pagamento
+    if (link) {
+      const e = await enviarLinkPagamentoInterno(p, link)
+      if (!e.ok) return { ok: false, erro: `Pedido no Bling, mas o link não foi enviado: ${e.erro}` }
+      feito.push('link de pagamento enviado')
+    } else {
+      feito.push('aguardando link de pagamento')
+    }
+  }
+
+  // 3. Etapa "Faturado" — a partir daqui o pedido sai da produção
+  if (statusAtual === 'pronto') {
+    const { error } = await supabase.rpc('marcar_pedido_faturado', {
+      p_pedido_id: p.id,
+      p_observacao: feito.length ? feito.join(', ') : null,
+    })
+    if (error) return { ok: false, erro: `Cobrança ok, mas a etapa não avançou: ${error.message}` }
+  }
+
+  // 4. Nota fiscal, quando o pedido é com nota
+  let avisoNf = ''
+  if (p.emitir_nf !== false && !p.nf_numero) {
+    const n = await emitirNotaFiscalInterno(p)
+    if (n.ok) feito.push('NF emitida')
+    else avisoNf = ` Nota fiscal: ${n.erro}`
+  }
+
+  revalidatePath(`/admin/pedidos/${p.id}`)
+  revalidatePath('/admin/pedidos')
+  revalidatePath('/admin')
+
+  return {
+    ok: true,
+    detalhe:
+      (feito.length ? `Faturado: ${feito.join(', ')}.` : 'Pedido já estava faturado.') + avisoNf,
+  }
+}
+
+/* --------------------------- link de pagamento --------------------------- */
+
+/**
+ * Cartão: grava o link gerado no Bling (ou na maquininha) e envia a cobrança
+ * ao cliente. Pode ser repetido para trocar o link — o e-mail sai de novo.
+ */
+export async function enviarLinkPagamento(pedidoId: string, linkPagamento: string): Promise<Resultado> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    linkPagamento: z.string().trim().url().startsWith('https://').max(500),
+  }).safeParse({ pedidoId, linkPagamento })
+  if (!parsed.success) return { ok: false, erro: 'Link inválido — precisa começar com https://' }
+
+  const p = await carregar(parsed.data.pedidoId)
+  if (!p) return { ok: false, erro: 'Pedido não encontrado.' }
+  if (!p.forma_pagamento.startsWith('cartao')) {
+    return { ok: false, erro: 'Link de pagamento é só para pedidos em cartão.' }
+  }
+
+  const r = await enviarLinkPagamentoInterno(p, parsed.data.linkPagamento)
+  revalidatePath(`/admin/pedidos/${p.id}`)
+  return r
+}
+
+async function enviarLinkPagamentoInterno(p: Pedido, link: string): Promise<Resultado> {
+  const admin = createAdminClient()
+  const forma = p.forma_pagamento
+
+  await admin.from('pedidos').update({ link_pagamento: link }).eq('id', p.id)
+
+  if (p.clientes?.email) {
+    const total = Number(p.total)
+    const taxa = taxaDoPedido(
+      total,
+      Number(p.taxa_pagamento_percentual ?? 0),
+      Number(p.taxa_pagamento_fixa ?? 0),
+      forma,
+      1
+    )
+    const totalCobrado = Math.round((total + taxa) * 100) / 100
+    await enviarEmail({
+      tipo: 'cobranca',
+      pedidoId: p.id,
+      destinatario: p.clientes.email,
+      assunto: `Cobrança do pedido #${p.numero}`,
+      html: templateCobranca({
+        clienteNome: p.clientes.razao_social,
+        numero: Number(p.numero),
+        rotuloPagamento: ROTULOS_PAGAMENTO[forma] ?? forma,
+        cobrancas: [],
+        totalCobrado,
+        linkPagamento: link,
+        urlPedido: `${urlDoSite()}/pedidos/${p.id}`,
+      }),
+    })
+  }
+
+  await admin.from('pedidos').update({ cobranca_gerada_em: new Date().toISOString() }).eq('id', p.id)
+  return { ok: true, detalhe: 'Link de pagamento enviado ao cliente.' }
 }
 
 /* ------------------------------- nota fiscal ------------------------------- */
@@ -90,6 +255,14 @@ export async function emitirNotaFiscal(pedidoId: string): Promise<Resultado> {
 
   const p = await carregar(parsed.data)
   if (!p) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  const r = await emitirNotaFiscalInterno(p)
+  revalidatePath(`/admin/pedidos/${p.id}`)
+  revalidatePath('/admin/pedidos')
+  return r
+}
+
+async function emitirNotaFiscalInterno(p: Pedido): Promise<Resultado> {
   if (p.emitir_nf === false) return { ok: false, erro: 'Este pedido está marcado para sair sem nota fiscal.' }
   if (!p.bling_pedido_id) return { ok: false, erro: 'O pedido ainda não foi enviado ao Bling. Use "Tentar de novo" primeiro.' }
   if (p.nf_numero) return { ok: true, detalhe: `Nota fiscal nº ${p.nf_numero} já emitida.` }
@@ -177,9 +350,6 @@ export async function emitirNotaFiscal(pedidoId: string): Promise<Resultado> {
     })
   }
 
-  revalidatePath(`/admin/pedidos/${p.id}`)
-  revalidatePath('/admin/pedidos')
-
   return {
     ok: true,
     detalhe: `Nota fiscal nº ${nf.numero ?? nfId} autorizada${anexos.length ? ' e enviada ao cliente' : ''}.`,
@@ -196,6 +366,13 @@ export async function gerarCobranca(pedidoId: string): Promise<Resultado> {
 
   const p = await carregar(parsed.data)
   if (!p) return { ok: false, erro: 'Pedido não encontrado.' }
+
+  const r = await gerarCobrancaInterno(p)
+  revalidatePath(`/admin/pedidos/${p.id}`)
+  return r
+}
+
+async function gerarCobrancaInterno(p: Pedido): Promise<Resultado> {
   if (!p.bling_pedido_id) return { ok: false, erro: 'O pedido ainda não foi enviado ao Bling. Use "Tentar de novo" primeiro.' }
 
   const forma = p.forma_pagamento
@@ -295,8 +472,6 @@ export async function gerarCobranca(pedidoId: string): Promise<Resultado> {
       anexos,
     })
   }
-
-  revalidatePath(`/admin/pedidos/${p.id}`)
 
   const n = paraEmail.length
   return {

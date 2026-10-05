@@ -4,13 +4,11 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateEmProducao } from '@/lib/resend/templates/em-producao'
 import { MAX_PARCELAS, taxaDoPedido } from '@/lib/pagamento/config'
 import { urlDoSite } from '@/lib/site'
-import { sincronizarPedidoComBling, cancelarPedidoNoBling } from '@/lib/bling/pedido'
-import { enviarCobrancaPedido } from '@/lib/cobranca/enviar'
+import { cancelarPedidoNoBling } from '@/lib/bling/pedido'
 import { buscarValorMinimoBoleto } from './configuracoes'
 
 const ETAPAS_MANUAIS = ['impressao', 'estampando', 'corte_costura', 'pronto'] as const
@@ -84,8 +82,8 @@ export async function lancarStatus(
   }
 
   // "Pedido pronto" não envia mais ao Bling nem gera cobrança sozinho.
-  // Isso passou a ser decisão do dono, em `faturarPedido` — assim os pedidos
-  // prontos do mesmo cliente podem ser agrupados antes de faturar.
+  // Isso passou a ser decisão do dono, em `faturarPedido` (faturamento.ts) —
+  // assim os pedidos prontos do mesmo cliente podem ser agrupados antes.
 
   revalidar()
   return { ok: true }
@@ -142,55 +140,6 @@ async function boletoAbaixoDoMinimo(pedidoId: string): Promise<string | null> {
     `Cada boleto ficaria em R$ ${brl(documento)}, abaixo do mínimo de R$ ${brl(minimo)}. ` +
     'Altere a forma de pagamento — menos parcelas ou outra forma — antes de faturar.'
   )
-}
-
-/**
- * Faturar: pedido no Bling, cobrança ao cliente e etapa "faturado".
- * Substitui o que antes acontecia sozinho ao lançar "Pedido pronto" —
- * agora é decisão do dono, e vale para pedido avulso ou agrupado.
- * Roda em `after()` pelo mesmo motivo de antes: três chamadas ao Bling
- * mais e-mail não cabem no tempo de uma requisição.
- */
-export async function faturarPedido(pedidoId: string): Promise<Resultado> {
-  const parsed = z.string().uuid().safeParse(pedidoId)
-  if (!parsed.success) return { ok: false, erro: 'Pedido inválido.' }
-  const id = parsed.data
-
-  // Última chance de trocar forma ou parcelas antes de emitir cobrança
-  const bloqueio = await boletoAbaixoDoMinimo(id)
-  if (bloqueio) return { ok: false, erro: bloqueio }
-
-  const supabase = await createClient()
-  const { data: pedido, error } = await supabase
-    .from('pedidos')
-    .select('id, agrupado_em, cobranca_gerada_em')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (error || !pedido) return { ok: false, erro: 'Pedido não encontrado.' }
-  if (pedido.agrupado_em) return { ok: false, erro: 'Pedido agrupado — fature pelo agrupador.' }
-  if (pedido.cobranca_gerada_em) return { ok: false, erro: 'Cobrança já gerada para este pedido.' }
-
-  after(async () => {
-    await sincronizarPedidoComBling(id)
-    await enviarCobrancaPedido(id)
-
-    // Só marca "faturado" se a cobrança de fato saiu
-    const admin = createAdminClient()
-    const { data: p } = await admin
-      .from('pedidos')
-      .select('bling_sync_status')
-      .eq('id', id)
-      .maybeSingle()
-
-    if (p?.bling_sync_status === 'enviado') {
-      await admin.rpc('marcar_pedido_faturado', { p_pedido_id: id })
-    }
-  })
-
-  revalidar()
-  revalidatePath(`/admin/pedidos/${id}`)
-  return { ok: true }
 }
 
 export async function reimprimir(

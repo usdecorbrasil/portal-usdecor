@@ -4,7 +4,7 @@ import { chamarBling } from './cliente'
 import { taxaDoPedido } from '@/lib/pagamento/config'
 
 /**
- * Cria o pedido de venda no Bling quando a etapa "Pedido pronto" é lançada.
+ * Cria o pedido de venda no Bling ao faturar.
  *
  * Por que só aqui e não na confirmação: o valor do pedido é `metragem × preço
  * por metro`, e a metragem só existe depois da estampa. Criar antes obrigaria
@@ -58,6 +58,46 @@ async function lerConfig(): Promise<ConfigBling> {
     }
   } catch {
     return CONFIG_PADRAO
+  }
+}
+
+/* -------------------------------- rastreio -------------------------------- */
+
+export type Rastreio = {
+  /** Número do pedido no portal. */
+  numero: number
+  /** Números dos pedidos originais, quando este é um agrupador. */
+  agrupados: number[]
+  /** Texto curto: "Portal #1024" ou "Portal #1024 (agrupa #1019, #1021)". */
+  curto: string
+  /** Texto longo, com metragem e valor de cada original. */
+  longo: string
+}
+
+/**
+ * Tudo que o portal cria no Bling — pedido de venda, item, contas a receber,
+ * nota — leva este texto, para qualquer pessoa achar o pedido do portal a
+ * partir do ERP, inclusive os originais de um agrupamento.
+ */
+export async function rastreioPedido(pedidoId: string): Promise<Rastreio | null> {
+  const admin = createAdminClient()
+
+  const [{ data: pedido }, { data: grupo }, { data: longo }] = await Promise.all([
+    admin.from('pedidos').select('numero').eq('id', pedidoId).maybeSingle(),
+    admin.from('pedidos_agrupamento').select('pedidos_numeros').eq('agrupador_id', pedidoId).maybeSingle(),
+    admin.rpc('rastreio_agrupamento', { p_pedido_id: pedidoId }),
+  ])
+  if (!pedido) return null
+
+  const numero = Number(pedido.numero)
+  const agrupados = ((grupo?.pedidos_numeros ?? []) as (number | string)[]).map(Number)
+  const lista = agrupados.map((n) => '#' + n).join(', ')
+
+  return {
+    numero,
+    agrupados,
+    curto: agrupados.length ? `Portal #${numero} (agrupa ${lista})` : `Portal #${numero}`,
+    longo: agrupados.length && longo ? `Portal #${numero} — ${longo}` : `Portal #${numero}`,
   }
 }
 
@@ -133,6 +173,12 @@ export async function criarPedidoNoBling(
   if (!cnpj) return { ok: false, erro: 'Cliente sem CNPJ cadastrado.' }
 
   const config = await lerConfig()
+  const rastreio = (await rastreioPedido(pedidoId)) ?? {
+    numero: p.numero,
+    agrupados: [],
+    curto: `Portal #${p.numero}`,
+    longo: `Portal #${p.numero}`,
+  }
 
   /* ---- contato: casado pelo documento, nunca criado automaticamente ---- */
   const rContato = await chamarBling(
@@ -198,6 +244,14 @@ export async function criarPedidoNoBling(
 
   const hoje = new Date().toISOString().slice(0, 10)
 
+  // As notas do agrupador já trazem o rastreio longo (metragem e valor de
+  // cada original); nos demais, são as notas do cliente
+  const notas = p.notas?.trim()
+  const notasSemRastreio =
+    notas && rastreio.agrupados.length && notas.includes('Pedidos agrupados:')
+      ? notas.split('Pedidos agrupados:')[0].trim()
+      : notas
+
   const corpo: Record<string, unknown> = {
     data: hoje,
     contato: { id: contato.id },
@@ -206,19 +260,22 @@ export async function criarPedidoNoBling(
     numeroPedidoCompra: String(p.numero),
     numeroLoja: String(p.numero),
     // O aviso vem primeiro de propósito: é a observação que quem fatura no
-    // Bling precisa ver antes de emitir a nota
+    // Bling precisa ver antes de emitir a nota. O rastreio vem em seguida,
+    // para qualquer pessoa achar o pedido do portal a partir do ERP
     observacoes: [
       p.emitir_nf === false ? '*** SEM NOTA FISCAL ***' : null,
-      `Portal — pedido #${p.numero}`,
-      p.notas?.trim(),
+      rastreio.longo,
+      notasSemRastreio,
     ]
       .filter(Boolean)
       .join(' | ')
       .slice(0, 500),
+    observacoesInternas: rastreio.longo.slice(0, 500),
     itens: [
       {
         codigo: config.produtoEstampaCodigo,
-        descricao: `Estampa sublimática — ${metragem.toLocaleString('pt-BR')} m`,
+        // A descrição do item vai para a NF: é o rastreio que o cliente vê
+        descricao: `Estampa sublimática — ${metragem.toLocaleString('pt-BR')} m — ${rastreio.curto}`.slice(0, 120),
         unidade: 'm',
         quantidade: metragem,
         valor: precoMetro,
@@ -239,6 +296,7 @@ export async function criarPedidoNoBling(
     corpo.parcelas = parcelas.map((pc) => ({
       dataVencimento: String(pc.vencimento).slice(0, 10),
       valor: Number(pc.valor),
+      observacoes: `${rastreio.curto} — parcela ${pc.numero}/${parcelas.length}`,
       ...(formaBling ? { formaPagamento: { id: formaBling } } : {}),
     }))
   } else {
@@ -248,6 +306,7 @@ export async function criarPedidoNoBling(
       {
         dataVencimento: hoje,
         valor: total,
+        observacoes: rastreio.curto,
         ...(formaBling ? { formaPagamento: { id: formaBling } } : {}),
       },
     ]

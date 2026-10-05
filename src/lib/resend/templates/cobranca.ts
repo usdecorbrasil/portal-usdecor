@@ -13,9 +13,10 @@ export type CobrancaEmail = {
 }
 
 /**
- * Cobrança gerada: boleto(s) ou Pix. Boleto vai anexado quando o PDF foi
- * baixado; o link fica de qualquer jeito, porque é ele que o banco do cliente
- * lê. Pix é só link — o QR Code está na página do Bling.
+ * Cobrança gerada: boleto(s), Pix ou link de cartão. Boleto vai anexado quando
+ * o PDF foi baixado; o link fica de qualquer jeito, porque é ele que o banco
+ * do cliente lê. Pix é só link — o QR Code está na página do Bling. Cartão é
+ * um link gerado fora do portal (Bling ou maquininha), sem parcelas listadas.
  */
 export function templateCobranca({
   clienteNome,
@@ -23,6 +24,7 @@ export function templateCobranca({
   rotuloPagamento,
   cobrancas,
   totalCobrado,
+  linkPagamento = null,
   urlPedido,
 }: {
   clienteNome: string
@@ -30,6 +32,8 @@ export function templateCobranca({
   rotuloPagamento: string
   cobrancas: CobrancaEmail[]
   totalCobrado: number
+  /** Link de pagamento por cartão, quando a forma é cartão. */
+  linkPagamento?: string | null
   urlPedido: string
 }) {
   const escapar = (s: string) =>
@@ -52,6 +56,28 @@ export function templateCobranca({
     )
     .join('')
 
+  const blocoParcelas = cobrancas.length
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #DDDCD5; border-radius:4px;">
+        ${linhas}
+      </table>`
+    : ''
+
+  const blocoCartao = linkPagamento
+    ? `<table cellpadding="0" cellspacing="0" style="margin-top:8px;">
+        <tr>
+          <td style="background:linear-gradient(103deg,#D8007A 0%,#B4005F 100%); border-radius:4px;">
+            <a href="${linkPagamento}" style="display:inline-block; padding: 14px 32px; color:#FFFFFF; font-size:15px; font-weight:bold; text-decoration:none;">
+              PAGAR COM CARTÃO
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size:12px; color:#6E6E68; line-height:1.6; margin: 12px 0 0;">
+        O pagamento é feito em ambiente seguro, fora do portal. Se o botão não abrir, copie este endereço:<br>
+        <span style="font-family: monospace; word-break:break-all;">${linkPagamento}</span>
+      </p>`
+    : ''
+
   return `
 <!DOCTYPE html>
 <html>
@@ -73,9 +99,8 @@ export function templateCobranca({
                 &mdash; ${escapar(rotuloPagamento)}, total de <strong style="font-family: monospace;">R$ ${brl(totalCobrado)}</strong>.
               </p>
 
-              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #DDDCD5; border-radius:4px;">
-                ${linhas}
-              </table>
+              ${blocoParcelas}
+              ${blocoCartao}
 
               <table cellpadding="0" cellspacing="0" style="margin-top:24px;">
                 <tr>
