@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { gerarNfe, transmitirEEsperar, NF_SITUACAO } from '@/lib/bling/nfe'
-import { gerarEObterCobrancas } from '@/lib/bling/cobranca'
+import { gerarEObterCobrancas, lancarEObterContas } from '@/lib/bling/cobranca'
 import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
 import { salvarDocumento, baixarArquivo } from '@/lib/storage/documentos'
 import { enviarEmail } from '@/lib/resend/enviar'
@@ -141,9 +141,15 @@ export async function faturarPedido(
       feito.push('cobrança enviada')
     }
   } else if (!p.cobranca_gerada_em) {
-    // Cartão: o link é gerado fora do portal (o Bling não expõe pela API) e
+    // Cartão: a conta a receber vai para o Bling com a forma do cartão, para
+    // o financeiro dar baixa por lá quando o dinheiro cair. O link de
+    // pagamento é gerado fora do portal (o Bling não expõe pela API) e
     // normalmente só existe depois do pedido de venda. Com link em mãos,
     // envia agora; sem link, o pedido fica "Faturado" aguardando o envio
+    const c = await lancarContasCartao(p)
+    if (!c.ok) return { ok: false, erro: `Pedido no Bling, mas a conta a receber falhou: ${c.erro}` }
+    feito.push('conta a receber lançada')
+
     const link = parsed.data.linkPagamento ?? p.link_pagamento
     if (link) {
       const e = await enviarLinkPagamentoInterno(p, link)
@@ -243,6 +249,64 @@ async function enviarLinkPagamentoInterno(p: Pedido, link: string): Promise<Resu
 
   await admin.from('pedidos').update({ cobranca_gerada_em: new Date().toISOString() }).eq('id', p.id)
   return { ok: true, detalhe: 'Link de pagamento enviado ao cliente.' }
+}
+
+/* ------------------------------ cartão: conta ------------------------------ */
+
+/**
+ * Cartão de crédito/débito: lança as contas a receber do pedido de venda no
+ * Bling e guarda o id de cada uma nas parcelas do portal. Não há boleto nem
+ * Pix — a cobrança é pelo link, cobrada fora — e a baixa é feita no Bling.
+ * Repetível: contas já lançadas não são erro.
+ */
+async function lancarContasCartao(p: Pedido): Promise<Resultado> {
+  if (!p.bling_pedido_id) return { ok: false, erro: 'O pedido ainda não foi enviado ao Bling. Use "Tentar de novo" primeiro.' }
+
+  const contatoId = Number(p.clientes?.bling_contato_id ?? 0)
+  if (!contatoId) return { ok: false, erro: 'Cliente sem vínculo com o Bling.' }
+
+  const forma = p.forma_pagamento
+  const total = Number(p.total)
+  const parcelas = (p.pedido_parcelas ?? []).slice().sort((a, b) => a.numero - b.numero)
+  const taxa = taxaDoPedido(
+    total,
+    Number(p.taxa_pagamento_percentual ?? 0),
+    Number(p.taxa_pagamento_fixa ?? 0),
+    forma,
+    parcelas.length || 1
+  )
+  const totalCobrado = Math.round((total + taxa) * 100) / 100
+
+  const esperados =
+    parcelas.length > 0
+      ? parcelas.map((x) => ({ valor: Number(x.valor), vencimento: String(x.vencimento).slice(0, 10) }))
+      : [{ valor: totalCobrado, vencimento: new Date().toISOString().slice(0, 10) }]
+
+  const r = await lancarEObterContas(contatoId, Number(p.bling_pedido_id), esperados)
+  if (!r.ok) return { ok: false, erro: r.erro }
+
+  // Guarda o vínculo com a conta do Bling na parcela correspondente. À vista
+  // não tem linha de parcela: a conta existe lá, ligada ao pedido pela origem
+  const admin = createAdminClient()
+  for (const [i, c] of r.contas.entries()) {
+    const parcela =
+      parcelas.find(
+        (x) => String(x.vencimento).slice(0, 10) === c.vencimento && Math.abs(Number(x.valor) - c.valor) < 0.01
+      ) ?? parcelas[i] ?? null
+    if (parcela && c.contaId) {
+      await admin.from('pedido_parcelas').update({ bling_conta_id: c.contaId }).eq('id', parcela.id)
+    }
+  }
+
+  const quantas = r.contas.length
+  return {
+    ok: true,
+    detalhe: r.jaLancadas
+      ? 'A conta a receber já estava lançada no Bling.'
+      : quantas > 0
+      ? `${quantas === 1 ? 'Conta a receber lançada' : `${quantas} contas a receber lançadas`} no Bling, para baixa pelo financeiro.`
+      : 'Contas lançadas no Bling; a leitura delas ainda não voltou.',
+  }
 }
 
 /* ------------------------------- nota fiscal ------------------------------- */
@@ -377,7 +441,15 @@ async function gerarCobrancaInterno(p: Pedido): Promise<Resultado> {
 
   const forma = p.forma_pagamento
   if (!forma.startsWith('boleto') && forma !== 'pix') {
-    return { ok: false, erro: 'Cartão é cobrado fora do portal — não há boleto nem Pix para gerar.' }
+    // Cartão: só a conta a receber; o link vai pelo bloco "Pedido faturado"
+    const c = await lancarContasCartao(p)
+    if (!c.ok) return c
+    if (p.link_pagamento) {
+      const e = await enviarLinkPagamentoInterno(p, p.link_pagamento)
+      if (!e.ok) return e
+      return { ok: true, detalhe: `${c.detalhe} Link de pagamento reenviado ao cliente.` }
+    }
+    return c
   }
 
   const contatoId = Number(p.clientes?.bling_contato_id ?? 0)

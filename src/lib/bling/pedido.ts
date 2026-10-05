@@ -27,12 +27,22 @@ type ConfigBling = {
   formaPagamentoId: number | null
   /** Forma de pagamento do Bling para Pix — é ela que gera o QR Code. */
   formaPagamentoPixId: number | null
+  /** Cartão de crédito. Sem configurar, é resolvida pelo tipo na conta do Bling. */
+  formaPagamentoCartaoCreditoId: number | null
+  /** Cartão de débito. Idem. */
+  formaPagamentoCartaoDebitoId: number | null
 }
 
 const CONFIG_PADRAO: ConfigBling = {
   produtoEstampaCodigo: 'ESTAMPA',
   formaPagamentoId: null,
   formaPagamentoPixId: null,
+  formaPagamentoCartaoCreditoId: null,
+  formaPagamentoCartaoDebitoId: null,
+}
+
+function numeroOuNulo(v: unknown): number | null {
+  return typeof v === 'number' ? v : null
 }
 
 async function lerConfig(): Promise<ConfigBling> {
@@ -51,14 +61,64 @@ async function lerConfig(): Promise<ConfigBling> {
     return {
       produtoEstampaCodigo:
         j.produtoEstampaCodigo || CONFIG_PADRAO.produtoEstampaCodigo,
-      formaPagamentoId:
-        typeof j.formaPagamentoId === 'number' ? j.formaPagamentoId : null,
-      formaPagamentoPixId:
-        typeof j.formaPagamentoPixId === 'number' ? j.formaPagamentoPixId : null,
+      formaPagamentoId: numeroOuNulo(j.formaPagamentoId),
+      formaPagamentoPixId: numeroOuNulo(j.formaPagamentoPixId),
+      formaPagamentoCartaoCreditoId: numeroOuNulo(j.formaPagamentoCartaoCreditoId),
+      formaPagamentoCartaoDebitoId: numeroOuNulo(j.formaPagamentoCartaoDebitoId),
     }
   } catch {
     return CONFIG_PADRAO
   }
+}
+
+/* --------------------------- formas de pagamento --------------------------- */
+
+/**
+ * Tipos de pagamento do Bling (os mesmos códigos da NF-e): 3 = cartão de
+ * crédito, 4 = cartão de débito. Servem para achar a forma na conta sem
+ * depender de id, que é por conta.
+ */
+const TIPO_PAGAMENTO_BLING: Record<string, { tipo: number; nome: RegExp }> = {
+  cartao_credito: { tipo: 3, nome: /cr[eé]dito/i },
+  cartao_debito: { tipo: 4, nome: /d[eé]bito/i },
+}
+
+type FormaBling = { id: number; descricao?: string; tipoPagamento?: number; situacao?: number }
+
+/**
+ * Id, no Bling, da forma de pagamento que corresponde à forma do portal.
+ * Boleto e Pix vêm da configuração (são do Bling Conta e geram o documento);
+ * cartão vem da configuração quando há, senão da lista de formas da conta,
+ * pelo tipo — e, em último caso, pelo nome. Null quando não dá para saber:
+ * a parcela sai sem forma e o Bling aplica a padrão dele.
+ */
+export async function formaPagamentoBling(forma: string): Promise<number | null> {
+  const config = await lerConfig()
+
+  if (forma === 'pix') return config.formaPagamentoPixId
+  if (forma.startsWith('boleto')) return config.formaPagamentoId
+
+  const configurada =
+    forma === 'cartao_credito'
+      ? config.formaPagamentoCartaoCreditoId
+      : forma === 'cartao_debito'
+      ? config.formaPagamentoCartaoDebitoId
+      : null
+  if (configurada) return configurada
+
+  const alvo = TIPO_PAGAMENTO_BLING[forma]
+  if (!alvo) return null
+
+  const r = await chamarBling('/formas-pagamentos?limite=100')
+  if (!r.ok) return null
+
+  const formas = ((r.dados as { data?: FormaBling[] })?.data ?? []).filter(
+    (f) => f.situacao == null || Number(f.situacao) === 1
+  )
+  const porTipo = formas.find((f) => Number(f.tipoPagamento) === alvo.tipo)
+  const porNome = formas.find((f) => alvo.nome.test(String(f.descricao ?? '')))
+  const achada = porTipo ?? porNome
+  return achada ? Number(achada.id) : null
 }
 
 /* -------------------------------- rastreio -------------------------------- */
@@ -286,11 +346,10 @@ export async function criarPedidoNoBling(
     outrasDespesas: taxa,
   }
 
-  // É a forma de pagamento da parcela que faz o Bling gerar boleto ou Pix
-  const formaBling =
-    p.forma_pagamento === 'pix'
-      ? config.formaPagamentoPixId
-      : config.formaPagamentoId
+  // É a forma de pagamento da parcela que faz o Bling gerar boleto ou Pix —
+  // e, no cartão, que deixa a conta a receber com a forma certa para a baixa
+  const formaBling = await formaPagamentoBling(p.forma_pagamento)
+  await pausa()
 
   if (parcelas.length > 0) {
     corpo.parcelas = parcelas.map((pc) => ({

@@ -43,9 +43,11 @@ export default function Faturamento({
   const [acao, setAcao] = useState<'nf' | 'cobranca' | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
 
+  const ehCartao = formaPagamento.startsWith('cartao')
   const cobravel = formaPagamento.startsWith('boleto') || formaPagamento === 'pix'
-  const cobrancaCompleta =
-    cobranca.linhas.length > 0 && cobranca.linhas.every((l) => l.linkBoleto || l.linkPix)
+  const cobrancaCompleta = ehCartao
+    ? !!cobranca.geradaEm
+    : cobranca.linhas.length > 0 && cobranca.linhas.every((l) => l.linkBoleto || l.linkPix)
 
   function rodar(qual: 'nf' | 'cobranca') {
     setMsg(null)
@@ -110,8 +112,14 @@ export default function Faturamento({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold tracking-tight">Cobrança</p>
-            {!cobravel ? (
-              <p className="text-[11px] text-[#6E6E68]">Cartão é cobrado fora do portal.</p>
+            {ehCartao ? (
+              <p className="text-[11px] text-[#6E6E68]">
+                {cobrancaCompleta
+                  ? 'Conta a receber no Bling e link de pagamento enviado ao cliente. A baixa é feita no Bling.'
+                  : 'Lança a conta a receber no Bling, com a forma do cartão, para o financeiro dar baixa. O link de pagamento é enviado no bloco acima.'}
+              </p>
+            ) : !cobravel ? (
+              <p className="text-[11px] text-[#6E6E68]">Esta forma de pagamento é cobrada fora do portal.</p>
             ) : cobrancaCompleta ? (
               <p className="text-[11px] text-[#6E6E68]">
                 Gerada{cobranca.geradaEm ? ` em ${new Date(cobranca.geradaEm).toLocaleDateString('pt-BR')}` : ''} e enviada ao cliente.
@@ -121,13 +129,15 @@ export default function Faturamento({
             )}
           </div>
 
-          {cobravel && !cobrancaCompleta && (
+          {(cobravel || ehCartao) && !cobrancaCompleta && (
             <button
               onClick={() => rodar('cobranca')}
               disabled={pendente}
               className="shrink-0 bg-[#131A2E] text-white rounded-sm px-3 py-1.5 text-[11px] font-semibold tracking-wide disabled:opacity-50"
             >
-              {pendente && acao === 'cobranca' ? 'GERANDO...' : cobranca.linhas.length ? 'COMPLETAR' : 'GERAR COBRANÇA'}
+              {pendente && acao === 'cobranca'
+                ? ehCartao ? 'LANÇANDO...' : 'GERANDO...'
+                : ehCartao ? 'LANÇAR CONTA' : cobranca.linhas.length ? 'COMPLETAR' : 'GERAR COBRANÇA'}
             </button>
           )}
         </div>
