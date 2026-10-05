@@ -23,11 +23,19 @@ type Conta = {
   id?: number
   vencimento?: string
   valor?: number
+  saldo?: number
+  situacao?: number
   linkQRCodePix?: string
   linkBoleto?: string
   contato?: { id?: number }
   origem?: { id?: number; tipoOrigem?: string; numero?: string }
 }
+
+/**
+ * Situação da conta a receber no Bling: 1 em aberto, 2 recebida,
+ * 3 parcialmente recebida, 4 devolvida, 5 cancelada.
+ */
+export const CONTA_SITUACAO = { aberta: 1, recebida: 2, parcial: 3, devolvida: 4, cancelada: 5 } as const
 
 const PAUSA_MS = 400
 const pausa = (ms = PAUSA_MS) => new Promise((r) => setTimeout(r, ms))
@@ -214,4 +222,55 @@ export async function gravarRastreioNasContas(
     }
   }
   return gravadas
+}
+
+/* ------------------------------- recebimento ------------------------------- */
+
+export type SituacaoConta = {
+  contaId: number
+  valor: number
+  saldo: number
+  vencimento: string
+  /** Recebida por inteiro: situação 2, ou saldo zerado. */
+  recebida: boolean
+  origemId: number | null
+}
+
+function lerSituacao(c: Conta): SituacaoConta | null {
+  if (!c.id) return null
+  const valor = Number(c.valor ?? 0)
+  const saldo = c.saldo != null ? Number(c.saldo) : valor
+  const situacao = Number(c.situacao ?? 0)
+  return {
+    contaId: Number(c.id),
+    valor,
+    saldo,
+    vencimento: String(c.vencimento ?? '').slice(0, 10),
+    recebida: situacao === CONTA_SITUACAO.recebida || (situacao !== CONTA_SITUACAO.cancelada && saldo <= 0.009),
+    origemId: c.origem?.id != null ? Number(c.origem.id) : null,
+  }
+}
+
+/** Uma conta a receber pelo id, com situação e saldo. Null se o Bling não achou. */
+export async function consultarConta(contaId: number): Promise<SituacaoConta | null> {
+  const r = await chamarBling(`/contas/receber/${contaId}`)
+  if (!r.ok) return null
+  const c = (r.dados as { data?: Conta })?.data
+  return c ? lerSituacao(c) : null
+}
+
+/**
+ * Contas a receber de um contato que já foram recebidas (inteiras ou em
+ * parte). Serve para achar o pagamento de pedidos cuja parcela não guardou o
+ * id da conta — à vista, ou cobrança gerada antes de o portal gravar o
+ * vínculo. Casa por `origem.id` (pedido de venda) ou vencimento + valor.
+ */
+export async function listarContasRecebidas(contatoId: number): Promise<SituacaoConta[]> {
+  if (!contatoId) return []
+  const r = await chamarBling(
+    `/contas/receber?idsContatos[]=${contatoId}&situacoes[]=${CONTA_SITUACAO.recebida}&situacoes[]=${CONTA_SITUACAO.parcial}&limite=100`
+  )
+  if (!r.ok) return []
+  const contas = ((r.dados as { data?: Conta[] })?.data ?? []) as Conta[]
+  return contas.map(lerSituacao).filter((c): c is SituacaoConta => !!c)
 }
