@@ -9,9 +9,9 @@ const brl = (v: number) =>
 
 const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'corte_costura', 'pronto']
 
-// "Em aberto" vai até Faturado. Daí em diante (NF, expedição, entrega, baixa)
+// "Em andamento" vai até Faturado. Daí em diante (NF, expedição, entrega, baixa)
 // o pedido é do Bling e deixa de ser acompanhado aqui
-const EM_ABERTO = [...EM_PRODUCAO, 'faturado']
+const EM_ANDAMENTO = [...EM_PRODUCAO, 'faturado']
 
 const MESES = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -170,7 +170,7 @@ export default async function DashboardPage({
   const metrosPeriodo = doPeriodo.reduce((a, p) => a + p.metros, 0)
   const ticket = doPeriodo.length > 0 ? fatPeriodo / doPeriodo.length : 0
 
-  /* ---- em aberto: tudo que ainda não fechou, qualquer que seja a data ---- */
+  /* ---- em andamento: até faturado, qualquer que seja a data ---- */
   const aguardando = validos.filter((p) => p.status === 'aguardando')
   const solicitacoes = validos.filter((p) => p.temSolicitacao)
   const valorAguardando = aguardando.reduce((a, p) => a + p.total, 0)
@@ -182,11 +182,11 @@ export default async function DashboardPage({
   const faturados = validos.filter((p) => p.status === 'faturado')
   const valorFaturados = faturados.reduce((a, p) => a + p.total, 0)
 
-  const abertos = validos.filter(
-    (p) => p.status === 'aguardando' || EM_ABERTO.includes(p.status)
+  const andamento = validos.filter(
+    (p) => p.status === 'aguardando' || EM_ANDAMENTO.includes(p.status)
   )
-  const emAberto = abertos.length
-  const valorEmAberto = abertos.reduce((a, p) => a + p.total, 0)
+  const emAndamento = andamento.length
+  const valorEmAndamento = andamento.reduce((a, p) => a + p.total, 0)
 
   const porCliente: Record<string, ResumoCliente> = {}
 
@@ -297,22 +297,22 @@ export default async function DashboardPage({
         <Cartao rotulo="METRAGEM NO PERÍODO" valor={`${brl(metrosPeriodo)} m`} />
       </div>
 
-      {/* ---- em aberto: não depende do período ---- */}
-      <Titulo>EM ABERTO — ATÉ FATURADO, QUALQUER DATA</Titulo>
+      {/* ---- em andamento: não depende do período ---- */}
+      <Titulo>EM ANDAMENTO — ATÉ FATURADO, QUALQUER DATA</Titulo>
 
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
         <div className="flex items-baseline justify-between gap-3">
           <div>
             <div className="font-mono text-lg sm:text-2xl font-semibold">
-              {emAberto}
+              {emAndamento}
             </div>
             <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
-              pedido{emAberto !== 1 ? 's' : ''} ainda não fechado{emAberto !== 1 ? 's' : ''}
+              pedido{emAndamento !== 1 ? 's' : ''} em andamento
             </div>
           </div>
           <div className="text-right">
             <div className="font-mono text-sm sm:text-lg font-semibold">
-              R$ {brl(valorEmAberto)}
+              R$ {brl(valorEmAndamento)}
             </div>
             <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
               a confirmar, produzir ou faturar
