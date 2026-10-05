@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   lancarStatus,
   reimprimir,
@@ -12,6 +13,8 @@ import {
   alterarFormaPagamento,
 } from '@/app/actions/producao'
 import { faturarPedido, enviarLinkPagamento } from '@/app/actions/faturamento'
+import { agruparPedidos } from '@/app/actions/agrupamento'
+import ModalUnificar, { type OutroPronto } from './modal-unificar'
 import {
   confirmarPedido,
   responderSolicitacao,
@@ -93,6 +96,8 @@ export default function PainelAcoes({
   precoCliente,
   metragemImpressa,
   linkPagamentoAtual,
+  outrosProntos,
+  erroInicial = '',
   itens,
 }: {
   pedidoId: string
@@ -119,10 +124,15 @@ export default function PainelAcoes({
   metragemImpressa: number | null
   /** Cartão: link já enviado ao cliente, ou null. */
   linkPagamentoAtual: string | null
+  /** Outros pedidos prontos do mesmo cliente, candidatos a uma cobrança só. */
+  outrosProntos: OutroPronto[]
+  /** Erro de uma ação que terminou nesta tela, para não se perder na navegação. */
+  erroInicial?: string
   itens: Item[]
 }) {
+  const router = useRouter()
   const [tela, setTela] = useState<Tela>(null)
-  const [erro, setErro] = useState('')
+  const [erro, setErro] = useState(erroInicial)
   const [pendente, iniciar] = useTransition()
   const [ajustesAbertos, setAjustesAbertos] = useState(false)
 
@@ -132,6 +142,7 @@ export default function PainelAcoes({
   const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(intervaloBoleto))
   const [statusPendente, setStatusPendente] = useState<string | null>(null)
   const [confirmandoFatura, setConfirmandoFatura] = useState(false)
+  const [unificando, setUnificando] = useState(false)
   const [recadoFatura, setRecadoFatura] = useState('')
   const [linkPagamento, setLinkPagamento] = useState('')
 
@@ -168,21 +179,64 @@ export default function PainelAcoes({
     })
   }
 
+  /** Link de cartão validado, ou undefined quando não se aplica. Null = inválido. */
+  function linkParaFaturar(): string | undefined | null {
+    const link = linkPagamento.trim()
+    if (!ehCartao || !link) return undefined
+    return link.startsWith('https://') ? link : null
+  }
+
   function faturar() {
     setErro('')
-    const link = linkPagamento.trim()
-    if (ehCartao && link && !link.startsWith('https://')) {
+    const link = linkParaFaturar()
+    if (link === null) {
       setErro('O link de pagamento precisa começar com https://')
       return
     }
     iniciar(async () => {
-      const r = await faturarPedido(pedidoId, ehCartao && link ? link : undefined)
+      const r = await faturarPedido(pedidoId, link)
       if (!r.ok) {
         setErro(r.erro)
         return
       }
       setConfirmandoFatura(false)
+      setUnificando(false)
       setRecadoFatura(r.detalhe)
+    })
+  }
+
+  /**
+   * Primeiro clique no Faturar: com outros pedidos prontos do cliente, abre o
+   * pop-up de unificação; sem, vai para a confirmação simples de sempre.
+   */
+  function iniciarFatura() {
+    setErro('')
+    if (outrosProntos.length > 0) setUnificando(true)
+    else setConfirmandoFatura(true)
+  }
+
+  /**
+   * Reúne este pedido com os marcados num agrupador e fatura o agrupador.
+   * Se o agrupamento der certo e o faturamento não, o agrupador existe e o
+   * botão Faturar dele mostra o erro — por isso a navegação acontece nos dois
+   * casos, e o erro vai junto na URL para aparecer lá.
+   */
+  function unificarEFaturar(ids: string[]) {
+    setErro('')
+    const link = linkParaFaturar()
+    if (link === null) {
+      setErro('O link de pagamento precisa começar com https://')
+      return
+    }
+    iniciar(async () => {
+      const g = await agruparPedidos([pedidoId, ...ids])
+      if (!g.ok) {
+        setErro(g.erro)
+        return
+      }
+      const r = await faturarPedido(g.pedidoId, link)
+      const destino = '/admin/pedidos/' + g.pedidoId
+      router.push(r.ok ? destino : destino + '?erro=' + encodeURIComponent(r.erro))
     })
   }
 
@@ -607,9 +661,10 @@ export default function PainelAcoes({
           </h2>
           <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
             Pedido de venda no Bling, cobrança (boleto/Pix) e nota fiscal
-            quando o pedido é com nota, com e-mails ao cliente. Se houver
-            outros pedidos prontos deste cliente, agrupe antes na lista de
-            pedidos — depois de faturado não dá mais.
+            quando o pedido é com nota, com e-mails ao cliente.
+            {outrosProntos.length > 0
+              ? ` Este cliente tem ${outrosProntos.length === 1 ? 'outro pedido pronto' : `outros ${outrosProntos.length} pedidos prontos`}: ao faturar, dá para reunir tudo numa cobrança só.`
+              : ''}
           </p>
 
           <dl className="mt-3 text-xs text-[#6E6E68] space-y-1">
@@ -677,12 +732,29 @@ export default function PainelAcoes({
             </div>
           ) : (
             <button
-              onClick={() => setConfirmandoFatura(true)}
+              onClick={iniciarFatura}
               disabled={pendente}
               className="w-full mt-3 bg-[#B00063] text-white rounded-sm py-3 text-sm font-bold tracking-wider disabled:opacity-50"
             >
               FATURAR
             </button>
+          )}
+
+          {unificando && (
+            <ModalUnificar
+              numeroAtual={numero}
+              metrosAtual={metragemImpressa}
+              totalAtual={total}
+              outros={outrosProntos}
+              pendente={pendente}
+              erro={erro}
+              onCancelar={() => {
+                setUnificando(false)
+                setErro('')
+              }}
+              onFaturarSoEste={faturar}
+              onUnificar={unificarEFaturar}
+            />
           )}
         </div>
       )}
