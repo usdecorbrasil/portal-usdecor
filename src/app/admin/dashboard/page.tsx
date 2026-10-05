@@ -9,9 +9,9 @@ const brl = (v: number) =>
 
 const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'corte_costura', 'pronto']
 
-// Depois de faturado o pedido segue no Bling até a baixa financeira. Enquanto
-// não chega a "fechado", ainda é dinheiro a entrar — por isso fica no "em aberto"
-const POS_FATURAMENTO = ['faturado', 'nf_emitida', 'expedido', 'entregue']
+// "Em aberto" vai até Faturado. Daí em diante (NF, expedição, entrega, baixa)
+// o pedido é do Bling e deixa de ser acompanhado aqui
+const EM_ABERTO = [...EM_PRODUCAO, 'faturado']
 
 const MESES = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -44,24 +44,22 @@ function dataCurta(s: string) {
 }
 
 /**
- * Período de comparação: o mês anterior quando o filtro é um mês de
- * calendário; senão, a janela de mesmo tamanho imediatamente antes.
+ * Período de comparação. Quando o filtro começa no dia 1, compara com o mês
+ * anterior **até o mesmo dia**: no dia 5, o faturamento de 1 a 5 contra o de
+ * 1 a 5 do mês passado — comparar com o mês passado inteiro faria o mês
+ * corrente parecer sempre pior. Com datas soltas, usa a janela de mesmo
+ * tamanho imediatamente antes.
  */
 function periodoAnterior(de: Date, ate: Date) {
-  const hoje = new Date()
-  const ehMesCorrente =
-    de.getFullYear() === hoje.getFullYear() && de.getMonth() === hoje.getMonth()
-  const fimDoMes = ehMesCorrente
-    ? hoje
-    : new Date(de.getFullYear(), de.getMonth() + 1, 0)
-  const mesInteiro = de.getDate() === 1 && iso(ate) === iso(fimDoMes)
-
-  if (mesInteiro) {
+  if (de.getDate() === 1) {
     const inicio = new Date(de.getFullYear(), de.getMonth() - 1, 1)
+    const ultimoDia = new Date(de.getFullYear(), de.getMonth(), 0).getDate()
+    // Dia 31 num mês de 30: fica no último dia que o mês anterior tem
+    const dia = Math.min(ate.getDate(), ultimoDia)
     return {
       de: inicio,
-      ate: new Date(de.getFullYear(), de.getMonth(), 0),
-      rotulo: MESES[inicio.getMonth()].slice(0, 3),
+      ate: new Date(inicio.getFullYear(), inicio.getMonth(), dia),
+      rotulo: `1 a ${dia} de ${MESES[inicio.getMonth()].slice(0, 3)}`,
     }
   }
 
@@ -181,11 +179,14 @@ export default async function DashboardPage({
   const metrosProducao = emProducao.reduce((a, p) => a + p.metros, 0)
   const valorProducao = emProducao.reduce((a, p) => a + p.total, 0)
 
-  const posFaturamento = validos.filter((p) => POS_FATURAMENTO.includes(p.status))
-  const valorPosFaturamento = posFaturamento.reduce((a, p) => a + p.total, 0)
+  const faturados = validos.filter((p) => p.status === 'faturado')
+  const valorFaturados = faturados.reduce((a, p) => a + p.total, 0)
 
-  const emAberto = aguardando.length + emProducao.length + posFaturamento.length
-  const valorEmAberto = valorAguardando + valorProducao + valorPosFaturamento
+  const abertos = validos.filter(
+    (p) => p.status === 'aguardando' || EM_ABERTO.includes(p.status)
+  )
+  const emAberto = abertos.length
+  const valorEmAberto = abertos.reduce((a, p) => a + p.total, 0)
 
   const porCliente: Record<string, ResumoCliente> = {}
 
@@ -297,7 +298,7 @@ export default async function DashboardPage({
       </div>
 
       {/* ---- em aberto: não depende do período ---- */}
-      <Titulo>EM ABERTO — TODOS OS PERÍODOS</Titulo>
+      <Titulo>EM ABERTO — ATÉ FATURADO, QUALQUER DATA</Titulo>
 
       <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
         <div className="flex items-baseline justify-between gap-3">
@@ -314,7 +315,7 @@ export default async function DashboardPage({
               R$ {brl(valorEmAberto)}
             </div>
             <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
-              a receber ou a produzir
+              a confirmar, produzir ou faturar
             </div>
           </div>
         </div>
@@ -378,30 +379,18 @@ export default async function DashboardPage({
           className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
         >
           <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
-            FATURADOS, SEM BAIXA
+            FATURADOS
           </div>
           <div className="flex items-baseline justify-between gap-2 mt-0.5 sm:mt-1">
             <span className="font-mono font-semibold text-base sm:text-xl">
-              {posFaturamento.length}
+              {faturados.length}
             </span>
             <span className="font-mono text-xs sm:text-sm text-[#6E6E68]">
-              R$ {brl(valorPosFaturamento)}
+              R$ {brl(valorFaturados)}
             </span>
           </div>
-          <div className="mt-2 pt-2 border-t border-[#DDDCD5] flex flex-wrap gap-x-3 gap-y-1">
-            {POS_FATURAMENTO.map((e) => {
-              const n = posFaturamento.filter((p) => p.status === e).length
-              if (n === 0) return null
-              return (
-                <span key={e} className="text-[10px] sm:text-xs text-[#6E6E68]">
-                  {rotuloEtapa(e)}{' '}
-                  <strong className="font-mono text-[#131A2E]">{n}</strong>
-                </span>
-              )
-            })}
-            {posFaturamento.length === 0 && (
-              <span className="text-[10px] sm:text-xs text-[#6E6E68]">nada a receber</span>
-            )}
+          <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-1">
+            aguardando nota e expedição
           </div>
         </Link>
       </div>
@@ -464,10 +453,6 @@ function rotuloEtapa(e: string) {
     estampando: 'Estampando',
     corte_costura: 'Corte/costura',
     pronto: 'Pronto',
-    faturado: 'Faturado',
-    nf_emitida: 'NF emitida',
-    expedido: 'Expedido',
-    entregue: 'Entregue',
   }
   return r[e] ?? e
 }
