@@ -129,6 +129,7 @@ export default async function PedidoAdminPage({
       pedido_precos(preco_de, preco_para, motivo, created_at, criado_por),
       pedido_nf_historico(emitir_de, emitir_para, motivo, created_at, criado_por),
       pedido_metragem_historico(metragem_de, metragem_para, motivo, created_at, criado_por),
+      pedido_instrucoes_historico(texto_anterior, texto_novo, autor_id, acao, criado_em),
       pedido_solicitacoes(id, texto, status, resposta, created_at),
       pedido_parcelas(numero, valor, vencimento, pago_em, link_boleto, link_pix, boleto_pdf_path)
     `
@@ -298,6 +299,7 @@ export default async function PedidoAdminPage({
   const ajustesPreco = (p.pedido_precos ?? []) as any[]
   const ajustesNf = (p.pedido_nf_historico ?? []) as any[]
   const ajustesMetragem = (p.pedido_metragem_historico ?? []) as any[]
+  const histInstrucoes = (p.pedido_instrucoes_historico ?? []) as any[]
   const itemPorId = new Map(itens.map((i) => [i.id, i]))
 
   // Quem fez cada coisa, numa consulta só. Degrada para nada quando o perfil
@@ -309,6 +311,7 @@ export default async function PedidoAdminPage({
     ...ajustesPreco.map((a) => a.criado_por),
     ...ajustesNf.map((a) => a.criado_por),
     ...ajustesMetragem.map((a) => a.criado_por),
+    ...histInstrucoes.map((a) => a.autor_id),
     ...hist.map((h: any) => h.criado_por),
     p.cancelado_por,
   ].filter(Boolean) as string[]
@@ -571,7 +574,20 @@ export default async function PedidoAdminPage({
         </>
       )}
 
-      <InstrucoesInternas pedidoId={p.id} texto={(p.instrucoes_internas as string | null) ?? null} />
+      <InstrucoesInternas
+        pedidoId={p.id}
+        texto={(p.instrucoes_internas as string | null) ?? null}
+        historico={histInstrucoes
+          .slice()
+          .sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime())
+          .map((h) => ({
+            acao: h.acao as 'editado' | 'apagado',
+            textoAnterior: (h.texto_anterior as string | null) ?? null,
+            textoNovo: (h.texto_novo as string | null) ?? null,
+            autor: autorDe(h.autor_id),
+            data: h.criado_em as string,
+          }))}
+      />
 
       <div className="mt-6 border-t-2 border-[#131A2E] pt-4">
         <div className="flex justify-between items-baseline text-sm text-[#6E6E68]">
