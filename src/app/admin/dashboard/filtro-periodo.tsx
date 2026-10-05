@@ -96,7 +96,7 @@ export default function FiltroPeriodo({ de, ate }: { de: string; ate: string }) 
             >
               ‹
             </button>
-            <span className="px-2 py-1.5 text-xs sm:text-sm font-semibold tracking-tight text-[#131A2E] capitalize">
+            <span className="px-2 py-1.5 text-xs sm:text-sm font-semibold tracking-tight text-[#131A2E]">
               {MESES[mes.getMonth()]} de {mes.getFullYear()}
             </span>
             <button

@@ -178,11 +178,6 @@ export default async function DashboardPage({
   const metrosProducao = emProducao.reduce((a, p) => a + p.metros, 0)
   const valorProducao = emProducao.reduce((a, p) => a + p.total, 0)
 
-  const andamento = validos.filter(
-    (p) => p.status === 'aguardando' || EM_PRODUCAO.includes(p.status)
-  )
-  const emAndamento = andamento.length
-  const valorEmAndamento = andamento.reduce((a, p) => a + p.total, 0)
 
   const porCliente: Record<string, ResumoCliente> = {}
 
@@ -301,28 +296,7 @@ export default async function DashboardPage({
       {/* ---- em andamento: não depende do período ---- */}
       <Titulo>EM ANDAMENTO — QUALQUER DATA</Titulo>
 
-      <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <div>
-            <div className="font-mono text-lg sm:text-2xl font-semibold">
-              {emAndamento}
-            </div>
-            <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
-              pedido{emAndamento !== 1 ? 's' : ''} em andamento
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="font-mono text-sm sm:text-lg font-semibold">
-              R$ {brl(valorEmAndamento)}
-            </div>
-            <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
-              a confirmar ou produzir
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-2 sm:gap-3 mt-2 sm:mt-3">
+      <div className="grid sm:grid-cols-2 gap-2 sm:gap-3">
         <Link
           href="/admin/pedidos?etapa=aguardando"
           className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
