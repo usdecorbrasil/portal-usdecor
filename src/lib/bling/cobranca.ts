@@ -164,3 +164,54 @@ export async function lancarEObterContas(
   const contas = await buscarCobrancasDoPedido(contatoId, blingPedidoId, esperados)
   return { ok: true, contas, jaLancadas: l.jaLancadas }
 }
+
+/**
+ * Grava o rastreio do portal no `historico` de cada conta a receber, para o
+ * financeiro ver no Bling quais pedidos do portal compõem aquela cobrança —
+ * no agrupamento são vários. GET + mescla + PUT, como no contato: o PUT
+ * substitui a conta inteira e o ERP tem campos que o portal não conhece.
+ *
+ * Nunca lança: a cobrança já saiu, e um texto a menos no ERP não pode
+ * desfazer isso. Devolve quantas contas foram gravadas.
+ */
+export async function gravarRastreioNasContas(
+  contaIds: (number | null)[],
+  rastreio: string
+): Promise<number> {
+  const texto = rastreio.trim().slice(0, 500)
+  if (!texto) return 0
+
+  let gravadas = 0
+  for (const id of contaIds) {
+    if (!id) continue
+    try {
+      await pausa()
+      const r = await chamarBling(`/contas/receber/${id}`)
+      if (!r.ok) continue
+
+      const atual = ((r.dados as { data?: Record<string, unknown> })?.data ?? {}) as Record<string, unknown>
+      const historico = String(atual.historico ?? '').trim()
+      if (historico.includes(texto)) {
+        gravadas++
+        continue
+      }
+
+      const mesclado: Record<string, unknown> = {
+        ...atual,
+        historico: (historico ? `${texto} | ${historico}` : texto).slice(0, 500),
+      }
+      delete mesclado.id
+
+      await pausa()
+      const w = await chamarBling(`/contas/receber/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(mesclado),
+      })
+      if (w.ok) gravadas++
+      else console.error(`[bling] rastreio na conta ${id}: ${w.erro.slice(0, 200)}`)
+    } catch (e) {
+      console.error(`[bling] rastreio na conta ${id}:`, e)
+    }
+  }
+  return gravadas
+}

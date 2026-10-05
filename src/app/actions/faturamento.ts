@@ -5,8 +5,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { gerarNfe, transmitirEEsperar, NF_SITUACAO } from '@/lib/bling/nfe'
-import { gerarEObterCobrancas, lancarEObterContas } from '@/lib/bling/cobranca'
-import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
+import { gerarEObterCobrancas, lancarEObterContas, gravarRastreioNasContas } from '@/lib/bling/cobranca'
+import { sincronizarPedidoComBling, rastreioPedido } from '@/lib/bling/pedido'
 import { salvarDocumento, baixarArquivo } from '@/lib/storage/documentos'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateNfEmitida } from '@/lib/resend/templates/nf-emitida'
@@ -251,6 +251,23 @@ async function enviarLinkPagamentoInterno(p: Pedido, link: string): Promise<Resu
   return { ok: true, detalhe: 'Link de pagamento enviado ao cliente.' }
 }
 
+/* --------------------------- rastreio nas contas --------------------------- */
+
+/**
+ * Escreve nas contas a receber do Bling quais pedidos do portal elas cobram
+ * (texto longo do rastreio: no agrupamento, cada original com metragem e
+ * valor). Nunca derruba a cobrança: falha só vai para o log.
+ */
+async function rastrearContas(pedidoId: string, contaIds: (number | null)[]): Promise<void> {
+  if (!contaIds.some(Boolean)) return
+  try {
+    const rastreio = await rastreioPedido(pedidoId)
+    if (rastreio) await gravarRastreioNasContas(contaIds, rastreio.longo)
+  } catch (e) {
+    console.error('[bling] rastreio nas contas a receber:', e)
+  }
+}
+
 /* ------------------------------ cartão: conta ------------------------------ */
 
 /**
@@ -297,6 +314,8 @@ async function lancarContasCartao(p: Pedido): Promise<Resultado> {
       await admin.from('pedido_parcelas').update({ bling_conta_id: c.contaId }).eq('id', parcela.id)
     }
   }
+
+  await rastrearContas(p.id, r.contas.map((c) => c.contaId))
 
   const quantas = r.contas.length
   return {
@@ -524,6 +543,8 @@ async function gerarCobrancaInterno(p: Pedido): Promise<Resultado> {
       linkPix: c.pix,
     })
   }
+
+  await rastrearContas(p.id, r.cobrancas.map((c) => c.contaId))
 
   await admin.from('pedidos').update({ cobranca_gerada_em: new Date().toISOString() }).eq('id', p.id)
 
