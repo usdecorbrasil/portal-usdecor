@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Baixa automática de pagamento
 --
--- A sincronização (Vercel Cron → /api/cron/pagamentos) consulta no Bling as
+-- A sincronização (GitHub Actions de hora em hora → /api/cron/pagamentos) consulta no Bling as
 -- contas a receber dos pedidos faturados e, quando uma está recebida, chama
 -- as duas funções abaixo. Elas são idempotentes: só gravam onde ainda não há
 -- pagamento, então rodar várias vezes não duplica nada.

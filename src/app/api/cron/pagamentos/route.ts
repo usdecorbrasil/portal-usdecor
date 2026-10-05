@@ -6,7 +6,8 @@ import { taxaDoPedido } from '@/lib/pagamento/config'
 /**
  * Baixa automática de pagamento.
  *
- * Chamada pelo Vercel Cron de hora em hora (vercel.json). Olha os pedidos
+ * Chamada de hora em hora pelo workflow .github/workflows/baixa-pagamentos.yml
+ * (o cron da Vercel no plano Hobby só roda uma vez por dia). Olha os pedidos
  * faturados ainda sem pagamento, consulta as contas a receber deles no Bling
  * e, quando uma está recebida, grava a parcela (`pedido_parcelas.pago_em`) e,
  * com tudo recebido, o pedido (`pedidos.pago_em` / `valor_pago`, mais a
