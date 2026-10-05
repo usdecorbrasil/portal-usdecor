@@ -872,7 +872,7 @@ function ModalAgrupar({
           </div>
           <div className="flex justify-between">
             <dt>Preço médio</dt>
-            <dd className="font-mono text-[#131A2E]">R$ {precoMedio.toFixed(4)}/m</dd>
+            <dd className="font-mono text-[#131A2E]">R$ {brl(precoMedio)}/m</dd>
           </div>
           <div className="flex justify-between">
             <dt>Total</dt>
