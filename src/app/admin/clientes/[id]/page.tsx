@@ -34,10 +34,9 @@ export default async function ClienteDetalhePage({
 
   if (!cliente) notFound()
 
-  const { data: emAberto } = await supabase.rpc('clientes_em_aberto')
-  const emAbertoCliente = (emAberto ?? []).find(
-    (e: { cliente_id: string; em_aberto: number }) => e.cliente_id === id
-  )
+  // Crédito em uso = o que está em boleto (faturado não pago + confirmado
+  // ainda não faturado), a mesma conta de `cliente_pode_parcelar`
+  const { data: emUso } = await supabase.rpc('credito_em_uso', { p_cliente_id: id })
 
   const [resumoPagamentos, { data: vencidos }] = await Promise.all([
     buscarResumoPagamentos(),
@@ -53,7 +52,7 @@ export default async function ClienteDetalhePage({
           ...cliente,
           preco_metro: Number(cliente.preco_metro),
           limite_credito: Number(cliente.limite_credito),
-          em_aberto: emAbertoCliente ? Number(emAbertoCliente.em_aberto) : 0,
+          em_aberto: Number(emUso ?? 0),
           boletos_vencidos: Number(vencidos ?? 0),
           atraso_liberado_em: (cliente.atraso_liberado_em as string | null) ?? null,
           atraso_liberado_motivo: (cliente.atraso_liberado_motivo as string | null) ?? null,

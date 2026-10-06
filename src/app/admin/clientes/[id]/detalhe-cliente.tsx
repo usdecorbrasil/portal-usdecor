@@ -245,7 +245,7 @@ export default function DetalheCliente({
                 />
               </div>
               <div className="flex justify-between text-xs text-[#6E6E68] mt-1.5">
-                <span>R$ {brl(cliente.em_aberto)} em aberto</span>
+                <span>R$ {brl(cliente.em_aberto)} em boletos</span>
                 <span
                   className={disponivel < 0 ? 'text-[#B00063] font-semibold' : ''}
                 >

@@ -80,6 +80,15 @@ export async function criarPedido(dados: {
     return { ok: false, erro: 'Há boleto em atraso. Regularize para enviar novos pedidos.' }
   }
 
+  // Boleto parcelado só com crédito sobrando (limite menos o que já está em
+  // boleto). `criar_pedido` repete a checagem no banco
+  if (parsed.data.forma_pagamento === 'boleto_parcelado' && !(await verificarPodeParcelar())) {
+    return {
+      ok: false,
+      erro: 'Limite de crédito atingido. Escolha boleto à vista ou outra forma de pagamento.',
+    }
+  }
+
   // Toda a validação real acontece dentro da função do banco:
   // preço, catálogo do cliente, produto ativo, anti-duplicidade, limite de crédito.
   const { data, error } = await supabase.rpc('criar_pedido', {
