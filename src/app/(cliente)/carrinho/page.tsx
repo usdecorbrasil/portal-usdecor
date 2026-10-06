@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCarrinho } from '@/lib/carrinho/contexto'
-import { criarPedido, verificarPodeParcelar, situacaoAtraso, type BoletoVencido } from '@/app/actions/pedidos'
+import { criarPedido, verificarPodeParcelar, situacaoAtraso, formasDoCliente, type BoletoVencido } from '@/app/actions/pedidos'
 import { buscarConfigPagamento } from '@/app/actions/configuracoes'
 import {
   FORMAS,
@@ -39,13 +39,21 @@ export default function CarrinhoPage() {
   const [podeParcelar, setPodeParcelar] = useState(true)
   const [config, setConfig] = useState<ConfigPagamento>(PADRAO)
   const [vencidos, setVencidos] = useState<BoletoVencido[]>([])
+  const [permitidas, setPermitidas] = useState<string[] | null>(null)
   const router = useRouter()
 
   useEffect(() => {
     verificarPodeParcelar().then(setPodeParcelar)
     buscarConfigPagamento().then(setConfig)
     situacaoAtraso().then((s) => setVencidos(s.vencidos))
+    formasDoCliente().then(setPermitidas)
   }, [])
+
+  // Formas que este cliente pode usar (lista do cadastro). Enquanto não
+  // carrega, ou se vier vazia, vale só a configuração geral
+  const permite = (f: string) => !permitidas || permitidas.length === 0 || permitidas.includes(f)
+  const boletoAvistaPermitido = permite('boleto_avista')
+  const boletoParceladoPermitido = permite('boleto_parcelado')
 
   // Boleto vencido trava o envio. O banco recusa de qualquer jeito; aqui o
   // botão já nasce desligado e a saída fica à mão
@@ -53,7 +61,13 @@ export default function CarrinhoPage() {
   const primeiroVencido = vencidos[0]
   const linkCartaoAtraso = vencidos.find((v) => v.linkCartao)?.linkCartao ?? null
 
-  const disponiveis = FORMAS.filter((f) => config[f].ativa)
+  // Disponível = ligada na configuração geral E permitida para o cliente.
+  // "Boleto" é uma categoria: basta à vista ou parcelado estar permitido
+  const disponiveis = FORMAS.filter(
+    (f) =>
+      config[f].ativa &&
+      (f === 'boleto' ? boletoAvistaPermitido || boletoParceladoPermitido : permite(f))
+  )
 
   // O dono pode ter desligado justamente a forma selecionada: em vez de
   // corrigir o estado num efeito, a escolha vigente é derivada
@@ -67,8 +81,14 @@ export default function CarrinhoPage() {
   // Crédito parcela; boleto parcela; débito é sempre à vista
   const maxParcelas = Math.max(1, regra.maxParcelas)
   // O limite de crédito trava só o boleto parcelado — cartão é cobrado na hora
-  const parcelasEscolhidas = Math.min(parcelas, maxParcelas)
-  const parcelamentoTravado = escolhida === 'boleto' && !podeParcelar
+  // Boleto só parcelado: "à vista" sai do seletor e a escolha começa em 2x
+  const avistaTravado = escolhida === 'boleto' && !boletoAvistaPermitido
+  const parcelamentoTravado =
+    escolhida === 'boleto' && (!podeParcelar || !boletoParceladoPermitido)
+  const parcelasEscolhidas = Math.min(
+    Math.max(parcelas, avistaTravado ? 2 : 1),
+    parcelamentoTravado ? 1 : maxParcelas
+  )
 
   async function enviar() {
     setErro('')
@@ -320,7 +340,7 @@ export default function CarrinhoPage() {
               style={{ gridTemplateColumns: `repeat(${maxParcelas}, 1fr)` }}
             >
               {Array.from({ length: maxParcelas }, (_, i) => i + 1).map((n) => {
-                const bloqueado = n > 1 && parcelamentoTravado
+                const bloqueado = (n > 1 && parcelamentoTravado) || (n === 1 && avistaTravado)
                 return (
                   <button
                     key={n}
@@ -342,7 +362,14 @@ export default function CarrinhoPage() {
             </div>
             {parcelamentoTravado && (
               <p className="text-xs text-[#D8007A] mt-2">
-                Limite de crédito atingido — parcelamento indisponível.
+                {!boletoParceladoPermitido
+                  ? 'Parcelamento não habilitado para o seu cadastro.'
+                  : 'Limite de crédito atingido — parcelamento indisponível.'}
+              </p>
+            )}
+            {avistaTravado && (
+              <p className="text-xs text-[#6E6E68] mt-2">
+                Boleto à vista não habilitado para o seu cadastro.
               </p>
             )}
             {parcelasEscolhidas > 1 && (

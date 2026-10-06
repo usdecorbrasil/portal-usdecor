@@ -27,7 +27,7 @@ export default async function ClienteDetalhePage({
        limite_credito, ativo, arquivado,
        inscricao_estadual, indicador_ie, cep, endereco, numero, complemento,
        bairro, municipio, uf, bling_contato_id,
-       atraso_liberado_em, atraso_liberado_motivo`
+       atraso_liberado_em, atraso_liberado_motivo, formas_pagamento`
     )
     .eq('id', id)
     .single()
@@ -57,6 +57,7 @@ export default async function ClienteDetalhePage({
           boletos_vencidos: Number(vencidos ?? 0),
           atraso_liberado_em: (cliente.atraso_liberado_em as string | null) ?? null,
           atraso_liberado_motivo: (cliente.atraso_liberado_motivo as string | null) ?? null,
+          formas_pagamento: ((cliente.formas_pagamento as string[] | null) ?? []),
         }}
         pagamentos={resumoPagamentos[id] ?? null}
       />

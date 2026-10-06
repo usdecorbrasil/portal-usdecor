@@ -41,6 +41,11 @@ const camposBase = {
   bairro: z.string().trim().max(100).optional(),
   municipio: z.string().trim().max(100).optional(),
   uf: z.string().trim().toUpperCase().max(2).optional(),
+  // O que o cliente pode escolher no carrinho. O banco recusa lista vazia e
+  // valor desconhecido; aqui a mensagem já vem legível
+  formas_pagamento: z
+    .array(z.enum(['boleto_avista', 'boleto_parcelado', 'pix', 'cartao_credito', 'cartao_debito']))
+    .min(1, 'Marque ao menos uma forma de pagamento'),
 }
 
 // O preço é definido no cadastro e, depois, só pela tela do cliente — por isso
@@ -65,6 +70,23 @@ async function exigirAdmin() {
   return !!perfil && perfil.ativo && (perfil.role === 'admin' || perfil.role === 'financeiro')
 }
 
+const ROTULOS_FORMAS_PAGAMENTO: Record<string, string> = {
+  boleto_avista: 'Boleto à vista',
+  boleto_parcelado: 'Boleto parcelado',
+  pix: 'Pix',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+}
+
+/** Lista de formas legível, na ordem fixa, para a auditoria. */
+function rotulosFormas(v: unknown): string {
+  const lista = Array.isArray(v) ? (v as string[]) : []
+  return Object.keys(ROTULOS_FORMAS_PAGAMENTO)
+    .filter((f) => lista.includes(f))
+    .map((f) => ROTULOS_FORMAS_PAGAMENTO[f])
+    .join(', ')
+}
+
 function lerCampos(formData: FormData) {
   return {
     razao_social: formData.get('razao_social'),
@@ -82,6 +104,7 @@ function lerCampos(formData: FormData) {
     bairro: formData.get('bairro') || undefined,
     municipio: formData.get('municipio') || undefined,
     uf: formData.get('uf') || undefined,
+    formas_pagamento: formData.getAll('formas_pagamento'),
   }
 }
 
@@ -117,6 +140,7 @@ export async function criarCliente(
       bairro: dados.bairro || null,
       municipio: dados.municipio || null,
       uf: dados.uf || null,
+      formas_pagamento: dados.formas_pagamento,
     })
     .select('id')
     .single()
@@ -243,6 +267,7 @@ export async function editarCliente(
       bairro: dados.bairro || null,
       municipio: dados.municipio || null,
       uf: dados.uf || null,
+      formas_pagamento: dados.formas_pagamento,
     })
     .eq('id', id)
 
@@ -257,7 +282,11 @@ export async function editarCliente(
     entidade: 'cliente',
     entidadeId: id,
     acao: 'editou',
-    campos: diferencas(atual, dados, ROTULOS_CLIENTE),
+    campos: diferencas(
+      { ...atual, formas_pagamento: rotulosFormas(atual.formas_pagamento) },
+      { ...dados, formas_pagamento: rotulosFormas(dados.formas_pagamento) },
+      ROTULOS_CLIENTE
+    ),
   })
 
   if (atual.email !== dados.email) {
