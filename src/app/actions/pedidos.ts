@@ -80,12 +80,12 @@ export async function criarPedido(dados: {
     return { ok: false, erro: 'Há boleto em atraso. Regularize para enviar novos pedidos.' }
   }
 
-  // Boleto parcelado só com crédito sobrando (limite menos o que já está em
-  // boleto). `criar_pedido` repete a checagem no banco
-  if (parsed.data.forma_pagamento === 'boleto_parcelado' && !(await verificarPodeParcelar())) {
+  // Forma fora da lista do cliente: idem, o gatilho recusa de qualquer jeito
+  const permitidas = await formasDoCliente()
+  if (permitidas.length > 0 && !permitidas.includes(parsed.data.forma_pagamento)) {
     return {
       ok: false,
-      erro: 'Limite de crédito atingido. Escolha boleto à vista ou outra forma de pagamento.',
+      erro: 'Esta forma de pagamento não está disponível para o seu cadastro. Escolha outra.',
     }
   }
 
@@ -187,6 +187,32 @@ export async function verificarPodeParcelar(): Promise<boolean> {
   if (error) return false
 
   return !!data
+}
+
+/* --------------------------- formas por cliente --------------------------- */
+
+/**
+ * Formas de pagamento que o cliente logado pode escolher. Lista vazia quando
+ * não há sessão de cliente — o chamador decide o que fazer (o carrinho mostra
+ * tudo o que a configuração geral permitir).
+ */
+export async function formasDoCliente(): Promise<string[]> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data: perfil } = await supabase
+    .from('profiles')
+    .select('cliente_id, clientes(formas_pagamento)')
+    .eq('id', user.id)
+    .single()
+
+  const formas = (perfil?.clientes as unknown as { formas_pagamento: string[] | null } | null)
+    ?.formas_pagamento
+  return Array.isArray(formas) ? formas : []
 }
 
 /* ------------------------------ boleto atrasado ------------------------------ */
