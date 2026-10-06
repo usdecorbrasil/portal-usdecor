@@ -218,3 +218,31 @@ export function valorCobranca(
     ) / 100
   )
 }
+
+/**
+ * Maior quantidade de parcelas em que nenhuma fica abaixo do mínimo, dado o
+ * valor da mercadoria. A taxa fixa do boleto é por documento, então entra na
+ * conta de cada quantidade. Sem valor (estimativa zero) não há o que
+ * limitar: devolve o teto da configuração. Mesma regra de `criar_pedido`
+ * no banco — mexeu numa, mexa na outra.
+ */
+export function maxParcelasPorMinimo(
+  mercadoria: number,
+  config: ConfigForma,
+  tetoParcelas: number = config.maxParcelas
+): number {
+  const teto = Math.max(1, Math.min(tetoParcelas, MAX_PARCELAS))
+  if (mercadoria <= 0 || config.valorMinimoParcela <= 0) return teto
+
+  for (let n = teto; n >= 2; n--) {
+    const cobranca = valorCobranca(
+      mercadoria,
+      config.percentual,
+      config.taxaFixa,
+      'boleto_parcelado',
+      n
+    )
+    if (Math.floor((cobranca / n) * 100) / 100 >= config.valorMinimoParcela) return n
+  }
+  return 1
+}

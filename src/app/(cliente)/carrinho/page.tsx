@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCarrinho } from '@/lib/carrinho/contexto'
-import { criarPedido, verificarPodeParcelar, situacaoAtraso, formasDoCliente, type BoletoVencido } from '@/app/actions/pedidos'
+import { criarPedido, verificarPodeParcelar, situacaoAtraso, formasDoCliente, estimativaCarrinho, type BoletoVencido } from '@/app/actions/pedidos'
 import { buscarConfigPagamento } from '@/app/actions/configuracoes'
 import {
   FORMAS,
   PADRAO,
   ROTULOS_FORMA,
+  maxParcelasPorMinimo,
   type ConfigPagamento,
   type Forma,
 } from '@/lib/pagamento/config'
@@ -40,7 +41,29 @@ export default function CarrinhoPage() {
   const [config, setConfig] = useState<ConfigPagamento>(PADRAO)
   const [vencidos, setVencidos] = useState<BoletoVencido[]>([])
   const [permitidas, setPermitidas] = useState<string[] | null>(null)
+  const [estimada, setEstimada] = useState(0)
   const router = useRouter()
+
+  // Estimativa pelos itens (metros × quantidade × preço do cliente), só para
+  // limitar as parcelas pelo mínimo. O cliente não vê o valor: ele muda com a
+  // metragem real. Carrinho vazio deriva zero, sem setState no efeito
+  const chaveItens = itens.map((i) => i.produtoId + ':' + i.quantidade).join('|')
+  useEffect(() => {
+    if (!chaveItens) return
+    let vivo = true
+    estimativaCarrinho(
+      chaveItens.split('|').map((par) => {
+        const [produto_id, qtd] = par.split(':')
+        return { produto_id, quantidade: Number(qtd) }
+      })
+    ).then((e) => {
+      if (vivo) setEstimada(e.mercadoria)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [chaveItens])
+  const mercadoriaEstimada = itens.length ? estimada : 0
 
   useEffect(() => {
     verificarPodeParcelar().then(setPodeParcelar)
@@ -78,8 +101,13 @@ export default function CarrinhoPage() {
 
   const regra = config[escolhida]
 
-  // Crédito parcela; boleto parcela; débito é sempre à vista
-  const maxParcelas = Math.max(1, regra.maxParcelas)
+  // Crédito parcela; boleto parcela; débito é sempre à vista. No boleto, a
+  // parcela mínima corta o teto conforme a estimativa do pedido
+  const maxParcelas =
+    escolhida === 'boleto'
+      ? maxParcelasPorMinimo(mercadoriaEstimada, regra)
+      : Math.max(1, regra.maxParcelas)
+  const tetoCortadoPorMinimo = escolhida === 'boleto' && maxParcelas < Math.max(1, regra.maxParcelas)
   // O limite de crédito trava só o boleto parcelado — cartão é cobrado na hora
   // Boleto só parcelado: "à vista" sai do seletor e a escolha começa em 2x
   const avistaTravado = escolhida === 'boleto' && !boletoAvistaPermitido
@@ -337,6 +365,13 @@ export default function CarrinhoPage() {
           ))}
         </div>
 
+        {tetoCortadoPorMinimo && maxParcelas <= 1 && (
+          <p className="text-xs text-[#6E6E68] mt-3 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-3">
+            Com parcela mínima de R$ {brl(regra.valorMinimoParcela)}, este pedido é
+            pago à vista.
+          </p>
+        )}
+
         {maxParcelas > 1 && (
           <div className="mt-3 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-3">
             <label className="block text-xs tracking-widest text-[#6E6E68] mb-2">
@@ -377,6 +412,12 @@ export default function CarrinhoPage() {
             {avistaTravado && (
               <p className="text-xs text-[#6E6E68] mt-2">
                 Boleto à vista não habilitado para o seu cadastro.
+              </p>
+            )}
+            {tetoCortadoPorMinimo && (
+              <p className="text-xs text-[#6E6E68] mt-2">
+                Com parcela mínima de R$ {brl(regra.valorMinimoParcela)}, este pedido
+                permite até {maxParcelas}x.
               </p>
             )}
             {parcelasEscolhidas > 1 && (
