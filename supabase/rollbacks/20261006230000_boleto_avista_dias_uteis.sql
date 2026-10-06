@@ -1,4 +1,4 @@
--- Desfaz 20261006180000_boleto_avista_dias_uteis.sql
+-- Desfaz 20261006230000_boleto_avista_dias_uteis.sql
 
 drop function if exists public.proximo_dia_util(date, integer);
 drop function if exists public.eh_dia_util(date);
