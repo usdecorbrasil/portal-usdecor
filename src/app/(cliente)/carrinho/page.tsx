@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCarrinho } from '@/lib/carrinho/contexto'
-import { criarPedido, verificarPodeParcelar } from '@/app/actions/pedidos'
+import { criarPedido, verificarPodeParcelar, situacaoAtraso, type BoletoVencido } from '@/app/actions/pedidos'
 import { buscarConfigPagamento } from '@/app/actions/configuracoes'
 import {
   FORMAS,
@@ -38,12 +38,20 @@ export default function CarrinhoPage() {
   const [parcelas, setParcelas] = useState(1)
   const [podeParcelar, setPodeParcelar] = useState(true)
   const [config, setConfig] = useState<ConfigPagamento>(PADRAO)
+  const [vencidos, setVencidos] = useState<BoletoVencido[]>([])
   const router = useRouter()
 
   useEffect(() => {
     verificarPodeParcelar().then(setPodeParcelar)
     buscarConfigPagamento().then(setConfig)
+    situacaoAtraso().then((s) => setVencidos(s.vencidos))
   }, [])
+
+  // Boleto vencido trava o envio. O banco recusa de qualquer jeito; aqui o
+  // botão já nasce desligado e a saída fica à mão
+  const travadoPorAtraso = vencidos.length > 0
+  const primeiroVencido = vencidos[0]
+  const linkCartaoAtraso = vencidos.find((v) => v.linkCartao)?.linkCartao ?? null
 
   const disponiveis = FORMAS.filter((f) => config[f].ativa)
 
@@ -378,9 +386,49 @@ export default function CarrinhoPage() {
         </p>
       )}
 
+      {travadoPorAtraso && (
+        <div className="mt-5 bg-[#FBEAF0] border-l-4 border-[#B00063] rounded-r-sm p-4">
+          <p className="text-sm font-semibold text-[#B00063]">
+            Há boleto em atraso. Regularize para enviar novos pedidos.
+          </p>
+          <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            Assim que o pagamento for identificado, o envio é liberado
+            automaticamente.
+          </p>
+          <div className="flex gap-2 flex-wrap mt-3">
+            <a
+              href={primeiroVencido?.pdfUrl ?? primeiroVencido?.linkBoleto ?? '/pedidos/boletos'}
+              target={primeiroVencido?.pdfUrl || primeiroVencido?.linkBoleto ? '_blank' : undefined}
+              rel="noreferrer"
+              className="flex-1 text-center bg-[#131A2E] text-white rounded-sm py-2.5 text-xs font-bold tracking-wide"
+            >
+              PAGAR BOLETO AGORA
+            </a>
+            {linkCartaoAtraso && (
+              <a
+                href={linkCartaoAtraso}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 text-center bg-[#D8007A] text-white rounded-sm py-2.5 text-xs font-bold tracking-wide"
+              >
+                PAGAR COM CARTÃO
+              </a>
+            )}
+          </div>
+          {primeiroVencido?.linhaDigitavel && (
+            <p className="font-mono text-[11px] text-[#6E6E68] mt-2 break-all select-all">
+              {primeiroVencido.linhaDigitavel}
+            </p>
+          )}
+          <Link href="/pedidos/boletos" className="inline-block text-xs text-[#0090D8] hover:underline mt-2">
+            ver todos os boletos
+          </Link>
+        </div>
+      )}
+
       <button
         onClick={enviar}
-        disabled={enviando}
+        disabled={enviando || travadoPorAtraso}
         className="w-full mt-5 mb-4 bg-[#D8007A] text-white rounded-sm py-4 text-sm font-bold tracking-wider disabled:opacity-50"
       >
         {enviando ? 'ENVIANDO...' : 'ENVIAR PEDIDO'}

@@ -7,6 +7,7 @@ import { CarrinhoProvider } from '@/lib/carrinho/contexto'
 import Navegacao from './navegacao'
 import BuscaHeaderCliente from './busca-header-cliente'
 import BarraCarrinho from './barra-carrinho'
+import AvisoAtraso from './aviso-atraso'
 
 export default async function ClienteLayout({
   children,
@@ -73,6 +74,9 @@ export default async function ClienteLayout({
 
           <Navegacao />
         </header>
+
+        {/* Boleto vencido: aviso em toda página, até a baixa ou a liberação */}
+        <AvisoAtraso />
 
         <main className="max-w-3xl mx-auto px-5 py-6">{children}</main>
 

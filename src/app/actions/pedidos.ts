@@ -7,6 +7,7 @@ import { MAX_PARCELAS } from '@/lib/pagamento/config'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateInterno } from '@/lib/resend/templates/interno'
 import { urlDoSite } from '@/lib/site'
+import { urlDocumento } from '@/lib/storage/documentos'
 
 const ROTULOS_PAGAMENTO: Record<string, string> = {
   boleto_avista: 'Boleto à vista',
@@ -71,6 +72,13 @@ export async function criarPedido(dados: {
   } = await supabase.auth.getUser()
 
   if (!user) return { ok: false, erro: 'Sessão expirada. Entre novamente.' }
+
+  // Boleto vencido trava pedido novo. O gatilho no banco é quem garante;
+  // aqui só antecipamos a mensagem, sem jargão
+  const atraso = await situacaoAtraso()
+  if (atraso.bloqueado) {
+    return { ok: false, erro: 'Há boleto em atraso. Regularize para enviar novos pedidos.' }
+  }
 
   // Toda a validação real acontece dentro da função do banco:
   // preço, catálogo do cliente, produto ativo, anti-duplicidade, limite de crédito.
@@ -170,4 +178,79 @@ export async function verificarPodeParcelar(): Promise<boolean> {
   if (error) return false
 
   return !!data
+}
+
+/* ------------------------------ boleto atrasado ------------------------------ */
+
+export type BoletoVencido = {
+  pedidoId: string
+  numero: number
+  parcela: string | null
+  valor: number
+  vencimento: string
+  linhaDigitavel: string | null
+  linkBoleto: string | null
+  pdfUrl: string | null
+  linkCartao: string | null
+}
+
+/**
+ * Boletos vencidos e não pagos do cliente logado, respeitando a liberação
+ * manual (só contam os que venceram depois dela). Mesma regra de
+ * `cliente_boletos_vencidos` no banco — mexeu numa, mexa na outra.
+ */
+export async function situacaoAtraso(): Promise<{ bloqueado: boolean; vencidos: BoletoVencido[] }> {
+  const vazio = { bloqueado: false, vencidos: [] as BoletoVencido[] }
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return vazio
+
+  const { data: perfil } = await supabase
+    .from('profiles')
+    .select('cliente_id, clientes(atraso_liberado_em)')
+    .eq('id', user.id)
+    .single()
+  if (!perfil?.cliente_id) return vazio
+
+  const liberadoEm = (perfil.clientes as unknown as { atraso_liberado_em: string | null } | null)
+    ?.atraso_liberado_em
+  const corteLiberacao = liberadoEm ? liberadoEm.slice(0, 10) : null
+  const hoje = new Date().toISOString().slice(0, 10)
+
+  const { data: parcelas } = await supabase
+    .from('pedido_parcelas')
+    .select(
+      'id, numero, valor, vencimento, pago_em, boleto_linha, link_boleto, boleto_pdf_path, ' +
+        'pedidos!inner(id, numero, cancelado_em, link_pagamento, forma_pagamento)'
+    )
+    .is('pago_em', null)
+    .is('pedidos.cancelado_em', null)
+    .lt('vencimento', hoje)
+    .order('vencimento')
+
+  const linhas = ((parcelas ?? []) as any[]).filter(
+    (p) => !corteLiberacao || String(p.vencimento).slice(0, 10) > corteLiberacao
+  )
+  if (linhas.length === 0) return vazio
+
+  const vencidos: BoletoVencido[] = []
+  for (const p of linhas) {
+    const ehCartao = String(p.pedidos?.forma_pagamento ?? '').startsWith('cartao')
+    vencidos.push({
+      pedidoId: p.pedidos.id,
+      numero: Number(p.pedidos.numero),
+      parcela: `parcela ${p.numero}`,
+      valor: Number(p.valor),
+      vencimento: String(p.vencimento).slice(0, 10),
+      linhaDigitavel: (p.boleto_linha as string | null) ?? null,
+      linkBoleto: (p.link_boleto as string | null) ?? null,
+      pdfUrl: await urlDocumento(p.boleto_pdf_path),
+      linkCartao: ehCartao ? ((p.pedidos.link_pagamento as string | null) ?? null) : null,
+    })
+  }
+
+  return { bloqueado: true, vencidos }
 }

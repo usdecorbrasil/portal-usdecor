@@ -632,3 +632,46 @@ export async function atualizarPrecoMetro(
   revalidatePath(`/admin/clientes/${parsed.data.clienteId}`)
   return { ok: true }
 }
+
+/**
+ * Libera um cliente travado por boleto vencido. A regra e a validação do
+ * motivo estão no banco (`admin_liberar_atraso_boleto`); aqui fica o rastro
+ * em auditoria, para a tela do cliente mostrar quem liberou e por quê.
+ */
+export async function liberarAtrasoBoleto(
+  clienteId: string,
+  motivo: string
+): Promise<Resultado> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+
+  const parsed = z.object({
+    clienteId: z.string().uuid(),
+    motivo: z.string().trim().min(10, 'Descreva o motivo com pelo menos 10 caracteres').max(500),
+  }).safeParse({ clienteId, motivo })
+  if (!parsed.success) return { ok: false, erro: parsed.error.issues[0].message }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('admin_liberar_atraso_boleto', {
+    p_cliente_id: parsed.data.clienteId,
+    p_motivo: parsed.data.motivo,
+  })
+  if (error) return { ok: false, erro: error.message }
+
+  await registrar({
+    entidade: 'cliente',
+    entidadeId: parsed.data.clienteId,
+    acao: 'editou',
+    campos: [
+      {
+        campo: 'Trava por boleto em atraso',
+        de: 'bloqueado',
+        para: 'liberado até o próximo vencimento',
+      },
+    ],
+    motivo: parsed.data.motivo,
+  })
+
+  revalidatePath(`/admin/clientes/${parsed.data.clienteId}`)
+  revalidatePath('/admin/clientes')
+  return { ok: true }
+}
