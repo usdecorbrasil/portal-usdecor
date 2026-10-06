@@ -96,6 +96,32 @@ export async function confirmarPedido(
   return { ok: true }
 }
 
+/**
+ * Pedido bloqueado por limite de crédito: libera com motivo (só
+ * admin/financeiro, regra no banco) e confirma pelo caminho normal. Sem a
+ * liberação o gatilho recusa a etapa "recebido".
+ */
+export async function confirmarPedidoBloqueado(
+  pedidoId: string,
+  motivo: string,
+  parcelamento?: { quantidade: number; primeiroVencimento: string }
+): Promise<Resultado> {
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    motivo: z.string().trim().min(10, 'Descreva o motivo da liberação com pelo menos 10 caracteres').max(500),
+  }).safeParse({ pedidoId, motivo })
+  if (!parsed.success) return { ok: false, erro: parsed.error.issues[0].message }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('admin_liberar_bloqueio_credito', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_motivo: parsed.data.motivo,
+  })
+  if (error) return { ok: false, erro: error.message }
+
+  return confirmarPedido(parsed.data.pedidoId, parcelamento)
+}
+
 /** Cliente cancela — só enquanto aguarda confirmação */
 export async function clienteCancelar(
   pedidoId: string,
