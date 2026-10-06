@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { MAX_PARCELAS } from '@/lib/pagamento/config'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateInterno } from '@/lib/resend/templates/interno'
+import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito'
 import { urlDoSite } from '@/lib/site'
 import { urlDocumento } from '@/lib/storage/documentos'
 
@@ -50,7 +51,7 @@ const schema = z.object({
 )
 
 type Resultado =
-  | { ok: true; numero: number; total: number }
+  | { ok: true; numero: number; total: number; bloqueadoCredito: boolean }
   | { ok: false; erro: string }
 
 export async function criarPedido(dados: {
@@ -110,7 +111,11 @@ export async function criarPedido(dados: {
 
   // Aviso para a equipe. Depois do pedido existir, e sem poder derrubá-lo:
   // quem lista os destinatários é Configurações → Avisos
+  const bloqueadoCredito = pedido.bloqueado_credito === true
   await avisarPedidoNovo(pedido.pedido_id as string)
+  if (bloqueadoCredito) {
+    await avisarBloqueioCredito(pedido.pedido_id as string, Number(pedido.total))
+  }
 
   revalidatePath('/pedidos')
   revalidatePath('/admin')
@@ -119,6 +124,48 @@ export async function criarPedido(dados: {
     ok: true,
     numero: Number(pedido.numero),
     total: Number(pedido.total),
+    bloqueadoCredito,
+  }
+}
+
+/**
+ * Pedido em boleto nasceu acima do limite: a equipe decide. Lê limite e
+ * crédito em uso com a sessão do cliente (a função do banco deixa o cliente
+ * consultar o próprio). Nunca derruba a criação.
+ */
+async function avisarBloqueioCredito(pedidoId: string, valorPedido: number) {
+  try {
+    const supabase = await createClient()
+    const { data: p } = await supabase
+      .from('pedidos')
+      .select('numero, forma_pagamento, parcelas_solicitadas, cliente_id, clientes(razao_social, limite_credito)')
+      .eq('id', pedidoId)
+      .maybeSingle()
+    if (!p) return
+
+    const cliente = p.clientes as unknown as { razao_social: string; limite_credito: number } | null
+    const { data: emUso } = await supabase.rpc('credito_em_uso', { p_cliente_id: p.cliente_id })
+    const forma =
+      (ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento) +
+      (p.parcelas_solicitadas ? ` (${p.parcelas_solicitadas}x)` : '')
+
+    await notificarEquipe('pedido_bloqueado_credito', {
+      pedidoId,
+      assunto: `Pedido #${p.numero} bloqueado por limite de crédito — ${cliente?.razao_social ?? 'cliente'}`,
+      html: templateBloqueioCredito({
+        numero: Number(p.numero),
+        cliente: cliente?.razao_social ?? '—',
+        forma,
+        valorPedido,
+        // O pedido recém-criado já conta no "em uso" (confirmado ainda não,
+        // mas aguardando não entra): mostramos o uso anterior a ele
+        emUso: Number(emUso ?? 0),
+        limite: Number(cliente?.limite_credito ?? 0),
+        urlPedido: `${urlDoSite()}/admin/pedidos/${pedidoId}`,
+      }),
+    })
+  } catch (e) {
+    console.error('[pedido_bloqueado_credito]', e)
   }
 }
 

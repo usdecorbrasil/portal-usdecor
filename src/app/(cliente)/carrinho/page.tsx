@@ -32,7 +32,7 @@ export default function CarrinhoPage() {
 
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
-  const [sucesso, setSucesso] = useState<{ numero: number } | null>(null)
+  const [sucesso, setSucesso] = useState<{ numero: number; bloqueadoCredito: boolean } | null>(null)
   const [removendo, setRemovendo] = useState<string | null>(null)
   const [categoria, setCategoria] = useState<Forma>('boleto')
   const [parcelas, setParcelas] = useState(1)
@@ -122,7 +122,7 @@ export default function CarrinhoPage() {
     }
 
     limpar()
-    setSucesso({ numero: r.numero })
+    setSucesso({ numero: r.numero, bloqueadoCredito: r.bloqueadoCredito })
     setEnviando(false)
     router.refresh()
   }
@@ -141,6 +141,13 @@ export default function CarrinhoPage() {
           <strong className="font-mono text-[#131A2E]">#{sucesso.numero}</strong>{' '}
           foi registrado.
         </p>
+        {/* Sem valores de limite nem de uso: é conversa da equipe com o cliente */}
+        {sucesso.bloqueadoCredito && (
+          <p className="text-sm text-[#8A6A00] bg-[#FFFBEE] border border-[#E8D9A8] rounded-sm px-4 py-3 mt-4 max-w-md mx-auto leading-relaxed">
+            Limite de crédito atingido. Escolha outra forma de pagamento ou
+            aguarde o contato da equipe.
+          </p>
+        )}
         <Link
           href="/pedidos"
           className="inline-block mt-6 bg-[#131A2E] text-white rounded-sm px-6 py-3 text-sm font-semibold tracking-wide"

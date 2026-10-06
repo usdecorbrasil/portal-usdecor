@@ -113,7 +113,7 @@ export default async function DashboardPage({
     supabase
     .from('pedidos')
     .select(`
-      id, numero, total, created_at, cancelado_em, metragem_impressa,
+      id, numero, total, created_at, cancelado_em, metragem_impressa, bloqueado_credito,
       clientes(id, razao_social),
       pedido_status_historico(status, created_at),
       pedido_solicitacoes(id, status)
@@ -144,6 +144,7 @@ export default async function DashboardPage({
       cliente: p.clientes?.razao_social ?? '—',
       status: hist[0]?.status ?? 'aguardando',
       cancelado: !!p.cancelado_em,
+      bloqueadoCredito: p.bloqueado_credito === true,
       criado: new Date(p.created_at),
       temSolicitacao: (p.pedido_solicitacoes ?? []).some(
         (s: any) => s.status === 'aberta'
@@ -171,6 +172,7 @@ export default async function DashboardPage({
 
   /* ---- em andamento: até pedido pronto, qualquer que seja a data ---- */
   const aguardando = validos.filter((p) => p.status === 'aguardando')
+  const bloqueados = aguardando.filter((p) => p.bloqueadoCredito)
   const solicitacoes = validos.filter((p) => p.temSolicitacao)
   const valorAguardando = aguardando.reduce((a, p) => a + p.total, 0)
 
@@ -222,6 +224,24 @@ export default async function DashboardPage({
           </h2>
 
           <div className="space-y-1.5 sm:space-y-2">
+            {bloqueados.length > 0 && (
+              <Link
+                href="/admin/pedidos?etapa=aguardando"
+                className="flex items-center gap-3 bg-[#FFFBEE] border-2 border-[#C79600] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#FFF6D6]"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold tracking-tight text-xs sm:text-sm text-[#6B5320]">
+                    {bloqueados.length} pedido{bloqueados.length > 1 ? 's' : ''} bloqueado
+                    {bloqueados.length > 1 ? 's' : ''} por limite de crédito
+                  </div>
+                  <div className="text-[10px] sm:text-xs text-[#8A6A00] mt-0.5">
+                    #{bloqueados.map((b) => b.numero).join(', #')} · precisa de liberação com motivo
+                  </div>
+                </div>
+                <span className="text-[#C79600] shrink-0">›</span>
+              </Link>
+            )}
+
             {aguardando.length > 0 && (
               <Link
                 href="/admin/pedidos?etapa=aguardando"
