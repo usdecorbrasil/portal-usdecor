@@ -7,7 +7,9 @@
 -- pagamento, então rodar várias vezes não duplica nada.
 --
 -- Rodam com a chave de serviço (não há sessão no cron), por isso só o
--- service_role executa. `pago_em` é a hora em que o portal identificou o
+-- service_role executa. O prefixo "sincronizar_" é de propósito: o banco já
+-- tem `registrar_pagamento_parcela` (baixa manual), com outro retorno, e a
+-- primeira versão desta migration tentou substituí-la — o Postgres recusou. `pago_em` é a hora em que o portal identificou o
 -- recebimento no Bling — o Bling não expõe a data exata da liquidação na
 -- conta, só a situação e o saldo.
 -- ============================================================================
@@ -22,7 +24,7 @@ comment on column public.pedidos.valor_pago is
   'Soma recebida, conforme as contas a receber do Bling.';
 
 -- Parcela recebida. Devolve true quando gravou agora, false quando já estava.
-create or replace function public.registrar_pagamento_parcela(
+create or replace function public.sincronizar_pagamento_parcela(
   p_parcela_id uuid,
   p_pago_em    timestamptz default now()
 )
@@ -47,7 +49,7 @@ $$;
 -- andamento, com origem 'bling'. A etapa não muda aqui — `status` é derivado
 -- do último registro, então repetimos o status atual com a observação.
 -- Devolve true quando gravou agora, false quando já estava pago.
-create or replace function public.registrar_pagamento_pedido(
+create or replace function public.sincronizar_pagamento_pedido(
   p_pedido_id  uuid,
   p_valor_pago numeric,
   p_pago_em    timestamptz default now()
@@ -88,7 +90,7 @@ begin
 end;
 $$;
 
-revoke all on function public.registrar_pagamento_parcela(uuid, timestamptz) from public;
-revoke all on function public.registrar_pagamento_pedido(uuid, numeric, timestamptz) from public;
-grant execute on function public.registrar_pagamento_parcela(uuid, timestamptz) to service_role;
-grant execute on function public.registrar_pagamento_pedido(uuid, numeric, timestamptz) to service_role;
+revoke all on function public.sincronizar_pagamento_parcela(uuid, timestamptz) from public;
+revoke all on function public.sincronizar_pagamento_pedido(uuid, numeric, timestamptz) from public;
+grant execute on function public.sincronizar_pagamento_parcela(uuid, timestamptz) to service_role;
+grant execute on function public.sincronizar_pagamento_pedido(uuid, numeric, timestamptz) to service_role;

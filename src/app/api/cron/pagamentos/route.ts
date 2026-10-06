@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
           })
 
           if (conta?.recebida) {
-            const { data: gravou } = await admin.rpc('registrar_pagamento_parcela', {
+            const { data: gravou } = await admin.rpc('sincronizar_pagamento_parcela', {
               p_parcela_id: parcela.id,
               p_pago_em: new Date().toISOString(),
             })
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (tudoRecebido && valorRecebido > 0) {
-        const { data: gravou, error: e } = await admin.rpc('registrar_pagamento_pedido', {
+        const { data: gravou, error: e } = await admin.rpc('sincronizar_pagamento_pedido', {
           p_pedido_id: p.id,
           p_valor_pago: Math.round(valorRecebido * 100) / 100,
           p_pago_em: new Date().toISOString(),
