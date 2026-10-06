@@ -145,19 +145,42 @@ async function boletoAbaixoDoMinimo(pedidoId: string): Promise<string | null> {
 export async function reimprimir(
   pedidoId: string,
   motivo: string,
-  custo: 'interno' | 'cliente'
+  custo: 'interno' | 'cliente',
+  /** De onde sai o tecido: do saldo do cliente (baixa, com metros) ou da empresa. */
+  tecido: { origem: 'cliente' | 'empresa'; metros?: number } = { origem: 'empresa' }
 ): Promise<Resultado> {
   const parsed = z.object({
     pedidoId: z.string().uuid(),
     motivo: z.string().trim().min(10, 'Descreva o motivo com pelo menos 10 caracteres').max(500),
     custo: z.enum(['interno', 'cliente']),
-  }).safeParse({ pedidoId, motivo, custo })
+    tecido: z.object({
+      origem: z.enum(['cliente', 'empresa']),
+      metros: z.number().positive().max(1000000).optional(),
+    }).refine((t) => t.origem === 'empresa' || (t.metros ?? 0) > 0, {
+      message: 'Informe quantos metros do tecido do cliente a reimpressão consome',
+    }),
+  }).safeParse({ pedidoId, motivo, custo, tecido })
 
   if (!parsed.success) {
     return { ok: false, erro: parsed.error.issues[0].message }
   }
 
   const supabase = await createClient()
+
+  // Tecido do cliente: confere antes de reimprimir que há pedido com tecido
+  // definido, para não voltar o pedido à impressão e falhar na baixa depois
+  let consumo: { clienteId: string; tecidoId: string; numero: number } | null = null
+  if (parsed.data.tecido.origem === 'cliente') {
+    const { data: p } = await supabase
+      .from('pedidos')
+      .select('cliente_id, tecido_id, numero')
+      .eq('id', parsed.data.pedidoId)
+      .maybeSingle()
+    if (!p?.tecido_id) {
+      return { ok: false, erro: 'Este pedido não tem tecido do cliente definido — escolha "Best Color Tecidos" como origem.' }
+    }
+    consumo = { clienteId: p.cliente_id as string, tecidoId: p.tecido_id as string, numero: Number(p.numero) }
+  }
 
   const { error } = await supabase.rpc('admin_reimprimir', {
     p_pedido_id: parsed.data.pedidoId,
@@ -167,7 +190,25 @@ export async function reimprimir(
 
   if (error) return { ok: false, erro: error.message }
 
+  // A reimpressão consome tecido além do romaneio: entra como quebra ligada
+  // ao pedido. O valor da estampa não muda
+  if (consumo) {
+    const { error: erroMov } = await supabase.rpc('registrar_movimento_tecido', {
+      p_cliente_id: consumo.clienteId,
+      p_tecido_id: consumo.tecidoId,
+      p_tipo: 'quebra',
+      p_metros: parsed.data.tecido.metros,
+      p_observacao: `Reimpressão do pedido #${consumo.numero} — ${parsed.data.motivo}`,
+      p_pedido_id: parsed.data.pedidoId,
+    })
+    if (erroMov) {
+      revalidar()
+      return { ok: false, erro: `Reimpressão registrada, mas a baixa do tecido falhou: ${erroMov.message}. Lance na aba Estoque.` }
+    }
+  }
+
   revalidar()
+  revalidatePath('/admin/estoque')
   return { ok: true }
 }
 

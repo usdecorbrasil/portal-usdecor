@@ -105,6 +105,7 @@ export default async function PedidoAdminPage({
   // O retorno já é tratado como `any` logo abaixo.
   const campos: string = `
       id, numero, notas, instrucoes_internas, created_at, metragem_impressa, agrupado_em,
+      tecido_id, tecidos(nome),
       cancelado_em, cancelado_motivo, cancelado_por,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       bling_nf_id, nf_numero, nf_chave, nf_emitida_em, nf_pdf_path, nf_xml_path, nf_link_danfe,
@@ -606,6 +607,12 @@ export default async function PedidoAdminPage({
               <span>Metragem impressa</span>
               <span className="font-mono">{brl(metrosTotal)} m</span>
             </div>
+            {p.tecidos?.nome && (
+              <div className="flex justify-between items-baseline text-sm text-[#6E6E68] mt-1">
+                <span>Tecido do cliente</span>
+                <span>{p.tecidos.nome}</span>
+              </div>
+            )}
             {dono && (
               <div className="flex justify-between items-baseline mt-2">
                 <span className="font-semibold tracking-tight">TOTAL</span>

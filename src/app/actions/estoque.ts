@@ -162,3 +162,55 @@ export async function registrarMovimento(dados: {
   revalidar()
   return { ok: true }
 }
+
+/* ------------------------------ pedido × tecido ------------------------------ */
+
+export type SaldoTecido = { tecidoId: string; nome: string; saldo: number }
+
+/** Tecidos ativos com saldo do cliente, para a escolha no romaneio. */
+export async function saldosDoCliente(clienteId: string): Promise<SaldoTecido[]> {
+  if (!(await exigirEquipe())) return []
+  const parsed = z.string().uuid().safeParse(clienteId)
+  if (!parsed.success) return []
+
+  const supabase = await createClient()
+  const [{ data: saldos }, { data: tecidos }] = await Promise.all([
+    supabase.from('tecido_saldos').select('tecido_id, saldo_metros').eq('cliente_id', parsed.data),
+    supabase.from('tecidos').select('id, nome').eq('ativo', true).order('nome'),
+  ])
+
+  const porTecido = new Map(((saldos ?? []) as { tecido_id: string; saldo_metros: number }[]).map((s) => [s.tecido_id, Number(s.saldo_metros)]))
+  return ((tecidos ?? []) as { id: string; nome: string }[])
+    .map((t) => ({ tecidoId: t.id, nome: t.nome, saldo: porTecido.get(t.id) ?? 0 }))
+    .filter((t) => t.saldo > 0)
+}
+
+/**
+ * Escolhe o tecido do pedido antes do romaneio. O banco confere que o saldo
+ * cobre a metragem e recusa com mensagem legível; a baixa em si acontece por
+ * gatilho quando a metragem impressa é gravada.
+ */
+export async function definirTecidoPedido(
+  pedidoId: string,
+  tecidoId: string,
+  metragem: number
+): Promise<Resultado> {
+  if (!(await exigirEquipe())) return { ok: false, erro: 'Acesso negado.' }
+
+  const parsed = z
+    .object({ pedidoId: z.string().uuid(), tecidoId: z.string().uuid(), metragem: z.number().positive() })
+    .safeParse({ pedidoId, tecidoId, metragem })
+  if (!parsed.success) return { ok: false, erro: 'Escolha o tecido e informe a metragem.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('definir_tecido_pedido', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_tecido_id: parsed.data.tecidoId,
+    p_metragem: parsed.data.metragem,
+  })
+  if (error) return { ok: false, erro: error.message }
+
+  revalidar()
+  revalidatePath(`/admin/pedidos/${parsed.data.pedidoId}`)
+  return { ok: true }
+}
