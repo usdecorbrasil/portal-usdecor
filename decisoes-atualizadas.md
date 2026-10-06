@@ -109,7 +109,7 @@ Decidido entre 05/10 e 06/10/2026, implementado nos PRs #8 a #27.
 | `pedidos.notas` é o que o cliente escreveu ao enviar; ninguém edita nem apaga, nem o admin (gatilho) | ✅ |
 | O que a equipe precisa anotar vai em `pedidos.instrucoes_internas`, editável por quem é interno e invisível ao cliente | ✅ |
 | Toda edição ou exclusão das instruções vira linha em histórico, com autor e data, por gatilho | ✅ |
-| As instruções acompanham o pedido em todas as telas da equipe (lista, painel, romaneio) | ✅ |
+| As instruções aparecem na tela do pedido, com o histórico em "Alterações no pedido" | ✅ |
 
 ### Pedido fechado sem depender da baixa
 
