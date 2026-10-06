@@ -61,6 +61,7 @@ export default async function DetalhePedidoPage({
       id, numero, total, notas, created_at, cancelado_em, cancelado_motivo,
       forma_pagamento, parcelas_solicitadas, metragem_impressa,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
+      link_pagamento, pago_em, link_boleto, link_pix,
       pedido_itens(
         id, produto_id, sku, nome,
         quantidade_pedida, quantidade_faturada
@@ -68,7 +69,7 @@ export default async function DetalhePedidoPage({
       pedido_status_historico(status, created_at),
       pedido_ajustes(motivo, created_at),
       pedido_solicitacoes(id, texto, status, resposta, created_at),
-      pedido_parcelas(numero, valor, vencimento, pago_em)
+      pedido_parcelas(numero, valor, vencimento, pago_em, link_boleto, link_pix)
     `)
     .eq('id', id)
     .single()
@@ -148,6 +149,15 @@ export default async function DetalhePedidoPage({
     (a, i) => a + Number(i.quantidade_faturada),
     0
   )
+
+  // Cobrança: o que o cliente pode fazer agora. Pago encerra o assunto;
+  // cartão paga pelo link que a equipe enviou; boleto/Pix pelos links do
+  // Bling, por parcela (parcelado) ou no pedido (à vista)
+  const pagoEm = (p.pago_em as string | null) ?? null
+  const ehCartao = String(p.forma_pagamento ?? '').startsWith('cartao')
+  const linkCartao = ehCartao && !pagoEm ? ((p.link_pagamento as string | null) ?? null) : null
+  const linkBoletoAvista = !pagoEm && parcelas.length === 0 ? ((p.link_boleto as string | null) ?? null) : null
+  const linkPixAvista = !pagoEm && parcelas.length === 0 ? ((p.link_pix as string | null) ?? null) : null
   // Metragem real, informada ao finalizar a estampa
   const metrosTotal =
     p.metragem_impressa != null ? Number(p.metragem_impressa) : null
@@ -254,6 +264,20 @@ export default async function DetalhePedidoPage({
                 <span className="text-[#6E6E68]">
                   venc. {dataBr(pc.vencimento)}
                 </span>
+                {!pc.pago_em && liberadoValor && (pc.link_boleto || pc.link_pix) && (
+                  <span className="flex gap-2">
+                    {pc.link_boleto && (
+                      <a href={pc.link_boleto} target="_blank" rel="noreferrer" className="text-[#0090D8] hover:underline">
+                        boleto
+                      </a>
+                    )}
+                    {pc.link_pix && (
+                      <a href={pc.link_pix} target="_blank" rel="noreferrer" className="text-[#0090D8] hover:underline">
+                        Pix
+                      </a>
+                    )}
+                  </span>
+                )}
                 <ParcelaBadge vencimento={pc.vencimento} pagoEm={pc.pago_em} />
               </div>
             ))}
@@ -264,6 +288,62 @@ export default async function DetalhePedidoPage({
           <p className="text-xs text-[#6E6E68] mt-3 pt-3 border-t border-[#DDDCD5] leading-relaxed">
             O valor será informado assim que o pedido estiver pronto.
           </p>
+        )}
+
+        {pagoEm && (
+          <div className="mt-3 pt-3 border-t border-[#DDDCD5]">
+            <p className="text-sm font-semibold tracking-tight text-[#2E7D4F]">
+              Pagamento confirmado em {new Date(pagoEm).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+        )}
+
+        {linkCartao && liberadoValor && (
+          <div className="mt-3 pt-3 border-t border-[#DDDCD5]">
+            <a
+              href={linkCartao}
+              target="_blank"
+              rel="noreferrer"
+              className="block w-full text-center bg-[#D8007A] text-white rounded-sm py-3 text-sm font-bold tracking-wider hover:bg-[#B00063]"
+            >
+              PAGAR COM CARTÃO
+            </a>
+            <p className="text-[11px] text-[#6E6E68] mt-2 leading-relaxed">
+              Abre a página de pagamento em uma nova aba. A confirmação aparece
+              aqui assim que o pagamento for identificado.
+            </p>
+          </div>
+        )}
+
+        {ehCartao && !linkCartao && !pagoEm && liberadoValor && (
+          <p className="text-xs text-[#6E6E68] mt-3 pt-3 border-t border-[#DDDCD5] leading-relaxed">
+            O link de pagamento será enviado por e-mail e aparecerá aqui.
+          </p>
+        )}
+
+        {(linkBoletoAvista || linkPixAvista) && liberadoValor && (
+          <div className="mt-3 pt-3 border-t border-[#DDDCD5] flex flex-wrap gap-2">
+            {linkBoletoAvista && (
+              <a
+                href={linkBoletoAvista}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 text-center border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide hover:bg-[#131A2E] hover:text-white"
+              >
+                ABRIR BOLETO
+              </a>
+            )}
+            {linkPixAvista && (
+              <a
+                href={linkPixAvista}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 text-center border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide hover:bg-[#131A2E] hover:text-white"
+              >
+                PAGAR COM PIX
+              </a>
+            )}
+          </div>
         )}
       </div>
 
