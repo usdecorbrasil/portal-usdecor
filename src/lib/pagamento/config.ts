@@ -17,6 +17,13 @@
  */
 export const MAX_PARCELAS = 4
 
+/**
+ * Boleto à vista vence este número de dias úteis depois da emissão (sábado,
+ * domingo e feriado nacional não contam). A conta de dias úteis está no
+ * banco (`proximo_dia_util`), que conhece o calendário.
+ */
+export const BOLETO_AVISTA_DIAS_UTEIS = 4
+
 export const FORMAS = ['boleto', 'pix', 'cartao_credito', 'cartao_debito'] as const
 
 export type Forma = (typeof FORMAS)[number]

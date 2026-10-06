@@ -63,6 +63,7 @@ type Pedido = {
   cobranca_gerada_em: string | null
   agrupado_em: string | null
   link_pagamento: string | null
+  vencimento_avista: string | null
   clientes: { email: string; razao_social: string; bling_contato_id: number | string | null } | null
   pedido_parcelas: {
     id: string
@@ -80,7 +81,7 @@ async function carregar(pedidoId: string): Promise<Pedido | null> {
     .from('pedidos')
     .select(
       'id, numero, forma_pagamento, total, taxa_pagamento_percentual, taxa_pagamento_fixa, ' +
-        'emitir_nf, bling_pedido_id, bling_sync_status, bling_nf_id, nf_numero, cobranca_gerada_em, agrupado_em, link_pagamento, ' +
+        'emitir_nf, bling_pedido_id, bling_sync_status, bling_nf_id, nf_numero, cobranca_gerada_em, agrupado_em, link_pagamento, vencimento_avista, ' +
         'clientes(email, razao_social, bling_contato_id), ' +
         'pedido_parcelas(id, numero, valor, vencimento, link_boleto, link_pix)'
     )
@@ -297,7 +298,7 @@ async function lancarContasCartao(p: Pedido): Promise<Resultado> {
   const esperados =
     parcelas.length > 0
       ? parcelas.map((x) => ({ valor: Number(x.valor), vencimento: String(x.vencimento).slice(0, 10) }))
-      : [{ valor: totalCobrado, vencimento: new Date().toISOString().slice(0, 10) }]
+      : [{ valor: totalCobrado, vencimento: p.vencimento_avista ?? new Date().toISOString().slice(0, 10) }]
 
   const r = await lancarEObterContas(contatoId, Number(p.bling_pedido_id), esperados)
   if (!r.ok) return { ok: false, erro: r.erro }
@@ -489,7 +490,7 @@ async function gerarCobrancaInterno(p: Pedido): Promise<Resultado> {
   const esperados =
     parcelas.length > 0
       ? parcelas.map((x) => ({ valor: Number(x.valor), vencimento: String(x.vencimento).slice(0, 10) }))
-      : [{ valor: totalCobrado, vencimento: new Date().toISOString().slice(0, 10) }]
+      : [{ valor: totalCobrado, vencimento: p.vencimento_avista ?? new Date().toISOString().slice(0, 10) }]
 
   const r = await gerarEObterCobrancas(contatoId, Number(p.bling_pedido_id), esperados)
   if (!r.ok) return { ok: false, erro: r.erro }
