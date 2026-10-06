@@ -63,7 +63,7 @@ export default async function BoletosClientePage() {
       .from('pedidos')
       .select(
         'id, numero, total, forma_pagamento, taxa_pagamento_percentual, taxa_pagamento_fixa, ' +
-          'pago_em, link_boleto, link_pix, link_pagamento, boleto_pdf_path, cobranca_gerada_em, pedido_parcelas(id)'
+          'pago_em, link_boleto, link_pix, link_pagamento, boleto_pdf_path, cobranca_gerada_em, vencimento_avista, pedido_parcelas(id)'
       )
       .is('cancelado_em', null)
       .not('cobranca_gerada_em', 'is', null),
@@ -116,10 +116,10 @@ export default async function BoletosClientePage() {
         p.forma_pagamento,
         1
       ),
-      // À vista o portal não guarda o vencimento: o boleto do Bling é que diz
-      vencimento: null,
+      // Boleto à vista: hoje + dias úteis, gravado ao faturar. Pix/cartão não têm
+      vencimento: (p.vencimento_avista as string | null) ?? null,
       pagoEm,
-      vencida: false,
+      vencida: !pagoEm && !!p.vencimento_avista && new Date(p.vencimento_avista + 'T00:00:00') < hoje,
       linhaDigitavel: null,
       linkBoleto: (p.link_boleto as string | null) ?? null,
       linkPix: (p.link_pix as string | null) ?? null,
