@@ -39,12 +39,15 @@ export default async function AdminLayout({
         { href: '/admin/financeiro/boletos', label: 'Financeiro' },
         { href: '/admin/clientes', label: 'Clientes' },
         { href: '/admin/catalogo', label: 'Catálogos' },
+        { href: '/admin/estoque', label: 'Estoque' },
         { href: '/admin/configuracoes', label: 'Configurações' },
       ]
     : [
         { href: '/admin/fila', label: 'Fila de impressão' },
         { href: '/admin/pedidos', label: 'Pedidos' },
         { href: '/admin/catalogo', label: 'Catálogos' },
+        // Produção recebe e mede o tecido: lê e lança movimentos
+        { href: '/admin/estoque', label: 'Estoque' },
       ]
 
   return (
