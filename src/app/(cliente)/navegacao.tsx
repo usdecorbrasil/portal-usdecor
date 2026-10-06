@@ -5,10 +5,11 @@ import { usePathname } from 'next/navigation'
 import { useCarrinho } from '@/lib/carrinho/contexto'
 import LinkCarregando from '@/components/link-carregando'
 
+// Pedidos primeiro: é a tela inicial do cliente e o que ele mais abre
 const ABAS = [
+  { href: '/pedidos', label: 'Pedidos' },
   { href: '/catalogo', label: 'Catálogo' },
   { href: '/carrinho', label: 'Carrinho' },
-  { href: '/pedidos', label: 'Pedidos' },
   { href: '/conta', label: 'Minha conta' },
 ]
 

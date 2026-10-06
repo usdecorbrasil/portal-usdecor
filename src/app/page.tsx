@@ -28,5 +28,7 @@ export default async function Home() {
     redirect('/admin')
   }
 
-  redirect('/catalogo')
+  // Cliente entra pelos pedidos: é o que ele vem acompanhar. O catálogo
+  // continua a um toque, na aba ao lado
+  redirect('/pedidos')
 }
