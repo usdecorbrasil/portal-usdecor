@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { lancarStatus, ajustarItem } from '@/app/actions/producao'
 import { confirmarRomaneio } from '@/app/actions/romaneio'
+import { definirTecidoPedido } from '@/app/actions/estoque'
 import { buscarItensPedido } from '@/app/actions/pedido-admin'
 import { agruparPedidos } from '@/app/actions/agrupamento'
 import {
@@ -472,7 +473,8 @@ export default function QuadroPedidos({
   function confirmarRomaneioEAvancar(
     metragem: number,
     alteracoes: { id: string; qtd: number }[],
-    motivoAjuste: string
+    motivoAjuste: string,
+    tecidoId: string
   ) {
     if (!movimento) return
     const id = movimento.pedido.id
@@ -485,6 +487,12 @@ export default function QuadroPedidos({
           setErro(rAjuste.erro)
           return
         }
+      }
+
+      const rTecido = await definirTecidoPedido(id, tecidoId, metragem)
+      if (!rTecido.ok) {
+        setErro(rTecido.erro)
+        return
       }
 
       const r1 = await confirmarRomaneio(id, metragem)
@@ -717,6 +725,7 @@ export default function QuadroPedidos({
       {movimento && itens && movimento.destino === 'estampando' && (
         <ModalRomaneio
           numero={movimento.pedido.numero}
+          clienteId={movimento.pedido.clienteId}
           itens={itens}
           pendente={pendente}
           erro={erro}

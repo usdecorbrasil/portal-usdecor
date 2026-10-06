@@ -25,6 +25,7 @@ export async function GET(
     saldo: dados.saldo,
     metragemImpressa: dados.metragemImpressa,
     notas: dados.notas,
+    tecido: dados.tecido,
     itens: dados.itens,
   }
 

@@ -21,6 +21,7 @@ import {
   responderSolicitacao,
 } from '@/app/actions/confirmacao'
 import { confirmarRomaneio } from '@/app/actions/romaneio'
+import { definirTecidoPedido } from '@/app/actions/estoque'
 import { buscarCatalogo } from '@/app/actions/pedido-admin'
 import {
   ModalRomaneio,
@@ -273,7 +274,8 @@ export default function PainelAcoes({
   function confirmarRomaneioEAvancar(
     metragem: number,
     alteracoes: { id: string; qtd: number }[],
-    motivoAjuste: string
+    motivoAjuste: string,
+    tecidoId: string
   ) {
     setErro('')
     iniciar(async () => {
@@ -283,6 +285,14 @@ export default function PainelAcoes({
           setErro(rAjuste.erro)
           return
         }
+      }
+
+      // Tecido antes do romaneio: o banco confere o saldo e, ao gravar a
+      // metragem, lança o consumo no estoque do cliente
+      const rTecido = await definirTecidoPedido(pedidoId, tecidoId, metragem)
+      if (!rTecido.ok) {
+        setErro(rTecido.erro)
+        return
       }
 
       const r1 = await confirmarRomaneio(pedidoId, metragem)
@@ -482,9 +492,9 @@ export default function PainelAcoes({
           setErro('')
           setTela('ajustar')
         }}
-        onConfirmar={(motivo, custo) =>
+        onConfirmar={(motivo, custo, tecido) =>
           iniciar(async () => {
-            const r = await reimprimir(pedidoId, motivo, custo)
+            const r = await reimprimir(pedidoId, motivo, custo, tecido)
             if (r.ok) setTela(null)
             else setErro(r.erro)
           })
@@ -1034,6 +1044,7 @@ export default function PainelAcoes({
       {statusPendente === 'estampando' && (
         <ModalRomaneio
           numero={numero}
+          clienteId={clienteId}
           itens={itens}
           pendente={pendente}
           erro={erro}
@@ -1878,16 +1889,28 @@ function TelaReimpressao({
   erro: string
   onVoltar: () => void
   onAjustar: () => void
-  onConfirmar: (motivo: string, custo: 'interno' | 'cliente') => void
+  onConfirmar: (
+    motivo: string,
+    custo: 'interno' | 'cliente',
+    tecido: { origem: 'cliente' | 'empresa'; metros?: number }
+  ) => void
 }) {
   const [motivo, setMotivo] = useState('')
   const [custo, setCusto] = useState<'interno' | 'cliente'>('interno')
+  // De onde sai o tecido da reimpressão. O valor da estampa não muda
+  const [origemTecido, setOrigemTecido] = useState<'cliente' | 'empresa'>('empresa')
+  const [metrosTecido, setMetrosTecido] = useState('')
   const [aviso, setAviso] = useState('')
   const [confirmando, setConfirmando] = useState(false)
+
+  const metrosNum = Number(metrosTecido.replace(',', '.'))
 
   function seguir() {
     if (motivo.trim().length < 10) {
       return setAviso('Descreva o motivo com pelo menos 10 caracteres.')
+    }
+    if (origemTecido === 'cliente' && (!Number.isFinite(metrosNum) || metrosNum <= 0)) {
+      return setAviso('Informe quantos metros do tecido do cliente a reimpressão consome.')
     }
     setAviso('')
     setConfirmando(true)
@@ -1904,7 +1927,15 @@ function TelaReimpressao({
               Reimprimir o pedido #{numero}?
             </strong>
             <ul className="space-y-1">
-              <li>· Novo consumo de tinta e tecido</li>
+              <li>
+                · Tecido:{' '}
+                <b>
+                  {origemTecido === 'cliente'
+                    ? `${brl(metrosNum)} m baixados do saldo do cliente`
+                    : 'fornecido pela Best Color Tecidos (saldo do cliente não muda)'}
+                </b>
+              </li>
+              <li>· O valor da estampa do pedido não muda</li>
               <li>
                 · Custo registrado como{' '}
                 <b>
@@ -1932,7 +1963,12 @@ function TelaReimpressao({
               VOLTAR
             </button>
             <button
-              onClick={() => onConfirmar(motivo.trim(), custo)}
+              onClick={() =>
+                onConfirmar(motivo.trim(), custo, {
+                  origem: origemTecido,
+                  metros: origemTecido === 'cliente' ? metrosNum : undefined,
+                })
+              }
               disabled={pendente}
               className="bg-[#C79600] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
             >
@@ -2002,6 +2038,48 @@ function TelaReimpressao({
                 onClick={() => setCusto('cliente')}
               />
             </div>
+          </div>
+
+          <div className="mt-4">
+            <span className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
+              DE ONDE SAI O TECIDO DA REIMPRESSÃO
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <OpcaoCusto
+                ativo={origemTecido === 'empresa'}
+                titulo="Best Color Tecidos"
+                legenda="saldo do cliente não muda"
+                onClick={() => setOrigemTecido('empresa')}
+              />
+              <OpcaoCusto
+                ativo={origemTecido === 'cliente'}
+                titulo="Saldo do cliente"
+                legenda="baixa no estoque, ligada ao pedido"
+                onClick={() => setOrigemTecido('cliente')}
+              />
+            </div>
+            {origemTecido === 'cliente' && (
+              <div className="mt-2">
+                <label
+                  htmlFor="metros-reimp"
+                  className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+                >
+                  METROS CONSUMIDOS NA REIMPRESSÃO
+                </label>
+                <input
+                  id="metros-reimp"
+                  type="text"
+                  inputMode="decimal"
+                  value={metrosTecido}
+                  onChange={(e) => {
+                    setMetrosTecido(e.target.value)
+                    setAviso('')
+                  }}
+                  placeholder="Ex.: 12,5"
+                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm outline-none focus:border-[#131A2E]"
+                />
+              </div>
+            )}
           </div>
 
           {aviso && <p className="text-sm text-[#B00063] mt-3">{aviso}</p>}

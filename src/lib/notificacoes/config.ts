@@ -10,7 +10,13 @@
  * deploy toda vez que entrasse um segundo administrador.
  */
 
-export const TIPOS = ['pedido_novo', 'pedido_bloqueado_credito', 'pedido_cancelado', 'cancelamento_solicitado'] as const
+export const TIPOS = [
+  'pedido_novo',
+  'pedido_bloqueado_credito',
+  'pedido_cancelado',
+  'cancelamento_solicitado',
+  'tecido_enviado',
+] as const
 
 export type TipoNotificacao = (typeof TIPOS)[number]
 
@@ -33,6 +39,11 @@ export const ROTULOS: Record<TipoNotificacao, { titulo: string; descricao: strin
     titulo: 'Cancelamento solicitado',
     descricao: 'Quando um cliente pede para cancelar um pedido já confirmado. Exige resposta.',
   },
+  tecido_enviado: {
+    titulo: 'Tecido enviado',
+    descricao:
+      'Quando um cliente avisa que mandou tecido. O saldo só entra depois da conferência na aba Estoque.',
+  },
 }
 
 export type ConfigNotificacoes = Record<TipoNotificacao, string[]>
@@ -42,6 +53,7 @@ export const PADRAO: ConfigNotificacoes = {
   pedido_bloqueado_credito: [],
   pedido_cancelado: [],
   cancelamento_solicitado: [],
+  tecido_enviado: [],
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

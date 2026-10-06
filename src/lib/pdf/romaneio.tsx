@@ -128,6 +128,8 @@ export type DadosRomaneio = {
   metragemImpressa: number
   /** Observação do cliente ao enviar o pedido — quem estampa precisa ler. */
   notas: string | null
+  /** Tecido do cliente de onde a metragem saiu. */
+  tecido: string | null
   itens: ItemRomaneio[]
 }
 
@@ -155,6 +157,12 @@ export function RomaneioDocumento({ pedidos }: { pedidos: DadosRomaneio[] }) {
                 {p.metragemImpressa.toFixed(2).replace('.', ',')} m
               </Text>
             </View>
+            {p.tecido && (
+              <View style={styles.cartaoResumo}>
+                <Text style={styles.rotuloResumo}>Tecido</Text>
+                <Text style={{ fontSize: 10, color: '#131A2E' }}>{p.tecido}</Text>
+              </View>
+            )}
             {p.rolos !== null && (
               <View style={styles.cartaoResumo}>
                 <Text style={styles.rotuloResumo}>Rolos de Tecido</Text>

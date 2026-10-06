@@ -5,6 +5,9 @@ import BuscaPagina from '@/components/busca-pagina'
 import Tecidos from './tecidos'
 import NovoMovimento from './novo-movimento'
 import Saldos, { type SaldoLinha, type MovimentoLinha } from './saldos'
+import FormEnvioTecido from '@/components/form-envio-tecido'
+import EnviosTecido from '@/components/envios-tecido'
+import { listarEnvios } from '@/lib/estoque/envios'
 
 export default async function EstoquePage({
   searchParams,
@@ -19,7 +22,7 @@ export default async function EstoquePage({
   const supabase = await createClient()
 
   // As políticas do banco deixam a equipe inteira ler tudo isto
-  const [{ data: tecidos }, { data: clientes }, { data: saldos }] = await Promise.all([
+  const [{ data: tecidos }, { data: clientes }, { data: saldos }, envios] = await Promise.all([
     supabase.from('tecidos').select('id, nome, ativo').order('nome'),
     supabase
       .from('clientes')
@@ -28,6 +31,7 @@ export default async function EstoquePage({
       .is('arquivado', false)
       .order('razao_social'),
     supabase.from('tecido_saldos').select('cliente_id, tecido_id, saldo_metros, ultimo_movimento'),
+    listarEnvios({ clienteId: clienteFiltro || undefined }),
   ])
 
   let movimentos: MovimentoLinha[] = []
@@ -87,11 +91,20 @@ export default async function EstoquePage({
         das movimentações — vale a metragem conferida pela equipe.
       </p>
 
-      <NovoMovimento
-        clientes={(clientes ?? []).map((c) => ({ id: c.id as string, nome: c.razao_social as string }))}
-        tecidos={(tecidos ?? []).filter((t) => t.ativo).map((t) => ({ id: t.id as string, nome: t.nome as string }))}
-        clienteInicial={clienteFiltro ?? ''}
-      />
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <NovoMovimento
+          clientes={(clientes ?? []).map((c) => ({ id: c.id as string, nome: c.razao_social as string }))}
+          tecidos={(tecidos ?? []).filter((t) => t.ativo).map((t) => ({ id: t.id as string, nome: t.nome as string }))}
+          clienteInicial={clienteFiltro ?? ''}
+        />
+        <FormEnvioTecido
+          clientes={(clientes ?? []).map((c) => ({ id: c.id as string, nome: c.razao_social as string }))}
+          tecidos={(tecidos ?? []).filter((t) => t.ativo).map((t) => ({ id: t.id as string, nome: t.nome as string }))}
+          clienteInicial={clienteFiltro ?? ''}
+        />
+      </div>
+
+      <EnviosTecido envios={envios} modo="equipe" titulo="ENVIOS DE TECIDO — CONFERÊNCIA" />
 
       <Saldos
         linhas={linhas}
