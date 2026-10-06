@@ -44,7 +44,7 @@ export async function buscarDadosRomaneio(pedidoId: string) {
     .from('pedidos')
     .select(`
       id, numero, total, romaneio_rolos, romaneio_saldo, metragem_impressa, notas,
-      clientes(razao_social),
+      clientes(razao_social), tecidos(nome),
       pedido_itens(id, sku, nome, produto_id, quantidade_faturada)
     `)
     .eq('id', pedidoId)
@@ -105,6 +105,7 @@ export async function buscarDadosRomaneio(pedidoId: string) {
     saldo: p.romaneio_saldo as string | null,
     metragemImpressa: p.metragem_impressa ? Number(p.metragem_impressa) : null,
     notas: ((p.notas as string | null) ?? '').trim() || null,
+    tecido: (p.tecidos?.nome as string | null) ?? null,
     itens: itens.map((i) => ({
       sku: i.sku,
       nome: i.nome,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { saldosDoCliente, type SaldoTecido } from '@/app/actions/estoque'
 
 /**
  * Modais de mudança de status, compartilhados entre o painel do pedido
@@ -40,6 +41,7 @@ export type Item = {
 
 export function ModalRomaneio({
   numero,
+  clienteId,
   itens,
   pendente,
   erro,
@@ -47,6 +49,8 @@ export function ModalRomaneio({
   onConfirmar,
 }: {
   numero: number
+  /** Para listar os tecidos em estoque deste cliente. */
+  clienteId: string
   itens: Item[]
   pendente: boolean
   erro: string
@@ -54,10 +58,25 @@ export function ModalRomaneio({
   onConfirmar: (
     metragem: number,
     alteracoes: { id: string; qtd: number }[],
-    motivoAjuste: string
+    motivoAjuste: string,
+    tecidoId: string
   ) => void
 }) {
   const [metragem, setMetragem] = useState('')
+  // Tecido do cliente de onde a metragem sai: obrigatório, só os com saldo
+  const [tecidos, setTecidos] = useState<SaldoTecido[] | null>(null)
+  const [tecidoId, setTecidoId] = useState('')
+
+  useEffect(() => {
+    let vivo = true
+    saldosDoCliente(clienteId).then((lista) => {
+      if (vivo) setTecidos(lista)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [clienteId])
+
   const [qtds, setQtds] = useState<Record<string, number>>(
     Object.fromEntries(itens.map((i) => [i.id, i.faturada]))
   )
@@ -86,6 +105,16 @@ export function ModalRomaneio({
       return setAviso('Informe a metragem total impressa.')
     }
 
+    if (!tecidoId) {
+      return setAviso('Escolha de qual tecido do cliente sai esta metragem.')
+    }
+    const escolhido = tecidos?.find((t) => t.tecidoId === tecidoId)
+    if (escolhido && escolhido.saldo < metragemNum) {
+      return setAviso(
+        `Saldo insuficiente de ${escolhido.nome}: ${brl(escolhido.saldo)} m disponíveis para ${brl(metragemNum)} m. Lance a entrada do tecido na aba Estoque antes de estampar.`
+      )
+    }
+
     const alteracoes = itens
       .filter((i) => (qtds[i.id] ?? 0) !== i.faturada)
       .map((i) => ({ id: i.id, qtd: qtds[i.id] ?? 0 }))
@@ -103,7 +132,7 @@ export function ModalRomaneio({
     }
 
     setAviso('')
-    onConfirmar(metragemNum, alteracoes, motivoAjuste.trim())
+    onConfirmar(metragemNum, alteracoes, motivoAjuste.trim(), tecidoId)
   }
 
   return (
@@ -123,6 +152,44 @@ export function ModalRomaneio({
             produção — isso recalcula o valor de cobrança e gera o PDF para a
             calandra.
           </p>
+
+          <div className="mt-4">
+            <label
+              htmlFor="tecido-romaneio"
+              className="block text-xs tracking-widest text-[#6E6E68] mb-1.5"
+            >
+              TECIDO DO CLIENTE<span className="text-[#B00063] ml-1">*</span>
+            </label>
+            {tecidos === null ? (
+              <p className="text-xs text-[#9B9A93]">Carregando estoque…</p>
+            ) : tecidos.length === 0 ? (
+              <p className="text-xs text-[#B00063] bg-[#FBEAF0] border border-[#E8A9C7] rounded-sm px-3 py-2 leading-relaxed">
+                Este cliente não tem tecido em estoque. Lance a entrada na aba
+                Estoque antes de estampar.
+              </p>
+            ) : (
+              <select
+                id="tecido-romaneio"
+                value={tecidoId}
+                onChange={(e) => {
+                  setTecidoId(e.target.value)
+                  setAviso('')
+                }}
+                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 bg-white text-sm outline-none focus:border-[#131A2E]"
+              >
+                <option value="">— escolha o tecido —</option>
+                {tecidos.map((t) => (
+                  <option key={t.tecidoId} value={t.tecidoId}>
+                    {t.nome} — {brl(t.saldo)} m em estoque
+                  </option>
+                ))}
+              </select>
+            )}
+            <p className="text-[11px] text-[#6E6E68] mt-1 leading-relaxed">
+              A metragem impressa é baixada deste saldo e fica no extrato do
+              cliente com o número do pedido.
+            </p>
+          </div>
 
           <div className="mt-4">
             <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">

@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       saldo: d.saldo,
       metragemImpressa: d.metragemImpressa,
       notas: d.notas,
+      tecido: d.tecido,
       itens: d.itens,
     }))
 
