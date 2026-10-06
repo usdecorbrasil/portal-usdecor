@@ -121,6 +121,7 @@ export const ROTULOS_CLIENTE: Record<string, string> = {
   bairro: 'Bairro',
   municipio: 'Município',
   uf: 'UF',
+  formas_pagamento: 'Formas de pagamento',
 }
 
 /** Rótulos do cadastro de quem é da equipe. */
