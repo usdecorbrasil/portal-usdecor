@@ -10,6 +10,7 @@ const ABAS = [
   { href: '/pedidos', label: 'Pedidos' },
   { href: '/catalogo', label: 'Catálogo' },
   { href: '/carrinho', label: 'Carrinho' },
+  { href: '/tecidos', label: 'Tecidos' },
   { href: '/conta', label: 'Minha conta' },
 ]
 
