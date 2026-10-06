@@ -23,6 +23,15 @@ jobs:
             echo "Faltam os secrets SITE_URL e/ou CRON_SECRET." >&2
             exit 1
           fi
-          curl --fail --silent --show-error --max-time 90 \
+          # Sem -L de propósito: um redirecionamento aqui é erro (a rota devolve
+          # JSON direto), e o corpo é o resumo da execução — fica no log
+          http=$(curl --silent --show-error --max-time 90 \
+            -o resposta.json -w '%{http_code}' \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "${SITE_URL%/}/api/cron/pagamentos"
+            "${SITE_URL%/}/api/cron/pagamentos")
+          echo "HTTP $http"
+          cat resposta.json 2>/dev/null; echo
+          if [ "$http" != "200" ]; then
+            echo "A rota não respondeu 200. 401 = CRON_SECRET diferente entre GitHub e Vercel; 3xx = redirecionamento (SITE_URL ou proxy); 5xx = erro na rota." >&2
+            exit 1
+          fi

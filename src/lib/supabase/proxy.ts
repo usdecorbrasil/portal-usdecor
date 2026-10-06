@@ -9,7 +9,19 @@ const ROTAS_PUBLICAS = [
   '/auth',
 ]
 
+/**
+ * Rotas chamadas por máquina, sem sessão de usuário, que fazem a própria
+ * autenticação (segredo no cabeçalho). Mandá-las para o login devolveria
+ * um redirecionamento onde quem chama espera JSON — foi o que aconteceu com
+ * a primeira execução da baixa de pagamentos.
+ */
+const ROTAS_DE_MAQUINA = ['/api/cron']
+
 export async function updateSession(request: NextRequest) {
+  if (ROTAS_DE_MAQUINA.some((r) => request.nextUrl.pathname.startsWith(r))) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
