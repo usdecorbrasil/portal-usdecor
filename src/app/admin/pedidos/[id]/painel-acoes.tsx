@@ -169,6 +169,13 @@ export default function PainelAcoes({
 
   const precoAtual = itens[0]?.precoMetro ?? 0
 
+  // Na confirmação o valor é a estimativa pelos itens; a parcela mínima já
+  // corta o teto por ela (a taxa entra depois, na divisão real)
+  const tetoParcelasConfirmacao =
+    total > 0 && valorMinimoBoleto > 0
+      ? Math.max(1, Math.min(maxParcelas, Math.floor(total / valorMinimoBoleto)))
+      : maxParcelas
+
   const disponiveis = aguardando
     ? []
     : statusAtual === 'estampando'
@@ -300,6 +307,14 @@ export default function PainelAcoes({
 
     if (ehParcelado && (qtdParcelas < 2 || qtdParcelas > maxParcelas)) {
       setErro(`Quantidade de parcelas deve ser entre 2 e ${maxParcelas}`)
+      return
+    }
+    if (ehParcelado && qtdParcelas > tetoParcelasConfirmacao) {
+      setErro(
+        tetoParcelasConfirmacao < 2
+          ? `Com parcela mínima de R$ ${brl(valorMinimoBoleto)}, este pedido só pode ser à vista — troque a forma de pagamento.`
+          : `Com parcela mínima de R$ ${brl(valorMinimoBoleto)}, este pedido permite no máximo ${tetoParcelasConfirmacao}x.`
+      )
       return
     }
 
@@ -626,18 +641,18 @@ export default function PainelAcoes({
                     htmlFor="qtd-parcelas"
                     className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
                   >
-                    QUANTIDADE (máx. {maxParcelas})
+                    QUANTIDADE (máx. {tetoParcelasConfirmacao})
                   </label>
                   <input
                     id="qtd-parcelas"
                     type="number"
                     min={2}
-                    max={maxParcelas}
-                    value={qtdParcelas}
+                    max={tetoParcelasConfirmacao}
+                    value={Math.min(qtdParcelas, Math.max(2, tetoParcelasConfirmacao))}
                     onChange={(e) =>
                       setQtdParcelas(
                         Math.min(
-                          maxParcelas,
+                          Math.max(2, tetoParcelasConfirmacao),
                           Math.max(2, parseInt(e.target.value) || 2)
                         )
                       )

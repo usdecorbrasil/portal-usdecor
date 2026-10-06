@@ -3,7 +3,8 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { MAX_PARCELAS } from '@/lib/pagamento/config'
+import { MAX_PARCELAS, maxParcelasPorMinimo } from '@/lib/pagamento/config'
+import { buscarConfigPagamento } from '@/app/actions/configuracoes'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateInterno } from '@/lib/resend/templates/interno'
 import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito'
@@ -79,6 +80,25 @@ export async function criarPedido(dados: {
   const atraso = await situacaoAtraso()
   if (atraso.bloqueado) {
     return { ok: false, erro: 'Há boleto em atraso. Regularize para enviar novos pedidos.' }
+  }
+
+  // Parcela mínima: com a estimativa pelos itens, o parcelado não pode deixar
+  // parcela abaixo do mínimo. `criar_pedido` repete a conta no banco
+  if (parsed.data.forma_pagamento === 'boleto_parcelado' && parsed.data.parcelas) {
+    const [estimativa, config] = await Promise.all([
+      estimativaCarrinho(parsed.data.itens),
+      buscarConfigPagamento(),
+    ])
+    const teto = maxParcelasPorMinimo(estimativa.mercadoria, config.boleto)
+    if (parsed.data.parcelas > teto) {
+      return {
+        ok: false,
+        erro:
+          teto === 1
+            ? `Com parcela mínima de R$ ${brl(config.boleto.valorMinimoParcela)}, este pedido só pode ser pago à vista.`
+            : `Com parcela mínima de R$ ${brl(config.boleto.valorMinimoParcela)}, este pedido permite no máximo ${teto}x.`,
+      }
+    }
   }
 
   // Forma fora da lista do cliente: idem, o gatilho recusa de qualquer jeito
@@ -234,6 +254,54 @@ export async function verificarPodeParcelar(): Promise<boolean> {
   if (error) return false
 
   return !!data
+}
+
+/* ------------------------------- estimativa ------------------------------- */
+
+const brl = (v: number) =>
+  v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+/**
+ * Valor estimado da mercadoria do carrinho: metros por unidade × quantidade
+ * × preço por metro do cliente. É a mesma conta que `criar_pedido` grava em
+ * `pedido_itens.subtotal`; o valor real vem da metragem impressa, depois.
+ * Serve para limitar as parcelas pelo mínimo antes de o pedido existir.
+ */
+export async function estimativaCarrinho(
+  itens: { produto_id: string; quantidade: number }[]
+): Promise<{ mercadoria: number }> {
+  const vazio = { mercadoria: 0 }
+  if (!itens.length) return vazio
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return vazio
+
+  const [{ data: perfil }, { data: produtos }] = await Promise.all([
+    supabase.from('profiles').select('clientes(preco_metro)').eq('id', user.id).single(),
+    supabase
+      .from('produtos')
+      .select('id, metros_por_unidade')
+      .in('id', [...new Set(itens.map((i) => i.produto_id))]),
+  ])
+
+  const preco = Number(
+    (perfil?.clientes as unknown as { preco_metro: number | string | null } | null)?.preco_metro ?? 0
+  )
+  if (!(preco > 0)) return vazio
+
+  const metrosPorProduto = new Map<string, number>()
+  for (const pr of (produtos ?? []) as { id: string; metros_por_unidade: number | string | null }[]) {
+    metrosPorProduto.set(pr.id, Number(pr.metros_por_unidade ?? 0))
+  }
+
+  const mercadoria = itens.reduce(
+    (a, i) => a + (metrosPorProduto.get(i.produto_id) ?? 0) * i.quantidade * preco,
+    0
+  )
+  return { mercadoria: Math.round(mercadoria * 100) / 100 }
 }
 
 /* --------------------------- formas por cliente --------------------------- */
