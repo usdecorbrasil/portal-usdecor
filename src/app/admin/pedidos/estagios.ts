@@ -49,7 +49,7 @@ export function sinal(status: string, dias: number) {
     return { cl: 'bling', tx: 'Faturado — aguardando nota e expedição' }
   }
   if (!EM_PRODUCAO.includes(status)) {
-    return { cl: 'bling', tx: 'Aguardando o Bling' }
+    return { cl: 'bling', tx: 'Nota e expedição no Bling — pode ser fechado no pedido' }
   }
   if (dias >= 4) return { cl: 'crit', tx: 'Parado há ' + dias + ' dias' }
   if (dias >= 2) return { cl: 'aten', tx: 'Parado há ' + dias + ' dias' }

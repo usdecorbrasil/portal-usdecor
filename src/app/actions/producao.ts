@@ -98,6 +98,31 @@ const brl = (v: number) =>
  * valor cobrado inteiro. Sem valor (metragem ainda não lançada) não há o que
  * comparar.
  */
+/**
+ * Fecha o pedido sem esperar a baixa financeira. O banco exige cobrança
+ * gerada e nota fiscal definida (emitida ou dispensada); o pagamento segue
+ * sendo registrado pela sincronização automática.
+ */
+export async function fecharPedido(pedidoId: string, observacao?: string): Promise<Resultado> {
+  const parsed = z.object({
+    pedidoId: z.string().uuid(),
+    observacao: z.string().trim().max(500).optional(),
+  }).safeParse({ pedidoId, observacao })
+  if (!parsed.success) return { ok: false, erro: 'Dados inválidos.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('admin_fechar_pedido', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_observacao: parsed.data.observacao || null,
+  })
+  if (error) return { ok: false, erro: error.message }
+
+  revalidar()
+  revalidatePath('/admin/arquivados')
+  revalidatePath(`/admin/pedidos/${parsed.data.pedidoId}`)
+  return { ok: true }
+}
+
 async function boletoAbaixoDoMinimo(pedidoId: string): Promise<string | null> {
   const supabase = await createClient()
 

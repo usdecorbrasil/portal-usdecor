@@ -11,6 +11,7 @@ import {
   ajustarMetragem,
   alterarPrecoPedido,
   alterarFormaPagamento,
+  fecharPedido,
 } from '@/app/actions/producao'
 import { faturarPedido, enviarLinkPagamento } from '@/app/actions/faturamento'
 import { agruparPedidos } from '@/app/actions/agrupamento'
@@ -44,6 +45,9 @@ const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
   'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
+
+/** Etapas a partir das quais a equipe pode fechar o pedido (depois de faturado). */
+const PODE_FECHAR = ['faturado', 'nf_emitida', 'expedido', 'entregue']
 
 const ROTULOS_PAGAMENTO: Record<string, string> = {
   boleto_avista: 'Boleto à vista',
@@ -151,6 +155,8 @@ export default function PainelAcoes({
   const [recadoFatura, setRecadoFatura] = useState('')
   const [linkPagamento, setLinkPagamento] = useState('')
   const [motivoLiberacao, setMotivoLiberacao] = useState('')
+  const [fechando, setFechando] = useState(false)
+  const [obsFechar, setObsFechar] = useState('')
 
   const idx = ORDEM.indexOf(statusAtual)
   const aguardando = statusAtual === 'aguardando'
@@ -268,6 +274,19 @@ export default function PainelAcoes({
       }
       setLinkPagamento('')
       setRecadoFatura(r.detalhe)
+    })
+  }
+
+  function fechar() {
+    setErro('')
+    iniciar(async () => {
+      const r = await fecharPedido(pedidoId, obsFechar.trim() || undefined)
+      if (!r.ok) {
+        setErro(r.erro)
+        return
+      }
+      setFechando(false)
+      setObsFechar('')
     })
   }
 
@@ -860,7 +879,7 @@ export default function PainelAcoes({
             {recadoFatura ||
               (ehCartao && !linkPagamentoAtual
                 ? 'Pedido no Bling. Gere o link de pagamento por cartão e envie abaixo.'
-                : 'Pedido no Bling e cobrança enviada. Nota fiscal, expedição e baixa seguem pelo Bling.')}
+                : 'Pedido no Bling e cobrança enviada. Nota fiscal e expedição seguem pelo Bling; o fechamento é feito aqui, abaixo.')}
           </p>
 
           {ehCartao && podeCancelarOuAjustar && (
@@ -902,6 +921,65 @@ export default function PainelAcoes({
                 No Bling: Contas a receber → conta deste pedido → link de pagamento.
                 O cliente recebe o e-mail com o botão e vê o link no pedido.
               </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {PODE_FECHAR.includes(statusAtual) && podeCancelarOuAjustar && (
+        <div className="bg-white border border-[#DDDCD5] rounded-sm p-4">
+          <h2 className="font-semibold tracking-tight text-sm">Fechar pedido</h2>
+          <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            Encerra o acompanhamento e leva o pedido para Arquivados. Não depende
+            da baixa do pagamento: exige só a cobrança gerada e a nota fiscal
+            {emitirNf ? ' emitida' : ' dispensada'}. O pagamento continua sendo
+            registrado pela sincronização automática.
+          </p>
+          {!fechando ? (
+            <button
+              type="button"
+              onClick={() => {
+                setErro('')
+                setFechando(true)
+              }}
+              className="mt-3 border border-[#131A2E] rounded-sm px-4 py-2 text-xs font-semibold tracking-wide"
+            >
+              FECHAR PEDIDO
+            </button>
+          ) : (
+            <div className="mt-3">
+              <label
+                htmlFor="obs-fechar"
+                className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+              >
+                OBSERVAÇÃO (OPCIONAL)
+              </label>
+              <input
+                id="obs-fechar"
+                type="text"
+                value={obsFechar}
+                onChange={(e) => setObsFechar(e.target.value)}
+                maxLength={500}
+                placeholder="Ex.: entregue e pago em dinheiro no balcão"
+                className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E]"
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={fechar}
+                  disabled={pendente}
+                  className="bg-[#131A2E] text-white rounded-sm px-4 py-2 text-xs font-bold tracking-wide disabled:opacity-50"
+                >
+                  {pendente ? 'FECHANDO…' : 'CONFIRMAR FECHAMENTO'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFechando(false)}
+                  className="text-xs text-[#6E6E68] hover:text-[#131A2E] px-2"
+                >
+                  voltar
+                </button>
+              </div>
             </div>
           )}
         </div>
