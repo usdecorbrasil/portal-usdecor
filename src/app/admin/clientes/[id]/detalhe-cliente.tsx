@@ -11,6 +11,7 @@ import {
   buscarHistoricoPagamentos,
   arquivarCliente,
 } from '@/app/actions/clientes'
+import LiberarAtraso from './liberar-atraso'
 
 type Cliente = {
   id: string
@@ -34,6 +35,10 @@ type Cliente = {
   municipio: string | null
   uf: string | null
   bling_contato_id: number | null
+  /** Boletos vencidos que travam pedidos novos (já descontada a liberação). */
+  boletos_vencidos: number
+  atraso_liberado_em: string | null
+  atraso_liberado_motivo: string | null
 }
 
 type Pagamentos = {
@@ -258,6 +263,13 @@ export default function DetalheCliente({
               cliente.
             </p>
           )}
+
+          <LiberarAtraso
+            clienteId={cliente.id}
+            vencidos={cliente.boletos_vencidos}
+            liberadoEm={cliente.atraso_liberado_em}
+            liberadoMotivo={cliente.atraso_liberado_motivo}
+          />
         </div>
 
         {/* ---- histórico de pagamento ---- */}
