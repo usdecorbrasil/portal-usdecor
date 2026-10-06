@@ -17,6 +17,13 @@
  */
 export const MAX_PARCELAS = 4
 
+/**
+ * Boleto à vista vence este número de dias úteis depois da emissão (sábado,
+ * domingo e feriado nacional não contam). A conta de dias úteis está no
+ * banco (`proximo_dia_util`), que conhece o calendário.
+ */
+export const BOLETO_AVISTA_DIAS_UTEIS = 4
+
 export const FORMAS = ['boleto', 'pix', 'cartao_credito', 'cartao_debito'] as const
 
 export type Forma = (typeof FORMAS)[number]
@@ -217,4 +224,32 @@ export function valorCobranca(
       (total + taxaDoPedido(total, percentual, taxaFixa, formaPagamento, parcelas)) * 100
     ) / 100
   )
+}
+
+/**
+ * Maior quantidade de parcelas em que nenhuma fica abaixo do mínimo, dado o
+ * valor da mercadoria. A taxa fixa do boleto é por documento, então entra na
+ * conta de cada quantidade. Sem valor (estimativa zero) não há o que
+ * limitar: devolve o teto da configuração. Mesma regra de `criar_pedido`
+ * no banco — mexeu numa, mexa na outra.
+ */
+export function maxParcelasPorMinimo(
+  mercadoria: number,
+  config: ConfigForma,
+  tetoParcelas: number = config.maxParcelas
+): number {
+  const teto = Math.max(1, Math.min(tetoParcelas, MAX_PARCELAS))
+  if (mercadoria <= 0 || config.valorMinimoParcela <= 0) return teto
+
+  for (let n = teto; n >= 2; n--) {
+    const cobranca = valorCobranca(
+      mercadoria,
+      config.percentual,
+      config.taxaFixa,
+      'boleto_parcelado',
+      n
+    )
+    if (Math.floor((cobranca / n) * 100) / 100 >= config.valorMinimoParcela) return n
+  }
+  return 1
 }

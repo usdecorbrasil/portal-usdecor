@@ -27,7 +27,7 @@ export default async function ContaPage() {
   const { data: perfil } = await supabase
     .from('profiles')
     .select(
-      'nome, clientes(razao_social, cnpj, email, contato, telefone, limite_credito)'
+      'nome, cliente_id, clientes(razao_social, cnpj, email, contato, telefone, limite_credito)'
     )
     .eq('id', user.id)
     .single()
@@ -41,12 +41,13 @@ export default async function ContaPage() {
     limite_credito: number
   } | null
 
-  // As políticas do banco já restringem ao próprio cliente
-  const [{ data: pedidos }, { data: parcelas }] = await Promise.all([
-    supabase
-      .from('pedidos')
-      .select('total, cancelado_em, pedido_status_historico(status, created_at)')
-      .is('cancelado_em', null),
+  // As políticas do banco já restringem ao próprio cliente. O crédito em uso
+  // vem da mesma função que decide se o cliente pode parcelar — assim o que
+  // ele vê aqui é exatamente o que o carrinho aplica
+  const [{ data: emUso }, { data: parcelas }] = await Promise.all([
+    perfil?.cliente_id
+      ? supabase.rpc('credito_em_uso', { p_cliente_id: perfil.cliente_id })
+      : Promise.resolve({ data: 0 }),
     supabase
       .from('pedido_parcelas')
       .select('numero, valor, vencimento, pago_em, pedidos!inner(numero, id, cancelado_em)')
@@ -55,18 +56,7 @@ export default async function ContaPage() {
       .order('vencimento'),
   ])
 
-  // Mesma regra do limite de crédito: conta o que ainda não foi fechado
-  const emAberto = ((pedidos ?? []) as any[])
-    .filter((p) => {
-      const ultimo = (p.pedido_status_historico ?? [])
-        .slice()
-        .sort(
-          (a: any, b: any) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )[0]
-      return (ultimo?.status ?? 'aguardando') !== 'fechado'
-    })
-    .reduce((a, p) => a + Number(p.total), 0)
+  const emAberto = Number(emUso ?? 0)
 
   const limite = Number(empresa?.limite_credito ?? 0)
   const disponivel = Math.max(0, limite - emAberto)
@@ -113,7 +103,7 @@ export default async function ContaPage() {
           </div>
 
           <div className="flex justify-between text-xs text-[#6E6E68] mt-2 font-mono">
-            <span>em aberto R$ {brl(emAberto)}</span>
+            <span>em boletos R$ {brl(emAberto)}</span>
             <span>limite R$ {brl(limite)}</span>
           </div>
 

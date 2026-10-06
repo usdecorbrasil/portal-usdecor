@@ -12,6 +12,7 @@
 
 export const TIPOS = [
   'pedido_novo',
+  'pedido_bloqueado_credito',
   'pedido_cancelado',
   'cancelamento_solicitado',
   'tecido_enviado',
@@ -23,6 +24,11 @@ export const ROTULOS: Record<TipoNotificacao, { titulo: string; descricao: strin
   pedido_novo: {
     titulo: 'Pedido novo',
     descricao: 'Quando qualquer cliente envia um pedido pelo carrinho.',
+  },
+  pedido_bloqueado_credito: {
+    titulo: 'Pedido bloqueado por limite de crédito',
+    descricao:
+      'Quando um pedido em boleto passa do limite de crédito do cliente e fica aguardando liberação. Exige decisão.',
   },
   pedido_cancelado: {
     titulo: 'Pedido cancelado pelo cliente',
@@ -44,6 +50,7 @@ export type ConfigNotificacoes = Record<TipoNotificacao, string[]>
 
 export const PADRAO: ConfigNotificacoes = {
   pedido_novo: [],
+  pedido_bloqueado_credito: [],
   pedido_cancelado: [],
   cancelamento_solicitado: [],
   tecido_enviado: [],

@@ -17,6 +17,7 @@ import { agruparPedidos } from '@/app/actions/agrupamento'
 import ModalUnificar, { type OutroPronto } from './modal-unificar'
 import {
   confirmarPedido,
+  confirmarPedidoBloqueado,
   responderSolicitacao,
 } from '@/app/actions/confirmacao'
 import { confirmarRomaneio } from '@/app/actions/romaneio'
@@ -99,6 +100,7 @@ export default function PainelAcoes({
   linkPagamentoAtual,
   outrosProntos,
   erroInicial = '',
+  bloqueioCredito = null,
   itens,
 }: {
   pedidoId: string
@@ -129,6 +131,8 @@ export default function PainelAcoes({
   outrosProntos: OutroPronto[]
   /** Erro de uma ação que terminou nesta tela, para não se perder na navegação. */
   erroInicial?: string
+  /** Pedido nasceu em boleto acima do limite: números para quem decide. */
+  bloqueioCredito?: { limite: number; emUso: number } | null
   itens: Item[]
 }) {
   const router = useRouter()
@@ -146,6 +150,7 @@ export default function PainelAcoes({
   const [unificando, setUnificando] = useState(false)
   const [recadoFatura, setRecadoFatura] = useState('')
   const [linkPagamento, setLinkPagamento] = useState('')
+  const [motivoLiberacao, setMotivoLiberacao] = useState('')
 
   const idx = ORDEM.indexOf(statusAtual)
   const aguardando = statusAtual === 'aguardando'
@@ -164,6 +169,13 @@ export default function PainelAcoes({
   const ehCartao = formaPagamento.startsWith('cartao')
 
   const precoAtual = itens[0]?.precoMetro ?? 0
+
+  // Na confirmação o valor é a estimativa pelos itens; a parcela mínima já
+  // corta o teto por ela (a taxa entra depois, na divisão real)
+  const tetoParcelasConfirmacao =
+    total > 0 && valorMinimoBoleto > 0
+      ? Math.max(1, Math.min(maxParcelas, Math.floor(total / valorMinimoBoleto)))
+      : maxParcelas
 
   const disponiveis = aguardando
     ? []
@@ -307,14 +319,27 @@ export default function PainelAcoes({
       setErro(`Quantidade de parcelas deve ser entre 2 e ${maxParcelas}`)
       return
     }
+    if (ehParcelado && qtdParcelas > tetoParcelasConfirmacao) {
+      setErro(
+        tetoParcelasConfirmacao < 2
+          ? `Com parcela mínima de R$ ${brl(valorMinimoBoleto)}, este pedido só pode ser à vista — troque a forma de pagamento.`
+          : `Com parcela mínima de R$ ${brl(valorMinimoBoleto)}, este pedido permite no máximo ${tetoParcelasConfirmacao}x.`
+      )
+      return
+    }
+
+    if (bloqueioCredito && motivoLiberacao.trim().length < 10) {
+      setErro('Descreva o motivo da liberação com pelo menos 10 caracteres.')
+      return
+    }
 
     iniciar(async () => {
-      const r = await confirmarPedido(
-        pedidoId,
-        ehParcelado
-          ? { quantidade: qtdParcelas, primeiroVencimento }
-          : undefined
-      )
+      const parcelamento = ehParcelado
+        ? { quantidade: qtdParcelas, primeiroVencimento }
+        : undefined
+      const r = bloqueioCredito
+        ? await confirmarPedidoBloqueado(pedidoId, motivoLiberacao.trim(), parcelamento)
+        : await confirmarPedido(pedidoId, parcelamento)
       if (!r.ok) setErro(r.erro)
     })
   }
@@ -558,6 +583,61 @@ export default function PainelAcoes({
             confirmado, o cliente ainda pode cancelar por conta própria.
           </p>
 
+          {bloqueioCredito && (
+            <div className="mt-4 bg-[#FFFBEE] border-l-4 border-[#C79600] rounded-r-sm p-4">
+              <p className="text-sm font-semibold text-[#6B5320]">
+                Bloqueado por limite de crédito
+              </p>
+              <dl className="mt-2 text-xs text-[#6E6E68] space-y-1">
+                <div className="flex justify-between">
+                  <dt>Já em boletos</dt>
+                  <dd className="font-mono text-[#131A2E]">R$ {brl(bloqueioCredito.emUso)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt>Este pedido (estimado)</dt>
+                  <dd className="font-mono text-[#131A2E]">R$ {brl(total)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt>Limite</dt>
+                  <dd className="font-mono text-[#131A2E]">R$ {brl(bloqueioCredito.limite)}</dd>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <dt className="text-[#B00063]">Passa do limite em</dt>
+                  <dd className="font-mono text-[#B00063]">
+                    R$ {brl(Math.max(0, bloqueioCredito.emUso + total - bloqueioCredito.limite))}
+                  </dd>
+                </div>
+              </dl>
+              {podeCancelarOuAjustar ? (
+                <div className="mt-3">
+                  <label
+                    htmlFor="motivo-liberacao-credito"
+                    className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+                  >
+                    MOTIVO DA LIBERAÇÃO (OBRIGATÓRIO)
+                  </label>
+                  <textarea
+                    id="motivo-liberacao-credito"
+                    value={motivoLiberacao}
+                    onChange={(e) => setMotivoLiberacao(e.target.value)}
+                    rows={2}
+                    placeholder="Ex.: cliente antigo, histórico de pagamento em dia; combinado por telefone"
+                    className="w-full bg-white border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E]"
+                  />
+                  <p className="text-[11px] text-[#6E6E68] mt-1.5 leading-relaxed">
+                    Confirmar libera o bloqueio e segue o caminho normal. Fica
+                    registrado em Alterações no pedido. Para não seguir, cancele
+                    ou combine outra forma de pagamento com o cliente.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-[#6E6E68] mt-2">
+                  Só o dono pode liberar e confirmar este pedido.
+                </p>
+              )}
+            </div>
+          )}
+
           {ehParcelado && (
             <div className="mt-4 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-4">
               <h3 className="text-xs tracking-widest text-[#6E6E68] mb-3">
@@ -571,18 +651,18 @@ export default function PainelAcoes({
                     htmlFor="qtd-parcelas"
                     className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
                   >
-                    QUANTIDADE (máx. {maxParcelas})
+                    QUANTIDADE (máx. {tetoParcelasConfirmacao})
                   </label>
                   <input
                     id="qtd-parcelas"
                     type="number"
                     min={2}
-                    max={maxParcelas}
-                    value={qtdParcelas}
+                    max={tetoParcelasConfirmacao}
+                    value={Math.min(qtdParcelas, Math.max(2, tetoParcelasConfirmacao))}
                     onChange={(e) =>
                       setQtdParcelas(
                         Math.min(
-                          maxParcelas,
+                          Math.max(2, tetoParcelasConfirmacao),
                           Math.max(2, parseInt(e.target.value) || 2)
                         )
                       )
@@ -620,10 +700,14 @@ export default function PainelAcoes({
 
           <button
             onClick={confirmar}
-            disabled={pendente}
+            disabled={pendente || (!!bloqueioCredito && !podeCancelarOuAjustar)}
             className="w-full mt-4 bg-[#B00063] text-white rounded-sm py-3.5 text-sm font-bold tracking-wider disabled:opacity-50"
           >
-            {pendente ? 'CONFIRMANDO...' : 'CONFIRMAR PEDIDO'}
+            {pendente
+              ? 'CONFIRMANDO...'
+              : bloqueioCredito
+              ? 'LIBERAR E CONFIRMAR PEDIDO'
+              : 'CONFIRMAR PEDIDO'}
           </button>
         </div>
       ) : (

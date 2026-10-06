@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useState } from 'react'
+import FormasPagamentoCliente from '@/components/formas-pagamento-cliente'
 import { criarCliente } from '@/app/actions/clientes'
 
 export default function FormularioCliente() {
@@ -57,6 +58,8 @@ export default function FormularioCliente() {
             dica="Vale para todas as artes deste cliente"
           />
         </div>
+
+        <FormasPagamentoCliente prefixoId="nc" />
 
         {/* Sem estes campos o contato criado no Bling não serve para faturar */}
         <div className="border-t border-[#EFEEE8] pt-4">

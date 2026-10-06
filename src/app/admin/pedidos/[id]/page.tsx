@@ -106,6 +106,7 @@ export default async function PedidoAdminPage({
   const campos: string = `
       id, numero, notas, instrucoes_internas, created_at, metragem_impressa, agrupado_em,
       tecido_id, tecidos(nome),
+      bloqueado_credito, bloqueio_liberado_em, bloqueio_liberado_por, bloqueio_liberado_motivo,
       cancelado_em, cancelado_motivo, cancelado_por,
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       bling_nf_id, nf_numero, nf_chave, nf_emitida_em, nf_pdf_path, nf_xml_path, nf_link_danfe,
@@ -114,7 +115,7 @@ export default async function PedidoAdminPage({
       emitir_nf, emitir_nf_motivo,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
       ${camposFinanceiros}
-      clientes(razao_social, cnpj, preco_metro),
+      clientes(razao_social, cnpj, preco_metro, limite_credito),
       pedido_itens(${camposItens}),
       pedido_status_historico(
         status, origem, created_at, observacao,
@@ -164,7 +165,15 @@ export default async function PedidoAdminPage({
     razao_social: string
     cnpj: string
     preco_metro: number
+    limite_credito: number | null
   }
+
+  // Bloqueado por crédito: o painel mostra os números para quem decide
+  const bloqueadoCredito = p.bloqueado_credito === true
+  const { data: creditoEmUso } =
+    bloqueadoCredito && dono
+      ? await supabase.rpc('credito_em_uso', { p_cliente_id: p.cliente_id })
+      : { data: null }
 
   // Agrupamento: este pedido reúne outros (agrupador) ou foi reunido em outro
   const pedidosAgrupados = ((agrupamento?.pedidos_numeros ?? []) as number[]).map(Number)
@@ -315,6 +324,7 @@ export default async function PedidoAdminPage({
     ...histInstrucoes.map((a) => a.autor_id),
     ...hist.map((h: any) => h.criado_por),
     p.cancelado_por,
+    p.bloqueio_liberado_por,
   ].filter(Boolean) as string[]
 
   const nomes = new Map<string, string>()
@@ -377,6 +387,17 @@ export default async function PedidoAdminPage({
       data: a.created_at as string,
       autor: autorDe(a.criado_por),
     })),
+    ...(p.bloqueio_liberado_em
+      ? [
+          {
+            tipo: 'Crédito',
+            motivo: (p.bloqueio_liberado_motivo as string) ?? '',
+            detalhe: 'Bloqueio por limite de crédito liberado',
+            data: p.bloqueio_liberado_em as string,
+            autor: autorDe(p.bloqueio_liberado_por),
+          },
+        ]
+      : []),
     ...ajustesNf.map((a) => ({
       tipo: 'Nota fiscal',
       motivo:
@@ -651,6 +672,14 @@ export default async function PedidoAdminPage({
           linkPagamentoAtual={(p.link_pagamento as string | null) ?? null}
           outrosProntos={outrosProntos}
           erroInicial={erroInicial?.slice(0, 500) ?? ''}
+          bloqueioCredito={
+            bloqueadoCredito
+              ? {
+                  limite: Number(cliente.limite_credito ?? 0),
+                  emUso: Number(creditoEmUso ?? 0),
+                }
+              : null
+          }
           solicitacao={
             aberta
               ? {

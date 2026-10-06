@@ -1,7 +1,7 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { chamarBling } from './cliente'
-import { taxaDoPedido } from '@/lib/pagamento/config'
+import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
 
 /**
  * Cria o pedido de venda no Bling ao faturar.
@@ -161,6 +161,25 @@ export async function rastreioPedido(pedidoId: string): Promise<Rastreio | null>
   }
 }
 
+/**
+ * Vencimento do boleto à vista: hoje + dias úteis configurados. A conta é
+ * feita no banco (`proximo_dia_util`), que sabe de sábado, domingo e feriado
+ * nacional. Se a função não responder, cai em dias corridos — melhor um
+ * boleto com data aproximada do que nenhum boleto.
+ */
+export async function vencimentoBoletoAvista(hojeIso: string): Promise<string> {
+  const admin = createAdminClient()
+  const { data } = await admin.rpc('proximo_dia_util', {
+    p_data: hojeIso,
+    p_dias: BOLETO_AVISTA_DIAS_UTEIS,
+  })
+  if (typeof data === 'string' && /^\d{4}-\d{2}-\d{2}/.test(data)) return data.slice(0, 10)
+
+  const d = new Date(hojeIso + 'T00:00:00')
+  d.setDate(d.getDate() + BOLETO_AVISTA_DIAS_UTEIS)
+  return d.toISOString().slice(0, 10)
+}
+
 type Falha = { ok: false; erro: string }
 type Sucesso = { ok: true; blingId: number; numero: number | null }
 
@@ -182,7 +201,7 @@ export async function criarPedidoNoBling(
     .select(`
       numero, total, metragem_impressa, forma_pagamento, notas, emitir_nf,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
-      bling_pedido_id,
+      bling_pedido_id, vencimento_avista,
       clientes(razao_social, cnpj),
       pedido_itens(preco_unitario),
       pedido_parcelas(numero, valor, vencimento)
@@ -197,6 +216,7 @@ export async function criarPedidoNoBling(
     total: number | string
     metragem_impressa: number | string | null
     forma_pagamento: string
+    vencimento_avista: string | null
     notas: string | null
     emitir_nf: boolean | null
     taxa_pagamento_percentual: number | string | null
@@ -359,11 +379,20 @@ export async function criarPedidoNoBling(
       ...(formaBling ? { formaPagamento: { id: formaBling } } : {}),
     }))
   } else {
-    // À vista (Pix, boleto único, cartão): uma parcela com o total cobrado
+    // À vista: uma parcela com o total cobrado. Boleto vence em dias úteis
+    // (a conta é do banco, que conhece feriados); Pix e cartão, hoje. A data
+    // fica gravada no pedido para a leitura das contas casar depois
     const total = Math.round((valorMercadoria + taxa) * 100) / 100
+    let vencimento = hoje
+    if (p.forma_pagamento.startsWith('boleto')) {
+      vencimento = p.vencimento_avista ?? (await vencimentoBoletoAvista(hoje))
+      if (vencimento !== p.vencimento_avista) {
+        await admin.from('pedidos').update({ vencimento_avista: vencimento }).eq('id', pedidoId)
+      }
+    }
     corpo.parcelas = [
       {
-        dataVencimento: hoje,
+        dataVencimento: vencimento,
         valor: total,
         observacoes: rastreio.curto,
         ...(formaBling ? { formaPagamento: { id: formaBling } } : {}),

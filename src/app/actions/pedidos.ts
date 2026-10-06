@@ -3,9 +3,11 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { MAX_PARCELAS } from '@/lib/pagamento/config'
+import { MAX_PARCELAS, maxParcelasPorMinimo } from '@/lib/pagamento/config'
+import { buscarConfigPagamento } from '@/app/actions/configuracoes'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateInterno } from '@/lib/resend/templates/interno'
+import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito'
 import { urlDoSite } from '@/lib/site'
 import { urlDocumento } from '@/lib/storage/documentos'
 
@@ -50,7 +52,7 @@ const schema = z.object({
 )
 
 type Resultado =
-  | { ok: true; numero: number; total: number }
+  | { ok: true; numero: number; total: number; bloqueadoCredito: boolean }
   | { ok: false; erro: string }
 
 export async function criarPedido(dados: {
@@ -80,6 +82,34 @@ export async function criarPedido(dados: {
     return { ok: false, erro: 'Há boleto em atraso. Regularize para enviar novos pedidos.' }
   }
 
+  // Parcela mínima: com a estimativa pelos itens, o parcelado não pode deixar
+  // parcela abaixo do mínimo. `criar_pedido` repete a conta no banco
+  if (parsed.data.forma_pagamento === 'boleto_parcelado' && parsed.data.parcelas) {
+    const [estimativa, config] = await Promise.all([
+      estimativaCarrinho(parsed.data.itens),
+      buscarConfigPagamento(),
+    ])
+    const teto = maxParcelasPorMinimo(estimativa.mercadoria, config.boleto)
+    if (parsed.data.parcelas > teto) {
+      return {
+        ok: false,
+        erro:
+          teto === 1
+            ? `Com parcela mínima de R$ ${brl(config.boleto.valorMinimoParcela)}, este pedido só pode ser pago à vista.`
+            : `Com parcela mínima de R$ ${brl(config.boleto.valorMinimoParcela)}, este pedido permite no máximo ${teto}x.`,
+      }
+    }
+  }
+
+  // Forma fora da lista do cliente: idem, o gatilho recusa de qualquer jeito
+  const permitidas = await formasDoCliente()
+  if (permitidas.length > 0 && !permitidas.includes(parsed.data.forma_pagamento)) {
+    return {
+      ok: false,
+      erro: 'Esta forma de pagamento não está disponível para o seu cadastro. Escolha outra.',
+    }
+  }
+
   // Toda a validação real acontece dentro da função do banco:
   // preço, catálogo do cliente, produto ativo, anti-duplicidade, limite de crédito.
   const { data, error } = await supabase.rpc('criar_pedido', {
@@ -101,7 +131,11 @@ export async function criarPedido(dados: {
 
   // Aviso para a equipe. Depois do pedido existir, e sem poder derrubá-lo:
   // quem lista os destinatários é Configurações → Avisos
+  const bloqueadoCredito = pedido.bloqueado_credito === true
   await avisarPedidoNovo(pedido.pedido_id as string)
+  if (bloqueadoCredito) {
+    await avisarBloqueioCredito(pedido.pedido_id as string, Number(pedido.total))
+  }
 
   revalidatePath('/pedidos')
   revalidatePath('/admin')
@@ -110,6 +144,48 @@ export async function criarPedido(dados: {
     ok: true,
     numero: Number(pedido.numero),
     total: Number(pedido.total),
+    bloqueadoCredito,
+  }
+}
+
+/**
+ * Pedido em boleto nasceu acima do limite: a equipe decide. Lê limite e
+ * crédito em uso com a sessão do cliente (a função do banco deixa o cliente
+ * consultar o próprio). Nunca derruba a criação.
+ */
+async function avisarBloqueioCredito(pedidoId: string, valorPedido: number) {
+  try {
+    const supabase = await createClient()
+    const { data: p } = await supabase
+      .from('pedidos')
+      .select('numero, forma_pagamento, parcelas_solicitadas, cliente_id, clientes(razao_social, limite_credito)')
+      .eq('id', pedidoId)
+      .maybeSingle()
+    if (!p) return
+
+    const cliente = p.clientes as unknown as { razao_social: string; limite_credito: number } | null
+    const { data: emUso } = await supabase.rpc('credito_em_uso', { p_cliente_id: p.cliente_id })
+    const forma =
+      (ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento) +
+      (p.parcelas_solicitadas ? ` (${p.parcelas_solicitadas}x)` : '')
+
+    await notificarEquipe('pedido_bloqueado_credito', {
+      pedidoId,
+      assunto: `Pedido #${p.numero} bloqueado por limite de crédito — ${cliente?.razao_social ?? 'cliente'}`,
+      html: templateBloqueioCredito({
+        numero: Number(p.numero),
+        cliente: cliente?.razao_social ?? '—',
+        forma,
+        valorPedido,
+        // O pedido recém-criado já conta no "em uso" (confirmado ainda não,
+        // mas aguardando não entra): mostramos o uso anterior a ele
+        emUso: Number(emUso ?? 0),
+        limite: Number(cliente?.limite_credito ?? 0),
+        urlPedido: `${urlDoSite()}/admin/pedidos/${pedidoId}`,
+      }),
+    })
+  } catch (e) {
+    console.error('[pedido_bloqueado_credito]', e)
   }
 }
 
@@ -178,6 +254,80 @@ export async function verificarPodeParcelar(): Promise<boolean> {
   if (error) return false
 
   return !!data
+}
+
+/* ------------------------------- estimativa ------------------------------- */
+
+const brl = (v: number) =>
+  v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+/**
+ * Valor estimado da mercadoria do carrinho: metros por unidade × quantidade
+ * × preço por metro do cliente. É a mesma conta que `criar_pedido` grava em
+ * `pedido_itens.subtotal`; o valor real vem da metragem impressa, depois.
+ * Serve para limitar as parcelas pelo mínimo antes de o pedido existir.
+ */
+export async function estimativaCarrinho(
+  itens: { produto_id: string; quantidade: number }[]
+): Promise<{ mercadoria: number }> {
+  const vazio = { mercadoria: 0 }
+  if (!itens.length) return vazio
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return vazio
+
+  const [{ data: perfil }, { data: produtos }] = await Promise.all([
+    supabase.from('profiles').select('clientes(preco_metro)').eq('id', user.id).single(),
+    supabase
+      .from('produtos')
+      .select('id, metros_por_unidade')
+      .in('id', [...new Set(itens.map((i) => i.produto_id))]),
+  ])
+
+  const preco = Number(
+    (perfil?.clientes as unknown as { preco_metro: number | string | null } | null)?.preco_metro ?? 0
+  )
+  if (!(preco > 0)) return vazio
+
+  const metrosPorProduto = new Map<string, number>()
+  for (const pr of (produtos ?? []) as { id: string; metros_por_unidade: number | string | null }[]) {
+    metrosPorProduto.set(pr.id, Number(pr.metros_por_unidade ?? 0))
+  }
+
+  const mercadoria = itens.reduce(
+    (a, i) => a + (metrosPorProduto.get(i.produto_id) ?? 0) * i.quantidade * preco,
+    0
+  )
+  return { mercadoria: Math.round(mercadoria * 100) / 100 }
+}
+
+/* --------------------------- formas por cliente --------------------------- */
+
+/**
+ * Formas de pagamento que o cliente logado pode escolher. Lista vazia quando
+ * não há sessão de cliente — o chamador decide o que fazer (o carrinho mostra
+ * tudo o que a configuração geral permitir).
+ */
+export async function formasDoCliente(): Promise<string[]> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data: perfil } = await supabase
+    .from('profiles')
+    .select('cliente_id, clientes(formas_pagamento)')
+    .eq('id', user.id)
+    .single()
+
+  const formas = (perfil?.clientes as unknown as { formas_pagamento: string[] | null } | null)
+    ?.formas_pagamento
+  return Array.isArray(formas) ? formas : []
 }
 
 /* ------------------------------ boleto atrasado ------------------------------ */

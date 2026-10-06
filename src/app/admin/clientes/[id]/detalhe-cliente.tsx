@@ -12,6 +12,7 @@ import {
   arquivarCliente,
 } from '@/app/actions/clientes'
 import LiberarAtraso from './liberar-atraso'
+import FormasPagamentoCliente, { ROTULOS_FORMA_CLIENTE, FORMAS_CLIENTE } from '@/components/formas-pagamento-cliente'
 
 type Cliente = {
   id: string
@@ -39,6 +40,8 @@ type Cliente = {
   boletos_vencidos: number
   atraso_liberado_em: string | null
   atraso_liberado_motivo: string | null
+  /** O que este cliente pode escolher no carrinho. */
+  formas_pagamento: string[]
 }
 
 type Pagamentos = {
@@ -225,6 +228,23 @@ export default function DetalheCliente({
           </span>
         </div>
 
+        {/* ---- formas de pagamento permitidas ---- */}
+        <div className="mt-4 pt-4 border-t border-[#DDDCD5]">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm text-[#6E6E68]">Formas de pagamento</span>
+            <span className="text-xs text-right text-[#131A2E]">
+              {FORMAS_CLIENTE.filter((f) => cliente.formas_pagamento.includes(f)).length === FORMAS_CLIENTE.length
+                ? 'Todas'
+                : FORMAS_CLIENTE.filter((f) => cliente.formas_pagamento.includes(f))
+                    .map((f) => ROTULOS_FORMA_CLIENTE[f])
+                    .join(', ') || 'Nenhuma'}
+            </span>
+          </div>
+          <p className="text-[11px] text-[#9B9A93] mt-1">
+            Altera-se em “editar”, no topo da tela.
+          </p>
+        </div>
+
         {/* ---- limite de crédito ---- */}
         <div className="mt-4 pt-4 border-t border-[#DDDCD5]">
           <div className="flex items-baseline justify-between gap-3">
@@ -245,7 +265,7 @@ export default function DetalheCliente({
                 />
               </div>
               <div className="flex justify-between text-xs text-[#6E6E68] mt-1.5">
-                <span>R$ {brl(cliente.em_aberto)} em aberto</span>
+                <span>R$ {brl(cliente.em_aberto)} em boletos</span>
                 <span
                   className={disponivel < 0 ? 'text-[#B00063] font-semibold' : ''}
                 >
@@ -585,6 +605,8 @@ function ModalEditar({
           <div className="grid sm:grid-cols-2 gap-4">
             <Campo nome="telefone" rotulo="TELEFONE" valor={cliente.telefone ?? ''} opcional />
           </div>
+
+          <FormasPagamentoCliente prefixoId="ec" marcadas={cliente.formas_pagamento} />
 
           {/* Sem estes campos o contato no Bling não serve para faturar */}
           <div className="border-t border-[#EFEEE8] pt-4">
