@@ -25,4 +25,6 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Aplicar migrations pendentes
-        run: supabase db push
+        # --include-all: PRs juntados fora da ordem dos timestamps não podem travar
+        # a fila (aconteceu em 06/10/2026 com #20 depois de #21)
+        run: supabase db push --include-all
