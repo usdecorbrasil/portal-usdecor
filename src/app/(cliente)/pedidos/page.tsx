@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { valorCobranca } from '@/lib/pagamento/config'
 import BuscaPagina from '@/components/busca-pagina'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, VAZIO } from '@/components/estilo-lista'
+import AbasPedidos from './abas-pedidos'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -51,9 +52,11 @@ export default async function PedidosPage() {
           rotulo="Filtrar os pedidos desta página"
         />
       </div>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-6">
+      <p className="text-sm text-[#6E6E68] mt-1 mb-4">
         Acompanhe a produção em tempo real
       </p>
+
+      <AbasPedidos />
 
       <div className={CAIXA}>
         <div className={CABECALHO}>

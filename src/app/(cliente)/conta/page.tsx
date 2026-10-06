@@ -131,7 +131,12 @@ export default async function ContaPage() {
         </p>
       )}
 
-      <Titulo>BOLETOS EM ABERTO</Titulo>
+      <Titulo>
+        BOLETOS EM ABERTO
+        <Link href="/pedidos/boletos" className="normal-case tracking-normal text-[#0090D8] hover:underline">
+          ver todos
+        </Link>
+      </Titulo>
 
       {boletos.length === 0 ? (
         <p className="text-sm text-[#6E6E68] bg-white border border-[#DDDCD5] rounded-sm p-4">
