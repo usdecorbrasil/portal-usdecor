@@ -58,8 +58,9 @@ export default async function ContaPage() {
 
   const emAberto = Number(emUso ?? 0)
 
+  // O valor do limite e o disponível são conversa da equipe com o cliente;
+  // na tela dele só aparece o percentual em uso.
   const limite = Number(empresa?.limite_credito ?? 0)
-  const disponivel = Math.max(0, limite - emAberto)
   const usoPercent = limite > 0 ? Math.min(100, (emAberto / limite) * 100) : 0
 
   const hoje = new Date(new Date().toDateString())
@@ -89,22 +90,26 @@ export default async function ContaPage() {
       {limite > 0 ? (
         <div className="bg-white border border-[#DDDCD5] rounded-sm p-4">
           <div className="flex justify-between items-baseline gap-3">
-            <span className="text-sm text-[#6E6E68]">Disponível</span>
-            <strong className="font-mono text-2xl">R$ {brl(disponivel)}</strong>
+            <span className="text-sm text-[#6E6E68]">Uso do limite de crédito</span>
+            <span className="font-mono text-xs text-[#6E6E68]">
+              {Math.round(usoPercent)}%
+            </span>
           </div>
 
-          <div className="h-2 bg-[#EEEDE7] rounded-full mt-3 overflow-hidden">
+          <div
+            className="h-2 bg-[#EEEDE7] rounded-full mt-3 overflow-hidden"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(usoPercent)}
+            aria-label="Uso do limite de crédito"
+          >
             <div
               className={`h-full ${
                 usoPercent >= 100 ? 'bg-[#B00063]' : 'bg-[#131A2E]'
               }`}
               style={{ width: `${usoPercent}%` }}
             />
-          </div>
-
-          <div className="flex justify-between text-xs text-[#6E6E68] mt-2 font-mono">
-            <span>em boletos R$ {brl(emAberto)}</span>
-            <span>limite R$ {brl(limite)}</span>
           </div>
 
           {usoPercent >= 100 && (
