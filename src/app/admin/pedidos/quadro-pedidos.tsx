@@ -51,7 +51,7 @@ export type PedidoQuadro = {
   temSolicitacao: boolean
   /** Observação escrita pelo cliente ao enviar; a produção precisa ver. */
   notas: string | null
-  /** Nasceu em boleto acima do limite de crédito; confirmação exige liberação. */
+  /** Boleto acima do limite de crédito (no Faturar, ou pedido antigo que nasceu assim). */
   bloqueadoCredito: boolean
   entrada: string
   dias: number
@@ -1112,7 +1112,7 @@ function LinhaPedido({
 
         {p.bloqueadoCredito && (
           <span
-            title="Bloqueado por limite de crédito — libere com motivo antes de confirmar"
+            title="Bloqueado por limite de crédito — no Faturar, libere com motivo ou escolha outra forma"
             className="text-[9px] font-mono uppercase tracking-wider text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-1 shrink-0"
           >
             crédito

@@ -4,22 +4,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCarrinho } from '@/lib/carrinho/contexto'
-import { criarPedido, verificarPodeParcelar, situacaoAtraso, formasDoCliente, estimativaCarrinho, type BoletoVencido } from '@/app/actions/pedidos'
-import { buscarConfigPagamento } from '@/app/actions/configuracoes'
-import {
-  FORMAS,
-  PADRAO,
-  ROTULOS_FORMA,
-  maxParcelasPorMinimo,
-  type ConfigPagamento,
-  type Forma,
-} from '@/lib/pagamento/config'
+import { criarPedido, situacaoAtraso, type BoletoVencido } from '@/app/actions/pedidos'
 
-const brl = (v: number) =>
-  v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-
-
+/**
+ * Carrinho do cliente. Desde 07/10/2026 não há escolha de forma de pagamento
+ * nem de parcelas aqui: quem decide é a equipe, no Faturar, com o valor real
+ * do pedido. O carrinho só confere artes, quantidades e notas.
+ */
 export default function CarrinhoPage() {
   const {
     itens,
@@ -33,50 +24,14 @@ export default function CarrinhoPage() {
 
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
-  const [sucesso, setSucesso] = useState<{ numero: number; bloqueadoCredito: boolean } | null>(null)
+  const [sucesso, setSucesso] = useState<{ numero: number } | null>(null)
   const [removendo, setRemovendo] = useState<string | null>(null)
-  const [categoria, setCategoria] = useState<Forma>('boleto')
-  const [parcelas, setParcelas] = useState(1)
-  const [podeParcelar, setPodeParcelar] = useState(true)
-  const [config, setConfig] = useState<ConfigPagamento>(PADRAO)
   const [vencidos, setVencidos] = useState<BoletoVencido[]>([])
-  const [permitidas, setPermitidas] = useState<string[] | null>(null)
-  const [estimada, setEstimada] = useState(0)
   const router = useRouter()
 
-  // Estimativa pelos itens (metros × quantidade × preço do cliente), só para
-  // limitar as parcelas pelo mínimo. O cliente não vê o valor: ele muda com a
-  // metragem real. Carrinho vazio deriva zero, sem setState no efeito
-  const chaveItens = itens.map((i) => i.produtoId + ':' + i.quantidade).join('|')
   useEffect(() => {
-    if (!chaveItens) return
-    let vivo = true
-    estimativaCarrinho(
-      chaveItens.split('|').map((par) => {
-        const [produto_id, qtd] = par.split(':')
-        return { produto_id, quantidade: Number(qtd) }
-      })
-    ).then((e) => {
-      if (vivo) setEstimada(e.mercadoria)
-    })
-    return () => {
-      vivo = false
-    }
-  }, [chaveItens])
-  const mercadoriaEstimada = itens.length ? estimada : 0
-
-  useEffect(() => {
-    verificarPodeParcelar().then(setPodeParcelar)
-    buscarConfigPagamento().then(setConfig)
     situacaoAtraso().then((s) => setVencidos(s.vencidos))
-    formasDoCliente().then(setPermitidas)
   }, [])
-
-  // Formas que este cliente pode usar (lista do cadastro). Enquanto não
-  // carrega, ou se vier vazia, vale só a configuração geral
-  const permite = (f: string) => !permitidas || permitidas.length === 0 || permitidas.includes(f)
-  const boletoAvistaPermitido = permite('boleto_avista')
-  const boletoParceladoPermitido = permite('boleto_parcelado')
 
   // Boleto vencido trava o envio. O banco recusa de qualquer jeito; aqui o
   // botão já nasce desligado e a saída fica à mão
@@ -84,53 +39,9 @@ export default function CarrinhoPage() {
   const primeiroVencido = vencidos[0]
   const linkCartaoAtraso = vencidos.find((v) => v.linkCartao)?.linkCartao ?? null
 
-  // Disponível = ligada na configuração geral E permitida para o cliente.
-  // "Boleto" é uma categoria: basta à vista ou parcelado estar permitido
-  const disponiveis = FORMAS.filter(
-    (f) =>
-      config[f].ativa &&
-      (f === 'boleto' ? boletoAvistaPermitido || boletoParceladoPermitido : permite(f))
-  )
-
-  // O dono pode ter desligado justamente a forma selecionada: em vez de
-  // corrigir o estado num efeito, a escolha vigente é derivada
-  const escolhida =
-    config[categoria].ativa || disponiveis.length === 0
-      ? categoria
-      : disponiveis[0]
-
-  const regra = config[escolhida]
-
-  // Crédito parcela; boleto parcela; débito é sempre à vista. No boleto, a
-  // parcela mínima corta o teto conforme a estimativa do pedido
-  const maxParcelas =
-    escolhida === 'boleto'
-      ? maxParcelasPorMinimo(mercadoriaEstimada, regra)
-      : Math.max(1, regra.maxParcelas)
-  const tetoCortadoPorMinimo = escolhida === 'boleto' && maxParcelas < Math.max(1, regra.maxParcelas)
-  // O limite de crédito trava só o boleto parcelado — cartão é cobrado na hora
-  // Boleto só parcelado: "à vista" sai do seletor e a escolha começa em 2x
-  const avistaTravado = escolhida === 'boleto' && !boletoAvistaPermitido
-  const parcelamentoTravado =
-    escolhida === 'boleto' && (!podeParcelar || !boletoParceladoPermitido)
-  const parcelasEscolhidas = Math.min(
-    Math.max(parcelas, avistaTravado ? 2 : 1),
-    parcelamentoTravado ? 1 : maxParcelas
-  )
-
   async function enviar() {
     setErro('')
     setEnviando(true)
-
-    const formaPagamento =
-      escolhida === 'boleto'
-        ? parcelasEscolhidas === 1
-          ? 'boleto_avista'
-          : 'boleto_parcelado'
-        : escolhida
-
-    const aceitaParcelas =
-      escolhida === 'boleto' || escolhida === 'cartao_credito'
 
     const r = await criarPedido({
       itens: itens.map((i) => ({
@@ -138,9 +49,6 @@ export default function CarrinhoPage() {
         quantidade: i.quantidade,
       })),
       notas: notas.trim() || undefined,
-      forma_pagamento: formaPagamento,
-      parcelas:
-        aceitaParcelas && parcelasEscolhidas > 1 ? parcelasEscolhidas : undefined,
     })
 
     if (!r.ok) {
@@ -150,7 +58,7 @@ export default function CarrinhoPage() {
     }
 
     limpar()
-    setSucesso({ numero: r.numero, bloqueadoCredito: r.bloqueadoCredito })
+    setSucesso({ numero: r.numero })
     setEnviando(false)
     router.refresh()
   }
@@ -169,13 +77,10 @@ export default function CarrinhoPage() {
           <strong className="font-mono text-[#131A2E]">#{sucesso.numero}</strong>{' '}
           foi registrado.
         </p>
-        {/* Sem valores de limite nem de uso: é conversa da equipe com o cliente */}
-        {sucesso.bloqueadoCredito && (
-          <p className="text-sm text-[#8A6A00] bg-[#FFFBEE] border border-[#E8D9A8] rounded-sm px-4 py-3 mt-4 max-w-md mx-auto leading-relaxed">
-            Limite de crédito atingido. Escolha outra forma de pagamento ou
-            aguarde o contato da equipe.
-          </p>
-        )}
+        <p className="text-xs text-[#6E6E68] mt-2 max-w-md mx-auto leading-relaxed">
+          A equipe confere as artes e confirma o pedido. Valor e forma de
+          pagamento são definidos ao fim da estampa.
+        </p>
         <Link
           href="/pedidos"
           className="inline-block mt-6 bg-[#131A2E] text-white rounded-sm px-6 py-3 text-sm font-semibold tracking-wide"
@@ -331,108 +236,6 @@ export default function CarrinhoPage() {
         />
       </div>
 
-      <div className="mt-6">
-        <label className="block text-xs tracking-widest text-[#6E6E68] mb-1.5">
-          FORMA DE PAGAMENTO
-        </label>
-        <div className="grid gap-2">
-          {disponiveis.map((f) => (
-            <label
-              key={f}
-              className={`flex items-center gap-2 border rounded-sm px-3 py-2.5 text-sm cursor-pointer border-[#DDDCD5] hover:border-[#131A2E] ${
-                escolhida === f ? 'border-[#131A2E] bg-[#FAFAF7]' : ''
-              }`}
-            >
-              <input
-                type="radio"
-                name="categoria_pagamento"
-                value={f}
-                checked={escolhida === f}
-                onChange={() => {
-                  setCategoria(f)
-                  setParcelas(1)
-                }}
-              />
-              <span className="flex-1">{ROTULOS_FORMA[f]}</span>
-              {(config[f].percentual > 0 || config[f].taxaFixa > 0) && (
-                <span className="text-[10px] font-mono text-[#6E6E68] whitespace-nowrap">
-                  {config[f].percentual > 0 && `+${config[f].percentual}%`}
-                  {config[f].percentual > 0 && config[f].taxaFixa > 0 && ' · '}
-                  {config[f].taxaFixa > 0 && `+R$ ${brl(config[f].taxaFixa)}`}
-                </span>
-              )}
-            </label>
-          ))}
-        </div>
-
-        {tetoCortadoPorMinimo && maxParcelas <= 1 && (
-          <p className="text-xs text-[#6E6E68] mt-3 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-3">
-            Com parcela mínima de R$ {brl(regra.valorMinimoParcela)}, este pedido é
-            pago à vista.
-          </p>
-        )}
-
-        {maxParcelas > 1 && (
-          <div className="mt-3 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-3">
-            <label className="block text-xs tracking-widest text-[#6E6E68] mb-2">
-              COMO PREFERE PAGAR
-            </label>
-            <div
-              className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${maxParcelas}, 1fr)` }}
-            >
-              {Array.from({ length: maxParcelas }, (_, i) => i + 1).map((n) => {
-                const bloqueado = (n > 1 && parcelamentoTravado) || (n === 1 && avistaTravado)
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={bloqueado}
-                    onClick={() => setParcelas(n)}
-                    className={`border rounded-sm py-3.5 text-base font-bold ${
-                      bloqueado
-                        ? 'opacity-40 cursor-not-allowed border-[#DDDCD5] text-[#6E6E68]'
-                        : parcelasEscolhidas === n
-                        ? 'border-[#131A2E] bg-[#131A2E] text-white'
-                        : 'border-[#DDDCD5] text-[#6E6E68] hover:border-[#131A2E]'
-                    }`}
-                  >
-                    {n === 1 ? 'À vista' : `${n}x`}
-                  </button>
-                )
-              })}
-            </div>
-            {parcelamentoTravado && (
-              <p className="text-xs text-[#D8007A] mt-2">
-                {!boletoParceladoPermitido
-                  ? 'Parcelamento não habilitado para o seu cadastro.'
-                  : 'Limite de crédito atingido — parcelamento indisponível.'}
-              </p>
-            )}
-            {avistaTravado && (
-              <p className="text-xs text-[#6E6E68] mt-2">
-                Boleto à vista não habilitado para o seu cadastro.
-              </p>
-            )}
-            {tetoCortadoPorMinimo && (
-              <p className="text-xs text-[#6E6E68] mt-2">
-                Com parcela mínima de R$ {brl(regra.valorMinimoParcela)}, este pedido
-                permite até {maxParcelas}x.
-              </p>
-            )}
-            {parcelasEscolhidas > 1 && (
-              <p className="text-xs text-[#6E6E68] mt-2">
-                {escolhida === 'boleto'
-                  ? `Boletos a cada ${regra.intervaloDias} dias. A equipe confirma os vencimentos e o valor ao processar seu pedido.`
-                  : 'A equipe confirma o valor e combina a cobrança ao processar seu pedido.'}
-                {regra.valorMinimoParcela > 0 &&
-                  ` Parcela mínima de R$ ${brl(regra.valorMinimoParcela)}.`}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
       <div className="mt-6 border-t-2 border-[#131A2E] pt-4 space-y-2">
         <div className="flex justify-between items-baseline">
           <span className="font-semibold tracking-tight">Quantidade total</span>
@@ -440,18 +243,8 @@ export default function CarrinhoPage() {
         </div>
         <p className="text-xs text-[#6E6E68]">
           O valor do pedido será informado após finalizar a estampa, com base na
-          metragem realmente impressa.
-          {(regra.percentual > 0 || regra.taxaFixa > 0) && (
-            <>
-              {' '}
-              A forma escolhida acrescenta
-              {regra.percentual > 0 && ` ${regra.percentual}%`}
-              {regra.percentual > 0 && regra.taxaFixa > 0 && ' e'}
-              {regra.taxaFixa > 0 &&
-                ` R$ ${brl(regra.taxaFixa)}${escolhida === 'boleto' ? ' por boleto' : ''}`}
-              {' '}ao valor final.
-            </>
-          )}
+          metragem realmente impressa. A forma de pagamento é combinada com a
+          equipe nesse momento.
         </p>
       </div>
 

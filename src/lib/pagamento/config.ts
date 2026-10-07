@@ -6,8 +6,8 @@
  * quinze linhas chave/valor tornaria cada leitura uma consulta diferente.
  *
  * Este arquivo é puro de propósito — sem Supabase, sem `server-only` — para
- * que o cálculo da taxa possa rodar também no carrinho, no navegador, e o
- * cliente ver o valor final antes de confirmar.
+ * que o cálculo da taxa possa rodar também no navegador, no bloco Faturar do
+ * painel, e quem fatura ver o valor final antes de confirmar.
  */
 
 /**
@@ -36,9 +36,9 @@ export const ROTULOS_FORMA: Record<Forma, string> = {
 }
 
 export type ConfigForma = {
-  /** Se desligada, a forma não aparece para o cliente no carrinho. */
+  /** Se desligada, a forma não pode ser escolhida no Faturar. */
   ativa: boolean
-  /** 1 = só à vista. Teto de parcelas que o cliente pode escolher. */
+  /** 1 = só à vista. Teto de parcelas que a equipe pode escolher ao faturar. */
   maxParcelas: number
   /** Abaixo disso o parcelamento é bloqueado, em reais. */
   valorMinimoParcela: number
@@ -160,7 +160,7 @@ export function totalComTaxa(
 }
 
 /**
- * Quantas parcelas o cliente pode escolher nesta forma, dado o valor.
+ * Quantas parcelas podem ser escolhidas nesta forma, dado o valor.
  * Devolve lista vazia quando nem à vista é permitido (forma desligada).
  */
 export function parcelasDisponiveis(
@@ -229,9 +229,10 @@ export function valorCobranca(
 /**
  * Maior quantidade de parcelas em que nenhuma fica abaixo do mínimo, dado o
  * valor da mercadoria. A taxa fixa do boleto é por documento, então entra na
- * conta de cada quantidade. Sem valor (estimativa zero) não há o que
- * limitar: devolve o teto da configuração. Mesma regra de `criar_pedido`
- * no banco — mexeu numa, mexa na outra.
+ * conta de cada quantidade. Sem valor não há o que limitar: devolve o teto
+ * da configuração. Usada no Faturar para o teto do seletor de parcelas; a
+ * regra que vale é a de `admin_definir_forma_pagamento_faturamento` e
+ * `parcelar_pedido` no banco — mexeu numa, mexa na outra.
  */
 export function maxParcelasPorMinimo(
   mercadoria: number,

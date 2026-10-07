@@ -133,7 +133,7 @@ async function boletoAbaixoDoMinimo(pedidoId: string): Promise<string | null> {
     .maybeSingle()
 
   const p = data as unknown as {
-    forma_pagamento: string
+    forma_pagamento: string | null
     total: number | string
     taxa_pagamento_percentual: number | string | null
     taxa_pagamento_fixa: number | string | null

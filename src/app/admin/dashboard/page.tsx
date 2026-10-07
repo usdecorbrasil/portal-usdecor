@@ -172,7 +172,10 @@ export default async function DashboardPage({
 
   /* ---- em andamento: até pedido pronto, qualquer que seja a data ---- */
   const aguardando = validos.filter((p) => p.status === 'aguardando')
-  const bloqueados = aguardando.filter((p) => p.bloqueadoCredito)
+  // Bloqueio por crédito acontece no Faturar (pedido em "pronto"), quando a
+  // forma de pagamento é escolhida; pedidos anteriores a 07/10/2026 podiam
+  // nascer bloqueados em "aguardando". A tela mostra os dois casos
+  const bloqueados = validos.filter((p) => p.bloqueadoCredito)
   const solicitacoes = validos.filter((p) => p.temSolicitacao)
   const valorAguardando = aguardando.reduce((a, p) => a + p.total, 0)
 
@@ -216,7 +219,7 @@ export default async function DashboardPage({
       <FiltroPeriodo de={dataDe} ate={dataAte} />
 
       {/* ---- pendências ---- */}
-      {(aguardando.length > 0 || solicitacoes.length > 0) && (
+      {(aguardando.length > 0 || solicitacoes.length > 0 || bloqueados.length > 0) && (
         <div className="mb-6">
           <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-2.5 flex items-center gap-2">
             PRECISA DA SUA DECISÃO
@@ -226,7 +229,7 @@ export default async function DashboardPage({
           <div className="space-y-1.5 sm:space-y-2">
             {bloqueados.length > 0 && (
               <Link
-                href="/admin/pedidos?etapa=aguardando"
+                href={bloqueados.length === 1 ? `/admin/pedidos/${bloqueados[0].id}` : '/admin/pedidos'}
                 className="flex items-center gap-3 bg-[#FFFBEE] border-2 border-[#C79600] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#FFF6D6]"
               >
                 <div className="flex-1 min-w-0">
@@ -235,7 +238,7 @@ export default async function DashboardPage({
                     {bloqueados.length > 1 ? 's' : ''} por limite de crédito
                   </div>
                   <div className="text-[10px] sm:text-xs text-[#8A6A00] mt-0.5">
-                    #{bloqueados.map((b) => b.numero).join(', #')} · precisa de liberação com motivo
+                    #{bloqueados.map((b) => b.numero).join(', #')} · no Faturar: libere com motivo ou escolha outra forma
                   </div>
                 </div>
                 <span className="text-[#C79600] shrink-0">›</span>

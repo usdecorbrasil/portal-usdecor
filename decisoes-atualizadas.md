@@ -10,7 +10,30 @@ decidido mas não implementado.
 
 ## Agrupamento, Faturado e financeiro
 
-Decidido entre 05/10 e 06/10/2026, implementado nos PRs #8 a #27.
+Decidido entre 05/10 e 07/10/2026, implementado nos PRs #8 a #27 e no PR da forma
+de pagamento no faturamento (07/10).
+
+### Forma de pagamento: decisão da equipe, no Faturar
+
+Decidido pelo dono em 07/10/2026: **o cliente não escolhe forma de pagamento**. A
+decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no agrupador.
+
+| Regra | Situação |
+|---|---|
+| Carrinho sem forma, parcelas, aviso de acréscimo ou mensagem de limite; só artes, quantidades e notas (o aviso de boleto atrasado continua) | ✅ |
+| `pedidos.forma_pagamento` e `parcelas_solicitadas` aceitam NULL; pedido novo nasce sem forma e **nunca** bloqueado por crédito | ✅ |
+| `criar_pedido(p_itens, p_notas)` sem validação de forma, parcelas, mínimo ou limite | ✅ |
+| O bloco **Faturar pedido** exige a forma: boleto à vista, boleto parcelado (nº de parcelas e 1º vencimento), Pix, cartão de crédito (com parcelas) ou débito, mostrando parcela, acréscimo e total cobrado | ✅ |
+| Pedido antigo, com forma escolhida pelo cliente, chega pré-selecionado e pode ser trocado | ✅ |
+| **Pop-up de confirmação** antes de gravar: cliente, pedido(s), metragem, mercadoria, forma, parcelas com valor e vencimento, acréscimo, total cobrado, com/sem nota. Bloqueio em vermelho desativa o confirmar | ✅ |
+| No agrupamento, a forma escolhida vale para o agrupador; a confirmação mostra os pedidos reunidos e a soma | ✅ |
+| RPC `admin_definir_forma_pagamento_faturamento`: `is_admin()`, só em `pronto`, forma ativa e permitida ao cliente, parcelas ≤ teto, parcela ≥ mínimo pelo valor real (`parcelar_pedido` regenera as parcelas), limite de crédito no boleto (dispensado por `bloqueio_liberado_em`), registro em `pedido_forma_pagamento_historico` com motivo "Definida no faturamento" | ✅ |
+| Gatilhos `pedidos_forma_permitida` e `pedidos_congelar_taxa` só com forma não nula, também no UPDATE do Faturar (a taxa congela ali) | ✅ |
+| Limite estourado no boleto: o bloco Faturar oferece **liberar com motivo** (`admin_liberar_bloqueio_credito`, sem exigir pedido já marcado) ou trocar a forma; a recusa marca `bloqueado_credito` para o dashboard e avisa a equipe (`pedido_bloqueado_credito`) | ✅ |
+| Confirmação do pedido (aguardando → recebido) não mexe mais em parcelas | ✅ |
+| Listas e tela do pedido mostram "a definir no faturamento" até lá; e-mails `pedido_recebido` e `pedido_novo` sem linha de pagamento | ✅ |
+| Cliente só vê a forma a partir de **Faturado** (tela do pedido e Meus pedidos); em Minha conta, o bloco Crédito mostra só a barra de uso do limite e o aviso de limite comprometido | ✅ |
+| Formas permitidas por cliente (`clientes.formas_pagamento`) e configuração de Pagamento continuam valendo — agora para o que a equipe pode escolher | ✅ |
 
 ### Fluxo de status: onze etapas, com "Faturado"
 
@@ -30,7 +53,8 @@ Decidido entre 05/10 e 06/10/2026, implementado nos PRs #8 a #27.
 
 - **Faturado** é a etapa que fala com o Bling. O botão **Faturar**
   (`faturarPedido`, `src/app/actions/faturamento.ts`) faz tudo de uma vez:
-  pedido de venda, cobrança (boleto ou Pix), NF-e quando o pedido é com nota,
+  define a forma de pagamento (passo zero, decisão da equipe), pedido de
+  venda, cobrança (boleto ou Pix), NF-e quando o pedido é com nota,
   e-mails ao cliente e a etapa. Cada passo pode ser repetido se ficou pela
   metade (NF "processando" é consultada de novo, cobrança já lançada só relê
   os links). Nada muda no portal antes de o Bling confirmar.
@@ -42,7 +66,8 @@ Decidido entre 05/10 e 06/10/2026, implementado nos PRs #8 a #27.
 | Regra | Situação |
 |---|---|
 | Vários pedidos **do mesmo cliente** em Pedido pronto podem virar uma cobrança só | ✅ |
-| O pop-up aparece no Faturar quando há outros pedidos prontos do cliente: "faturar só este" ou "unificar" | ✅ |
+| O pop-up aparece no Faturar quando há outros pedidos prontos do cliente: "só este" ou "unificar" — os dois seguem para o resumo de confirmação | ✅ |
+| A forma de pagamento escolhida no bloco Faturar vale para o agrupador | ✅ |
 | Nasce um pedido **agrupador**; só ele vai ao Bling | ✅ |
 | Os originais ficam em `faturado`, com o rastreio (número do agrupador) nas observações | ✅ |
 | Desagrupar exige motivo; se o agrupador já estava no Bling, o cancelamento lá é manual | ✅ |
@@ -60,9 +85,9 @@ Decidido entre 05/10 e 06/10/2026, implementado nos PRs #8 a #27.
 
 | Regra | Situação |
 |---|---|
-| Cada cliente tem a lista de formas que pode escolher; nasce com todas, o dono tira ou devolve na tela do cliente | ✅ |
+| Cada cliente tem a lista de formas que a equipe pode escolher para ele no Faturar; nasce com todas, o dono tira ou devolve na tela do cliente | ✅ |
 | Vale junto da configuração geral de Pagamento: as **duas** precisam permitir | ✅ |
-| Regra no banco (gatilho em `pedidos`); só o papel cliente é travado, pedido criado pela equipe não passa pelo gatilho | ✅ |
+| Regra no banco: a RPC do faturamento recusa forma fora da lista; o gatilho em `pedidos` continua travando o papel cliente (hoje sem efeito, porque o cliente não grava forma) | ✅ |
 
 ### Limite de crédito consumido pelos boletos
 
@@ -70,9 +95,9 @@ Decidido entre 05/10 e 06/10/2026, implementado nos PRs #8 a #27.
 |---|---|
 | Crédito em uso = pedidos faturados em boleto ainda não pagos (parcelas em aberto, ou valor cobrado inteiro no à vista) + pedidos confirmados e não faturados em boleto (valor já conhecido) | ✅ |
 | Pix, cartão, cancelados, fechados e "aguardando" ficam de fora | ✅ |
-| Pedido em boleto que passa do limite **não é recusado**: nasce em `aguardando` com `bloqueado_credito = true`, em destaque no dashboard, com aviso à equipe (`pedido_bloqueado_credito`) | ✅ |
-| Só admin/financeiro libera, com motivo; só então o pedido pode ser confirmado (gatilho) | ✅ |
-| Boleto à vista continua disponível mesmo com o limite tomado | ✅ |
+| ~~Pedido em boleto que passa do limite nasce bloqueado em `aguardando`~~ — desde 07/10/2026 o limite é conferido **no Faturar**, quando a forma é escolhida; a recusa marca `bloqueado_credito`, destaca no dashboard e avisa a equipe (`pedido_bloqueado_credito`) | ✅ |
+| Só admin/financeiro libera, com motivo, no próprio bloco Faturar (ou troca a forma). Pedidos antigos que nasceram bloqueados em `aguardando` seguem exigindo liberação para confirmar (gatilho) | ✅ |
+| Boleto à vista dentro do limite continua disponível mesmo sem crédito para parcelar; Pix e cartão não passam por limite | ✅ |
 
 ### Trava por boleto atrasado e aba Boletos
 
@@ -97,7 +122,7 @@ Decidido entre 05/10 e 06/10/2026, implementado nos PRs #8 a #27.
 | Regra | Situação |
 |---|---|
 | Mínimo por parcela em Configurações → Pagamento → boleto (padrão **R$ 200**) | ✅ |
-| Aplicado já na escolha das parcelas: com o valor estimado pelos itens, o carrinho só oferece as quantidades que respeitam o mínimo, e `criar_pedido` recusa o resto | ✅ |
+| ~~Aplicado já no carrinho, com o valor estimado~~ — desde 07/10/2026 é aplicado no **Faturar**, com o valor real: o seletor de parcelas só oferece o que respeita o mínimo, e a RPC recusa o resto | ✅ |
 | Continua aplicado no valor real (romaneio, Pedido pronto e `parcelar_pedido`) | ✅ |
 | À vista, Pix e cartão não têm mínimo | ✅ |
 | Teto de parcelas: 4 | ✅ |

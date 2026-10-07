@@ -40,7 +40,7 @@ type Cliente = {
   boletos_vencidos: number
   atraso_liberado_em: string | null
   atraso_liberado_motivo: string | null
-  /** O que este cliente pode escolher no carrinho. */
+  /** Formas que a equipe pode escolher ao faturar os pedidos deste cliente. */
   formas_pagamento: string[]
 }
 

@@ -28,7 +28,7 @@ export const ROTULOS: Record<TipoNotificacao, { titulo: string; descricao: strin
   pedido_bloqueado_credito: {
     titulo: 'Pedido bloqueado por limite de crédito',
     descricao:
-      'Quando um pedido em boleto passa do limite de crédito do cliente e fica aguardando liberação. Exige decisão.',
+      'Quando, no Faturar, o boleto escolhido passa do limite de crédito do cliente e o pedido fica aguardando liberação ou outra forma. Exige decisão.',
   },
   pedido_cancelado: {
     titulo: 'Pedido cancelado pelo cliente',

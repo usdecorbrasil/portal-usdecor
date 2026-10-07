@@ -18,12 +18,15 @@ export type OutroPronto = {
  * reunir tudo numa cobrança só antes de ir ao Bling — depois de faturado
  * não dá mais. Pedido sem romaneio aparece travado: o banco recusa agrupar
  * sem metragem confirmada, e avisar aqui evita o erro depois do clique.
+ * Nenhuma das saídas grava nada: as duas levam ao resumo de confirmação, e a
+ * forma de pagamento escolhida no bloco Faturar vale para o agrupador.
  */
 export default function ModalUnificar({
   numeroAtual,
   metrosAtual,
   totalAtual,
   outros,
+  resumoPagamento,
   pendente,
   erro,
   onCancelar,
@@ -34,6 +37,8 @@ export default function ModalUnificar({
   metrosAtual: number | null
   totalAtual: number
   outros: OutroPronto[]
+  /** Forma de pagamento escolhida no bloco Faturar; vale para o agrupador. */
+  resumoPagamento: string
   pendente: boolean
   erro: string
   onCancelar: () => void
@@ -99,6 +104,11 @@ export default function ModalUnificar({
           })}
         </ul>
 
+        <p className="mt-3 text-xs text-[#6E6E68]">
+          Forma de pagamento: <strong className="text-[#131A2E]">{resumoPagamento}</strong>
+          {escolhidos.length > 0 ? ' — vale para a cobrança reunida.' : '.'}
+        </p>
+
         {escolhidos.length > 0 && (
           <dl className="mt-3 text-xs text-[#6E6E68] space-y-1">
             <div className="flex justify-between">
@@ -130,21 +140,24 @@ export default function ModalUnificar({
             disabled={pendente}
             className="border border-[#131A2E] rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
           >
-            {pendente ? 'AGUARDE…' : 'FATURAR SÓ ESTE'}
+            {pendente ? 'AGUARDE…' : 'SÓ ESTE'}
           </button>
           <button
             onClick={() => onUnificar(escolhidos.map((o) => o.id))}
             disabled={pendente || escolhidos.length === 0 || agrupaveis.length === 0}
             className="bg-[#B00063] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-40"
           >
-            {pendente ? 'AGUARDE…' : 'UNIFICAR E FATURAR'}
+            {pendente ? 'AGUARDE…' : 'UNIFICAR'}
           </button>
         </div>
 
+        <p className="mt-2 text-[11px] text-[#9B9A93] text-center">
+          Em seguida você confere o resumo antes de faturar.
+        </p>
         <button
           onClick={onCancelar}
           disabled={pendente}
-          className="w-full mt-2 text-xs text-[#6E6E68] hover:text-[#131A2E] py-1.5"
+          className="w-full mt-1 text-xs text-[#6E6E68] hover:text-[#131A2E] py-1.5"
         >
           voltar sem faturar
         </button>

@@ -3,6 +3,9 @@
  * cadastro e na edição; o nome do campo é `formas_pagamento` (vários valores,
  * lidos com `formData.getAll`). Precisa ficar ao menos uma marcada — o banco
  * recusa lista vazia, e aqui a mensagem já vem antes.
+ *
+ * Desde 07/10/2026 quem escolhe a forma é a equipe, no Faturar; a lista
+ * limita o que pode ser escolhido para este cliente.
  */
 
 export const FORMAS_CLIENTE = [
@@ -40,8 +43,8 @@ export default function FormasPagamentoCliente({
         Formas de pagamento permitidas
       </p>
       <p className="text-[11px] text-[#6E6E68] mb-3 leading-relaxed">
-        O cliente só vê no carrinho o que estiver marcado aqui. A configuração
-        geral de Pagamento continua valendo por cima.
+        No Faturar, só o que estiver marcado aqui pode ser escolhido para este
+        cliente. A configuração geral de Pagamento continua valendo por cima.
       </p>
       <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2">
         {FORMAS_CLIENTE.map((f) => (

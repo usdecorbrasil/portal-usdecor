@@ -42,8 +42,8 @@ export default async function ContaPage() {
   } | null
 
   // As políticas do banco já restringem ao próprio cliente. O crédito em uso
-  // vem da mesma função que decide se o cliente pode parcelar — assim o que
-  // ele vê aqui é exatamente o que o carrinho aplica
+  // vem da mesma função que o Faturar usa para conferir o limite — assim o
+  // que ele vê aqui é exatamente o que a equipe aplica
   const [{ data: emUso }, { data: parcelas }] = await Promise.all([
     perfil?.cliente_id
       ? supabase.rpc('credito_em_uso', { p_cliente_id: perfil.cliente_id })
@@ -114,15 +114,16 @@ export default async function ContaPage() {
 
           {usoPercent >= 100 && (
             <p className="text-xs text-[#B00063] mt-2 leading-relaxed">
-              Limite comprometido. Novos pedidos podem ser feitos à vista até a
-              quitação dos pedidos em aberto.
+              Limite comprometido. A equipe combina com você a forma de
+              pagamento dos próximos pedidos até a quitação dos boletos em
+              aberto.
             </p>
           )}
         </div>
       ) : (
         <p className="text-sm text-[#6E6E68] bg-white border border-[#DDDCD5] rounded-sm p-4">
           Sem limite de crédito definido. Fale com a Best Color Tecidos se
-          quiser trabalhar com pagamento parcelado.
+          quiser trabalhar com boleto parcelado.
         </p>
       )}
 

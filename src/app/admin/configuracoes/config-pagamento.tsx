@@ -86,7 +86,7 @@ export default function ConfigPagamento({
           {/* Fechado, o resumo já responde a pergunta mais comum */}
           <span className="block text-xs text-[#6E6E68] mt-1 leading-relaxed">
             {aberto
-              ? 'O que o cliente pode escolher no carrinho, em quantas vezes, e quanto a forma escolhida acrescenta ao pedido. A taxa entra como acréscimo no valor cobrado — não altera o preço por metro.'
+              ? 'O que a equipe pode escolher ao faturar, em quantas vezes, e quanto a forma escolhida acrescenta ao pedido. A taxa entra como acréscimo no valor cobrado — não altera o preço por metro.'
               : resumo}
           </span>
         </span>

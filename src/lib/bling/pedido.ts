@@ -215,7 +215,7 @@ export async function criarPedidoNoBling(
     numero: number
     total: number | string
     metragem_impressa: number | string | null
-    forma_pagamento: string
+    forma_pagamento: string | null
     vencimento_avista: string | null
     notas: string | null
     emitir_nf: boolean | null
@@ -234,6 +234,12 @@ export async function criarPedidoNoBling(
   // Já enviado: não duplica pedido no ERP
   if (p.bling_pedido_id) {
     return { ok: true, blingId: p.bling_pedido_id, numero: null }
+  }
+
+  // A forma de pagamento é definida no Faturar; sem ela não há parcela nem
+  // forma do Bling para montar o pedido de venda
+  if (!p.forma_pagamento) {
+    return { ok: false, erro: 'Pedido sem forma de pagamento. Defina-a no Faturar antes de enviar ao Bling.' }
   }
 
   const metragem = p.metragem_impressa != null ? Number(p.metragem_impressa) : 0

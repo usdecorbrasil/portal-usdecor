@@ -13,9 +13,17 @@ import {
   alterarFormaPagamento,
   fecharPedido,
 } from '@/app/actions/producao'
-import { faturarPedido, enviarLinkPagamento } from '@/app/actions/faturamento'
+import { faturarPedido, enviarLinkPagamento, type OpcoesFatura } from '@/app/actions/faturamento'
 import { agruparPedidos } from '@/app/actions/agrupamento'
 import ModalUnificar, { type OutroPronto } from './modal-unificar'
+import ModalFaturar from './modal-faturar'
+import { MAX_PARCELAS, maxParcelasPorMinimo, type ConfigPagamento } from '@/lib/pagamento/config'
+import {
+  FORMAS_FATURA,
+  ROTULOS_FATURA,
+  avaliarFatura,
+  configDaForma,
+} from '@/lib/pagamento/faturar'
 import {
   confirmarPedido,
   confirmarPedidoBloqueado,
@@ -49,12 +57,7 @@ const ORDEM = [
 /** Etapas a partir das quais a equipe pode fechar o pedido (depois de faturado). */
 const PODE_FECHAR = ['faturado', 'nf_emitida', 'expedido', 'entregue']
 
-const ROTULOS_PAGAMENTO: Record<string, string> = {
-  boleto_avista: 'Boleto à vista',
-  boleto_parcelado: 'Boleto parcelado',
-  cartao_credito: 'Cartão de crédito',
-  cartao_debito: 'Cartão de débito',
-}
+const ROTULOS_PAGAMENTO: Record<string, string> = ROTULOS_FATURA
 
 type Arte = {
   id: string
@@ -94,10 +97,17 @@ export default function PainelAcoes({
   emitirNf,
   parcelasSolicitadas,
   parcelasAtuais,
+  primeiroVencimentoAtual,
   maxParcelas,
   valorMinimoBoleto,
   valorDocumentoBoleto,
   intervaloBoleto,
+  configPagamento,
+  formasPermitidas,
+  taxaCongelada,
+  limiteCredito,
+  creditoEmUso,
+  bloqueioLiberado,
   solicitacao,
   precoCliente,
   metragemImpressa,
@@ -116,16 +126,30 @@ export default function PainelAcoes({
   total: number
   reimpressoes: number
   podeCancelarOuAjustar: boolean
-  formaPagamento: string
+  /** NULL até o faturamento definir (pedidos a partir de 07/10/2026). */
+  formaPagamento: string | null
   emitirNf: boolean
   parcelasSolicitadas: number | null
   parcelasAtuais: number
+  /** Vencimento da 1ª parcela já gerada (pedidos antigos), AAAA-MM-DD. */
+  primeiroVencimentoAtual: string | null
   maxParcelas: number
   valorMinimoBoleto: number
   /** Menor boleto do pedido, ou null quando não é boleto / não tem valor. */
   valorDocumentoBoleto: number | null
   /** Dias entre boletos, da configuração. Também é o prazo do primeiro. */
   intervaloBoleto: number
+  /** Configurações → Pagamento, para o Faturar oferecer e calcular as formas. */
+  configPagamento: ConfigPagamento
+  /** `clientes.formas_pagamento`; vazia = sem restrição. */
+  formasPermitidas: string[]
+  /** Taxa já congelada no pedido (pedidos antigos com forma); null sem forma. */
+  taxaCongelada: { percentual: number; fixa: number } | null
+  limiteCredito: number
+  /** Crédito em uso do cliente sem este pedido; null quando não é o dono ou não é "pronto". */
+  creditoEmUso: number | null
+  /** O dono já liberou o limite para este pedido. */
+  bloqueioLiberado: boolean
   solicitacao: Solicitacao | null
   precoCliente: number
   metragemImpressa: number | null
@@ -145,12 +169,27 @@ export default function PainelAcoes({
   const [pendente, iniciar] = useTransition()
   const [ajustesAbertos, setAjustesAbertos] = useState(false)
 
-  const [qtdParcelas, setQtdParcelas] = useState(
-    Math.min(parcelasSolicitadas ?? 3, maxParcelas)
+  // Faturar: forma, parcelas e 1º vencimento escolhidos por quem fatura.
+  // Pedido antigo (criado quando o cliente ainda escolhia) vem pré-selecionado
+  const [formaEscolhida, setFormaEscolhida] = useState<string>(formaPagamento ?? '')
+  const [parcelasFatura, setParcelasFatura] = useState(
+    Math.max(
+      1,
+      Math.min(
+        parcelasAtuais || parcelasSolicitadas || (formaPagamento === 'boleto_parcelado' ? 2 : 1),
+        MAX_PARCELAS
+      )
+    )
   )
-  const [primeiroVencimento, setPrimeiroVencimento] = useState(dataPadrao(intervaloBoleto))
+  // Vencimento já gerado num pedido antigo só serve se ainda não passou
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(
+    primeiroVencimentoAtual && primeiroVencimentoAtual >= dataPadrao(0)
+      ? primeiroVencimentoAtual
+      : dataPadrao(intervaloBoleto)
+  )
   const [statusPendente, setStatusPendente] = useState<string | null>(null)
-  const [confirmandoFatura, setConfirmandoFatura] = useState(false)
+  /** Faturar confirmando: ids dos outros pedidos a unificar ([] = só este). */
+  const [faturaPendente, setFaturaPendente] = useState<string[] | null>(null)
   const [unificando, setUnificando] = useState(false)
   const [recadoFatura, setRecadoFatura] = useState('')
   const [linkPagamento, setLinkPagamento] = useState('')
@@ -171,17 +210,60 @@ export default function PainelAcoes({
   // Com o romaneio lançado, quantidade não muda mais nada; o que pode
   // mudar é a metragem — quebra na estamparia, por exemplo
   const emEstampa = statusAtual === 'estampando' || statusAtual === 'corte_costura'
-  const ehParcelado = formaPagamento === 'boleto_parcelado'
-  const ehCartao = formaPagamento.startsWith('cartao')
+  const ehCartao = (formaPagamento ?? '').startsWith('cartao')
 
   const precoAtual = itens[0]?.precoMetro ?? 0
 
-  // Na confirmação o valor é a estimativa pelos itens; a parcela mínima já
-  // corta o teto por ela (a taxa entra depois, na divisão real)
-  const tetoParcelasConfirmacao =
-    total > 0 && valorMinimoBoleto > 0
-      ? Math.max(1, Math.min(maxParcelas, Math.floor(total / valorMinimoBoleto)))
-      : maxParcelas
+  /* ---- Faturar: o que a forma escolhida dá, com o valor real ---- */
+
+  const escolhidaEhCartao = formaEscolhida.startsWith('cartao')
+  const cfgEscolhida = formaEscolhida ? configDaForma(configPagamento, formaEscolhida) : null
+  // Boleto parcelado: o teto cai conforme a parcela mínima; cartão usa o da configuração
+  const tetoParcelas =
+    formaEscolhida === 'boleto_parcelado'
+      ? maxParcelasPorMinimo(total, configPagamento.boleto)
+      : formaEscolhida === 'cartao_credito'
+      ? Math.max(1, Math.min(configPagamento.cartao_credito.maxParcelas, MAX_PARCELAS))
+      : 1
+  const parcelasEfetivas =
+    formaEscolhida === 'boleto_parcelado'
+      ? Math.max(2, Math.min(parcelasFatura, Math.max(2, tetoParcelas)))
+      : formaEscolhida === 'cartao_credito'
+      ? Math.max(1, Math.min(parcelasFatura, tetoParcelas))
+      : 1
+
+  // Pedidos reunidos (unificação): a avaliação usa a soma
+  const outrosEscolhidos = outrosProntos.filter((o) => (faturaPendente ?? []).includes(o.id))
+  const mercadoriaFatura = total + outrosEscolhidos.reduce((s, o) => s + o.total, 0)
+  const metragemFatura =
+    metragemImpressa === null && outrosEscolhidos.length === 0
+      ? null
+      : (metragemImpressa ?? 0) + outrosEscolhidos.reduce((s, o) => s + (o.metros ?? 0), 0)
+
+  const avaliacao = avaliarFatura({
+    forma: formaEscolhida,
+    parcelas: parcelasEfetivas,
+    primeiroVencimento,
+    mercadoria: mercadoriaFatura,
+    config: configPagamento,
+    permitidas: formasPermitidas,
+    formaAtual: formaPagamento,
+    taxaCongelada,
+    limite: limiteCredito,
+    emUso: creditoEmUso,
+    liberado: bloqueioLiberado,
+  })
+  const liberacaoPreenchida = motivoLiberacao.trim().length >= 10
+
+  function opcoesFatura(): OpcoesFatura {
+    return {
+      forma: formaEscolhida || undefined,
+      parcelas: parcelasEfetivas > 1 ? parcelasEfetivas : undefined,
+      primeiroVencimento: formaEscolhida === 'boleto_parcelado' ? primeiroVencimento : undefined,
+      motivoLiberacao: avaliacao.credito && liberacaoPreenchida ? motivoLiberacao.trim() : undefined,
+      linkPagamento: escolhidaEhCartao && linkPagamento.trim() ? linkPagamento.trim() : undefined,
+    }
+  }
 
   const disponiveis = aguardando
     ? []
@@ -198,62 +280,68 @@ export default function PainelAcoes({
     })
   }
 
-  /** Link de cartão validado, ou undefined quando não se aplica. Null = inválido. */
-  function linkParaFaturar(): string | undefined | null {
+  /** Link de cartão inválido? Só quando a forma escolhida é cartão e há texto. */
+  function linkInvalido(): boolean {
     const link = linkPagamento.trim()
-    if (!ehCartao || !link) return undefined
-    return link.startsWith('https://') ? link : null
+    return escolhidaEhCartao && !!link && !link.startsWith('https://')
+  }
+
+  /**
+   * Primeiro clique no Faturar: com outros pedidos prontos do cliente, abre o
+   * pop-up de unificação; sem, vai direto para a confirmação. Nos dois casos
+   * nada é gravado antes de "Confirmar e faturar".
+   */
+  function iniciarFatura() {
+    setErro('')
+    if (!formaEscolhida) {
+      setErro('Escolha a forma de pagamento antes de faturar.')
+      return
+    }
+    if (linkInvalido()) {
+      setErro('O link de pagamento precisa começar com https://')
+      return
+    }
+    if (outrosProntos.length > 0) setUnificando(true)
+    else setFaturaPendente([])
+  }
+
+  /** Depois do "Confirmar e faturar": só este pedido, ou unificado com os marcados. */
+  function confirmarFatura() {
+    const ids = faturaPendente ?? []
+    if (ids.length === 0) faturar()
+    else unificarEFaturar(ids)
   }
 
   function faturar() {
     setErro('')
-    const link = linkParaFaturar()
-    if (link === null) {
-      setErro('O link de pagamento precisa começar com https://')
-      return
-    }
     iniciar(async () => {
-      const r = await faturarPedido(pedidoId, link)
+      const r = await faturarPedido(pedidoId, opcoesFatura())
       if (!r.ok) {
         setErro(r.erro)
         return
       }
-      setConfirmandoFatura(false)
+      setFaturaPendente(null)
       setUnificando(false)
       setRecadoFatura(r.detalhe)
     })
   }
 
   /**
-   * Primeiro clique no Faturar: com outros pedidos prontos do cliente, abre o
-   * pop-up de unificação; sem, vai para a confirmação simples de sempre.
-   */
-  function iniciarFatura() {
-    setErro('')
-    if (outrosProntos.length > 0) setUnificando(true)
-    else setConfirmandoFatura(true)
-  }
-
-  /**
-   * Reúne este pedido com os marcados num agrupador e fatura o agrupador.
-   * Se o agrupamento der certo e o faturamento não, o agrupador existe e o
-   * botão Faturar dele mostra o erro — por isso a navegação acontece nos dois
-   * casos, e o erro vai junto na URL para aparecer lá.
+   * Reúne este pedido com os marcados num agrupador e fatura o agrupador,
+   * com a forma de pagamento escolhida aqui. Se o agrupamento der certo e o
+   * faturamento não, o agrupador existe e o botão Faturar dele mostra o erro
+   * — por isso a navegação acontece nos dois casos, e o erro vai junto na URL
+   * para aparecer lá.
    */
   function unificarEFaturar(ids: string[]) {
     setErro('')
-    const link = linkParaFaturar()
-    if (link === null) {
-      setErro('O link de pagamento precisa começar com https://')
-      return
-    }
     iniciar(async () => {
       const g = await agruparPedidos([pedidoId, ...ids])
       if (!g.ok) {
         setErro(g.erro)
         return
       }
-      const r = await faturarPedido(g.pedidoId, link)
+      const r = await faturarPedido(g.pedidoId, opcoesFatura())
       const destino = '/admin/pedidos/' + g.pedidoId
       router.push(r.ok ? destino : destino + '?erro=' + encodeURIComponent(r.erro))
     })
@@ -331,21 +419,12 @@ export default function PainelAcoes({
     })
   }
 
+  /**
+   * Confirmação (aguardando → recebido): só libera a produção. Forma de
+   * pagamento e parcelas não existem nesta hora — são definidas no Faturar.
+   */
   function confirmar() {
     setErro('')
-
-    if (ehParcelado && (qtdParcelas < 2 || qtdParcelas > maxParcelas)) {
-      setErro(`Quantidade de parcelas deve ser entre 2 e ${maxParcelas}`)
-      return
-    }
-    if (ehParcelado && qtdParcelas > tetoParcelasConfirmacao) {
-      setErro(
-        tetoParcelasConfirmacao < 2
-          ? `Com parcela mínima de R$ ${brl(valorMinimoBoleto)}, este pedido só pode ser à vista — troque a forma de pagamento.`
-          : `Com parcela mínima de R$ ${brl(valorMinimoBoleto)}, este pedido permite no máximo ${tetoParcelasConfirmacao}x.`
-      )
-      return
-    }
 
     if (bloqueioCredito && motivoLiberacao.trim().length < 10) {
       setErro('Descreva o motivo da liberação com pelo menos 10 caracteres.')
@@ -353,12 +432,9 @@ export default function PainelAcoes({
     }
 
     iniciar(async () => {
-      const parcelamento = ehParcelado
-        ? { quantidade: qtdParcelas, primeiroVencimento }
-        : undefined
       const r = bloqueioCredito
-        ? await confirmarPedidoBloqueado(pedidoId, motivoLiberacao.trim(), parcelamento)
-        : await confirmarPedido(pedidoId, parcelamento)
+        ? await confirmarPedidoBloqueado(pedidoId, motivoLiberacao.trim())
+        : await confirmarPedido(pedidoId)
       if (!r.ok) setErro(r.erro)
     })
   }
@@ -403,7 +479,7 @@ export default function PainelAcoes({
     return (
       <TelaFormaPagamento
         intervaloBoleto={intervaloBoleto}
-        formaAtual={formaPagamento}
+        formaAtual={formaPagamento ?? 'boleto_avista'}
         parcelasAtual={parcelasAtuais || parcelasSolicitadas}
         total={total}
         antesDoEstampando={antesDoEstampando}
@@ -657,65 +733,10 @@ export default function PainelAcoes({
             </div>
           )}
 
-          {ehParcelado && (
-            <div className="mt-4 border border-[#DDDCD5] bg-[#FAFAF7] rounded-sm p-4">
-              <h3 className="text-xs tracking-widest text-[#6E6E68] mb-3">
-                CLIENTE PEDIU BOLETO PARCELADO
-                {parcelasSolicitadas && ` · ${parcelasSolicitadas}x sugerido`}
-              </h3>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="qtd-parcelas"
-                    className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
-                  >
-                    QUANTIDADE (máx. {tetoParcelasConfirmacao})
-                  </label>
-                  <input
-                    id="qtd-parcelas"
-                    type="number"
-                    min={2}
-                    max={tetoParcelasConfirmacao}
-                    value={Math.min(qtdParcelas, Math.max(2, tetoParcelasConfirmacao))}
-                    onChange={(e) =>
-                      setQtdParcelas(
-                        Math.min(
-                          Math.max(2, tetoParcelasConfirmacao),
-                          Math.max(2, parseInt(e.target.value) || 2)
-                        )
-                      )
-                    }
-                    className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 font-mono text-sm outline-none focus:border-[#131A2E]"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="primeiro-venc"
-                    className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
-                  >
-                    1º VENCIMENTO
-                  </label>
-                  <input
-                    id="primeiro-venc"
-                    type="date"
-                    value={primeiroVencimento}
-                    onChange={(e) => setPrimeiroVencimento(e.target.value)}
-                    className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E]"
-                  />
-                </div>
-              </div>
-
-              {/* Na confirmação o valor ainda não existe (vem da metragem):
-                  mostrar "2x de R$ 0,00" só confunde */}
-              <p className="text-xs text-[#6E6E68] mt-2.5">
-                {qtdParcelas}x
-                {total > 0 ? ` de R$ ${brl(total / qtdParcelas)}` : ''} · vencimentos
-                a cada {intervaloBoleto} dias a partir da data escolhida. O valor de
-                cada parcela é definido ao fim da estampa.
-              </p>
-            </div>
-          )}
+          <p className="text-xs text-[#6E6E68] mt-4 leading-relaxed">
+            Forma de pagamento e parcelas são definidas no faturamento, com o
+            valor real do pedido.
+          </p>
 
           <button
             onClick={confirmar}
@@ -773,32 +794,198 @@ export default function PainelAcoes({
             Faturar pedido
           </h2>
           <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
-            Pedido de venda no Bling, cobrança (boleto/Pix) e nota fiscal
-            quando o pedido é com nota, com e-mails ao cliente.
+            Escolha a forma de pagamento; depois, pedido de venda no Bling,
+            cobrança e nota fiscal quando o pedido é com nota, com e-mails ao
+            cliente.
             {outrosProntos.length > 0
               ? ` Este cliente tem ${outrosProntos.length === 1 ? 'outro pedido pronto' : `outros ${outrosProntos.length} pedidos prontos`}: ao faturar, dá para reunir tudo numa cobrança só.`
               : ''}
           </p>
 
+          {/* ---- forma de pagamento: decisão de quem fatura ---- */}
+          <div className="mt-3">
+            <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1.5">
+              FORMA DE PAGAMENTO<span className="text-[#B00063] ml-1">*</span>
+              {formaPagamento && (
+                <span className="ml-2 normal-case tracking-normal text-[#9B9A93]">
+                  pré-selecionada do pedido · pode trocar
+                </span>
+              )}
+            </label>
+            <div className="grid gap-1.5">
+              {FORMAS_FATURA.map((f) => {
+                const cfg = configDaForma(configPagamento, f)
+                const permitida = formasPermitidas.length === 0 || formasPermitidas.includes(f)
+                const indisponivel = !cfg.ativa || !permitida
+                const marcada = formaEscolhida === f
+                return (
+                  <label
+                    key={f}
+                    className={`flex items-center gap-2 border rounded-sm px-3 py-2 text-sm bg-white ${
+                      marcada ? 'border-[#131A2E]' : 'border-[#DDDCD5]'
+                    } ${indisponivel && !marcada ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-[#131A2E]'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="forma-fatura"
+                      value={f}
+                      checked={marcada}
+                      disabled={pendente || (indisponivel && !marcada)}
+                      onChange={() => {
+                        setFormaEscolhida(f)
+                        setParcelasFatura(f === 'boleto_parcelado' ? Math.max(2, parcelasFatura) : 1)
+                        setErro('')
+                      }}
+                      className="accent-[#B00063]"
+                    />
+                    <span className="flex-1">{ROTULOS_PAGAMENTO[f]}</span>
+                    {!cfg.ativa ? (
+                      <span className="text-[10px] text-[#9B9A93]">desativada</span>
+                    ) : !permitida ? (
+                      <span className="text-[10px] text-[#B00063]">não permitida ao cliente</span>
+                    ) : (cfg.percentual > 0 || cfg.taxaFixa > 0) ? (
+                      <span className="text-[10px] font-mono text-[#6E6E68] whitespace-nowrap">
+                        {cfg.percentual > 0 && `+${cfg.percentual}%`}
+                        {cfg.percentual > 0 && cfg.taxaFixa > 0 && ' · '}
+                        {cfg.taxaFixa > 0 && `+R$ ${brl(cfg.taxaFixa)}${f.startsWith('boleto') ? '/boleto' : ''}`}
+                      </span>
+                    ) : null}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {(formaEscolhida === 'boleto_parcelado' || formaEscolhida === 'cartao_credito') && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="parcelas-fatura"
+                  className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+                >
+                  PARCELAS (máx. {tetoParcelas})
+                </label>
+                <select
+                  id="parcelas-fatura"
+                  value={parcelasEfetivas}
+                  disabled={pendente}
+                  onChange={(e) => {
+                    setParcelasFatura(parseInt(e.target.value) || 1)
+                    setErro('')
+                  }}
+                  className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 bg-white text-sm font-mono outline-none focus:border-[#131A2E]"
+                >
+                  {Array.from(
+                    { length: Math.max(1, tetoParcelas - (formaEscolhida === 'boleto_parcelado' ? 1 : 0)) },
+                    (_, i) => i + (formaEscolhida === 'boleto_parcelado' ? 2 : 1)
+                  ).map((n) => (
+                    <option key={n} value={n}>
+                      {n === 1 ? 'À vista' : `${n}x`}
+                    </option>
+                  ))}
+                </select>
+                {formaEscolhida === 'boleto_parcelado' &&
+                  tetoParcelas < Math.max(1, configPagamento.boleto.maxParcelas) && (
+                    <p className="text-[10px] text-[#6E6E68] mt-1">
+                      teto pela parcela mínima de R$ {brl(configPagamento.boleto.valorMinimoParcela)}
+                    </p>
+                  )}
+              </div>
+              {formaEscolhida === 'boleto_parcelado' && (
+                <div>
+                  <label
+                    htmlFor="primeiro-venc-fatura"
+                    className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
+                  >
+                    1º VENCIMENTO
+                  </label>
+                  <input
+                    id="primeiro-venc-fatura"
+                    type="date"
+                    value={primeiroVencimento}
+                    disabled={pendente}
+                    onChange={(e) => {
+                      setPrimeiroVencimento(e.target.value)
+                      setErro('')
+                    }}
+                    className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 bg-white text-sm outline-none focus:border-[#131A2E]"
+                  />
+                  <p className="text-[10px] text-[#6E6E68] mt-1">
+                    demais a cada {cfgEscolhida?.intervaloDias ?? intervaloBoleto} dias
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <dl className="mt-3 text-xs text-[#6E6E68] space-y-1">
             <div className="flex justify-between">
-              <dt>Forma de pagamento</dt>
-              <dd className="text-[#131A2E]">
-                {ROTULOS_PAGAMENTO[formaPagamento] ?? formaPagamento}
-                {ehParcelado && parcelasAtuais > 0 ? ` (${parcelasAtuais}x)` : ''}
-              </dd>
+              <dt>Mercadoria</dt>
+              <dd className="font-mono text-[#131A2E]">R$ {brl(total)}</dd>
             </div>
+            {formaEscolhida && avaliacao.taxa > 0 && (
+              <div className="flex justify-between">
+                <dt>Acréscimo da forma</dt>
+                <dd className="font-mono text-[#131A2E]">+ R$ {brl(avaliacao.taxa)}</dd>
+              </div>
+            )}
+            {formaEscolhida && (
+              <div className="flex justify-between">
+                <dt>Total cobrado{parcelasEfetivas > 1 ? ` · ${parcelasEfetivas}x` : ''}</dt>
+                <dd className="font-mono font-semibold text-[#131A2E]">
+                  R$ {brl(avaliacao.totalCobrado)}
+                  {parcelasEfetivas > 1 && avaliacao.parcelasPrevistas[0]
+                    ? ` (${parcelasEfetivas}x de R$ ${brl(avaliacao.parcelasPrevistas[0].valor)})`
+                    : ''}
+                </dd>
+              </div>
+            )}
             <div className="flex justify-between">
               <dt>Nota fiscal</dt>
               <dd className="text-[#131A2E]">{emitirNf ? 'emite' : 'sem nota'}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt>Total</dt>
-              <dd className="font-mono font-semibold text-[#131A2E]">R$ {brl(total)}</dd>
-            </div>
           </dl>
 
-          {ehCartao && (
+          {formaEscolhida &&
+            avaliacao.bloqueios.map((b) => (
+              <p
+                key={b}
+                className="mt-3 text-xs text-[#B00063] bg-white border border-[#B00063] rounded-sm px-3 py-2 leading-relaxed"
+              >
+                {b}
+              </p>
+            ))}
+
+          {/* Limite de crédito estourado no boleto: liberar com motivo ou trocar a forma */}
+          {avaliacao.credito && (
+            <div className="mt-3 bg-[#FFFBEE] border-l-4 border-[#C79600] rounded-r-sm p-3">
+              <p className="text-xs font-semibold text-[#6B5320]">Limite de crédito</p>
+              <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">{avaliacao.credito}</p>
+              <label
+                htmlFor="motivo-liberacao-fatura"
+                className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mt-2.5 mb-1"
+              >
+                LIBERAR COM MOTIVO (mín. 10 caracteres) — ou escolha outra forma acima
+              </label>
+              <textarea
+                id="motivo-liberacao-fatura"
+                value={motivoLiberacao}
+                onChange={(e) => {
+                  setMotivoLiberacao(e.target.value)
+                  setErro('')
+                }}
+                rows={2}
+                disabled={pendente}
+                placeholder="Ex.: cliente antigo, histórico de pagamento em dia; combinado por telefone"
+                className="w-full bg-white border border-[#DDDCD5] rounded-sm px-3 py-2 text-sm outline-none focus:border-[#131A2E]"
+              />
+              <p className="text-[11px] text-[#6E6E68] mt-1 leading-relaxed">
+                A liberação fica registrada em Alterações no pedido, com quem liberou.
+              </p>
+            </div>
+          )}
+
+          {escolhidaEhCartao && (
             <div className="mt-3">
               <label
                 htmlFor="link-pagamento"
@@ -826,32 +1013,16 @@ export default function PainelAcoes({
             </div>
           )}
 
-          {confirmandoFatura ? (
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              <button
-                onClick={() => setConfirmandoFatura(false)}
-                disabled={pendente}
-                className="border border-[#131A2E] bg-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
-              >
-                VOLTAR
-              </button>
-              <button
-                onClick={faturar}
-                disabled={pendente}
-                className="bg-[#B00063] text-white rounded-sm py-2.5 text-sm font-semibold tracking-wide disabled:opacity-50"
-              >
-                {pendente ? 'FATURANDO...' : 'CONFIRMAR'}
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={iniciarFatura}
-              disabled={pendente}
-              className="w-full mt-3 bg-[#B00063] text-white rounded-sm py-3 text-sm font-bold tracking-wider disabled:opacity-50"
-            >
-              FATURAR
-            </button>
-          )}
+          <button
+            onClick={iniciarFatura}
+            disabled={pendente}
+            className="w-full mt-3 bg-[#B00063] text-white rounded-sm py-3 text-sm font-bold tracking-wider disabled:opacity-50"
+          >
+            FATURAR
+          </button>
+          <p className="text-[11px] text-[#6E6E68] mt-1.5 text-center">
+            Abre um resumo para conferir antes de gravar qualquer coisa.
+          </p>
 
           {unificando && (
             <ModalUnificar
@@ -859,14 +1030,42 @@ export default function PainelAcoes({
               metrosAtual={metragemImpressa}
               totalAtual={total}
               outros={outrosProntos}
+              resumoPagamento={
+                (ROTULOS_PAGAMENTO[formaEscolhida] ?? formaEscolhida) +
+                (parcelasEfetivas > 1 ? ` · ${parcelasEfetivas}x` : '')
+              }
               pendente={pendente}
               erro={erro}
               onCancelar={() => {
                 setUnificando(false)
                 setErro('')
               }}
-              onFaturarSoEste={faturar}
-              onUnificar={unificarEFaturar}
+              onFaturarSoEste={() => {
+                setUnificando(false)
+                setFaturaPendente([])
+              }}
+              onUnificar={(ids) => {
+                setUnificando(false)
+                setFaturaPendente(ids)
+              }}
+            />
+          )}
+
+          {faturaPendente !== null && (
+            <ModalFaturar
+              cliente={cliente}
+              numeros={[numero, ...outrosEscolhidos.map((o) => o.numero)]}
+              metragem={metragemFatura}
+              emitirNf={emitirNf}
+              avaliacao={avaliacao}
+              motivoLiberacao={motivoLiberacao}
+              pendente={pendente}
+              erro={erro}
+              onVoltar={() => {
+                setFaturaPendente(null)
+                setErro('')
+              }}
+              onConfirmar={confirmarFatura}
             />
           )}
         </div>
@@ -1051,7 +1250,9 @@ export default function PainelAcoes({
                   onClick={() => setTela('preco')}
                 />
               )}
-              {podeCancelarOuAjustar && !valorFechado && (
+              {/* Só pedidos antigos têm forma antes do faturamento; nos novos
+                  ela é escolhida no Faturar */}
+              {podeCancelarOuAjustar && !valorFechado && formaPagamento && (
                 <BotaoAcao
                   titulo="Alterar forma de pagamento"
                   legenda={`hoje: ${ROTULOS_PAGAMENTO[formaPagamento] ?? formaPagamento}`}
