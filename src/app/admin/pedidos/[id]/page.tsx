@@ -52,7 +52,10 @@ const ROTULOS_PAGAMENTO: Record<string, string> = {
   cartao_debito: 'Cartão de débito',
 }
 
-function rotuloForma(forma: string, parcelas: number | null) {
+const A_DEFINIR = 'a definir no faturamento'
+
+function rotuloForma(forma: string | null, parcelas: number | null) {
+  if (!forma) return A_DEFINIR
   const label = ROTULOS_PAGAMENTO[forma] ?? forma
   return forma === 'boleto_parcelado' && parcelas ? `${label} (${parcelas}x)` : label
 }
@@ -115,7 +118,7 @@ export default async function PedidoAdminPage({
       emitir_nf, emitir_nf_motivo,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
       ${camposFinanceiros}
-      clientes(razao_social, cnpj, preco_metro, limite_credito),
+      clientes(razao_social, cnpj, preco_metro, limite_credito, formas_pagamento),
       pedido_itens(${camposItens}),
       pedido_status_historico(
         status, origem, created_at, observacao,
@@ -166,12 +169,22 @@ export default async function PedidoAdminPage({
     cnpj: string
     preco_metro: number
     limite_credito: number | null
+    formas_pagamento: string[] | null
   }
 
-  // Bloqueado por crédito: o painel mostra os números para quem decide
+  const histInicial = (p.pedido_status_historico ?? []) as { status: string; created_at: string }[]
+  const statusInicial =
+    histInicial
+      .slice()
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+      ?.status ?? 'aguardando'
+
+  // Crédito em uso do cliente: para o painel mostrar os números a quem
+  // decide — num pedido que nasceu bloqueado (antes de 07/10/2026) ou no
+  // Faturar, onde a forma de pagamento é escolhida e o limite conferido
   const bloqueadoCredito = p.bloqueado_credito === true
   const { data: creditoEmUso } =
-    bloqueadoCredito && dono
+    dono && (bloqueadoCredito || statusInicial === 'pronto')
       ? await supabase.rpc('credito_em_uso', { p_cliente_id: p.cliente_id })
       : { data: null }
 
@@ -343,6 +356,27 @@ export default async function PedidoAdminPage({
   const autorDe = (id: string | null | undefined) =>
     (id && nomes.get(id)) || null
 
+  // Crédito em uso sem este pedido: `credito_em_uso` já conta um pedido em
+  // "pronto" quando ele está em boleto (pedidos antigos). A RPC do faturamento
+  // faz a mesma subtração — mexeu numa, mexa na outra
+  const emUsoSemEste =
+    creditoEmUso === null || creditoEmUso === undefined
+      ? null
+      : Math.max(
+          0,
+          Number(creditoEmUso) -
+            (atual === 'pronto' && String(p.forma_pagamento ?? '').startsWith('boleto')
+              ? Number(p.total) +
+                taxaDoPedido(
+                  Number(p.total),
+                  Number(p.taxa_pagamento_percentual ?? 0),
+                  Number(p.taxa_pagamento_fixa ?? 0),
+                  p.forma_pagamento,
+                  parcelas.length || 1
+                )
+              : 0)
+        )
+
   const alteracoes = [
     ...ajustesQtd.map((a) => {
       const item = itemPorId.get(a.item_id)
@@ -361,8 +395,8 @@ export default async function PedidoAdminPage({
       tipo: 'Forma de pagamento',
       motivo: a.motivo as string,
       detalhe:
-        a.forma_anterior === a.forma_nova
-          ? `${a.parcelas_anterior}x → ${a.parcelas_nova}x`
+        a.forma_anterior && a.forma_anterior === a.forma_nova
+          ? `${a.parcelas_anterior ?? 1}x → ${a.parcelas_nova ?? 1}x`
           : `${rotuloForma(a.forma_anterior, a.parcelas_anterior)} → ${rotuloForma(
               a.forma_nova,
               a.parcelas_nova
@@ -657,14 +691,30 @@ export default async function PedidoAdminPage({
           total={dono ? Number(p.total) : 0}
           reimpressoes={reimpressoes}
           podeCancelarOuAjustar={dono}
-          formaPagamento={p.forma_pagamento}
+          formaPagamento={(p.forma_pagamento as string | null) ?? null}
           emitirNf={p.emitir_nf !== false}
           parcelasSolicitadas={p.parcelas_solicitadas}
           parcelasAtuais={parcelas.length}
+          primeiroVencimentoAtual={
+            parcelas[0]?.vencimento ? String(parcelas[0].vencimento).slice(0, 10) : null
+          }
           maxParcelas={maxParcelas}
           valorMinimoBoleto={valorMinimoBoleto}
           valorDocumentoBoleto={valorDocumentoBoleto}
           intervaloBoleto={configPagamento.boleto.intervaloDias}
+          configPagamento={configPagamento}
+          formasPermitidas={Array.isArray(cliente.formas_pagamento) ? cliente.formas_pagamento : []}
+          taxaCongelada={
+            p.forma_pagamento
+              ? {
+                  percentual: Number(p.taxa_pagamento_percentual ?? 0),
+                  fixa: Number(p.taxa_pagamento_fixa ?? 0),
+                }
+              : null
+          }
+          limiteCredito={dono ? Number(cliente.limite_credito ?? 0) : 0}
+          creditoEmUso={dono ? emUsoSemEste : null}
+          bloqueioLiberado={!!p.bloqueio_liberado_em}
           precoCliente={dono ? Number(cliente.preco_metro) : 0}
           metragemImpressa={
             p.metragem_impressa != null ? Number(p.metragem_impressa) : null
@@ -718,14 +768,23 @@ export default async function PedidoAdminPage({
             Forma de pagamento
           </h2>
           <span className="text-xs font-mono text-[#6E6E68]">
-            {ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento}
+            {p.forma_pagamento
+              ? (ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento)
+              : A_DEFINIR}
           </span>
         </div>
 
+        {!p.forma_pagamento && (
+          <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
+            Quem fatura escolhe a forma e as parcelas, com o valor real do
+            pedido em mãos.
+          </p>
+        )}
+
         {p.forma_pagamento === 'boleto_parcelado' && parcelas.length === 0 && (
           <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
-            Cliente sugeriu {p.parcelas_solicitadas}x — parcelas ainda não
-            geradas (defina ao confirmar o pedido).
+            {p.parcelas_solicitadas ? `${p.parcelas_solicitadas}x — ` : ''}parcelas
+            geradas no faturamento.
           </p>
         )}
 

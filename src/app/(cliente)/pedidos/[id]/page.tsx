@@ -15,6 +15,7 @@ const ROTULOS: Record<string, string> = {
   estampando: 'Estampando',
   corte_costura: 'Em corte / costura',
   pronto: 'Pedido pronto',
+  faturado: 'Faturado',
   nf_emitida: 'Nota fiscal emitida',
   expedido: 'Expedido',
   entregue: 'Entregue',
@@ -31,7 +32,7 @@ const ROTULOS_PAGAMENTO: Record<string, string> = {
 
 const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
 
 function dataHora(iso: string) {
@@ -126,6 +127,9 @@ export default async function DetalhePedidoPage({
 
   // Valor só é exibido ao cliente a partir de "Pedido pronto"
   const liberadoValor = ORDEM.indexOf(atual) >= ORDEM.indexOf('pronto')
+  // Forma de pagamento é decisão da equipe no faturamento: antes disso o
+  // cliente não vê nada sobre ela
+  const faturado = ORDEM.indexOf(atual) >= ORDEM.indexOf('faturado') && !!p.forma_pagamento
 
   // `total` é a mercadoria; a forma de pagamento pode acrescentar taxa
   const taxa = taxaDoPedido(
@@ -221,6 +225,8 @@ export default async function DetalhePedidoPage({
         </div>
       )}
 
+      {faturado && (
+      <>
       <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-7 mb-3 flex items-center gap-2">
         FORMA DE PAGAMENTO
         <span className="flex-1 h-px bg-[#DDDCD5]" />
@@ -231,22 +237,10 @@ export default async function DetalhePedidoPage({
           <span className="font-semibold tracking-tight text-sm">
             {ROTULOS_PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento}
           </span>
-          {p.forma_pagamento === 'boleto_parcelado' && (
-            <span className="text-xs font-mono text-[#6E6E68]">
-              {parcelas.length > 0
-                ? `${parcelas.length}x`
-                : p.parcelas_solicitadas
-                ? `${p.parcelas_solicitadas}x sugerido`
-                : ''}
-            </span>
+          {parcelas.length > 1 && (
+            <span className="text-xs font-mono text-[#6E6E68]">{parcelas.length}x</span>
           )}
         </div>
-
-        {p.forma_pagamento === 'boleto_parcelado' && parcelas.length === 0 && (
-          <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
-            As parcelas serão definidas quando a equipe confirmar o pedido.
-          </p>
-        )}
 
         {parcelas.length > 0 && (
           <div className="mt-3 pt-3 border-t border-[#DDDCD5] space-y-1.5">
@@ -282,12 +276,6 @@ export default async function DetalhePedidoPage({
               </div>
             ))}
           </div>
-        )}
-
-        {!liberadoValor && (
-          <p className="text-xs text-[#6E6E68] mt-3 pt-3 border-t border-[#DDDCD5] leading-relaxed">
-            O valor será informado assim que o pedido estiver pronto.
-          </p>
         )}
 
         {pagoEm && (
@@ -346,6 +334,8 @@ export default async function DetalhePedidoPage({
           </div>
         )}
       </div>
+      </>
+      )}
 
       <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-7 mb-3 flex items-center gap-2">
         ANDAMENTO
@@ -496,7 +486,8 @@ export default async function DetalhePedidoPage({
         ) : (
           <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
             O valor será informado após finalizar a estampa, com base na
-            metragem realmente impressa.
+            metragem realmente impressa. A forma de pagamento é combinada com
+            a equipe nesse momento.
           </p>
         )}
       </div>

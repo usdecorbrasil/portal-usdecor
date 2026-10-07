@@ -55,12 +55,22 @@ Repositório: `usdecorbrasil/portal-bello-tecido` (GitHub)
 - Carrinho: itens + quantidade + subtotal, total pela tabela de preços do cliente,
   campo de notas livre.
 - Confirmação grava no banco e cria **pedido de venda** no Bling (não orçamento).
-- Cliente escolhe forma de pagamento na confirmação: **à vista, boleto parcelado (até 3x,
-  admin/financeiro pode alterar o nº de parcelas na confirmação) ou cartão de crédito**
-  (gateway fora do Bling, a definir).
-- **Limite de crédito**: soma dos pedidos em aberto desde `aguardando` até "não pago".
-  Se o limite estiver tomado, **só o parcelado bica bloqueado** — à vista continua
-  disponível.
+- **O cliente não escolhe forma de pagamento** (decidido pelo dono em 07/10/2026). O
+  carrinho só tem artes, quantidades e notas; o pedido nasce com `forma_pagamento` e
+  `parcelas_solicitadas` nulos. Quem decide é **admin/financeiro, no botão Faturar**
+  (pedido individual ou agrupador), com o valor real em mãos: boleto à vista, boleto
+  parcelado (nº de parcelas e 1º vencimento), Pix, cartão de crédito ou débito. A RPC
+  `admin_definir_forma_pagamento_faturamento` valida forma ativa, permitida ao cliente,
+  teto e mínimo de parcelas pelo valor real e limite de crédito, grava e registra em
+  `pedido_forma_pagamento_historico` ("Definida no faturamento"). O Faturar abre um
+  resumo de confirmação antes de gravar qualquer coisa. Pedidos antigos, que já tinham
+  forma, chegam com ela pré-selecionada e podem trocar.
+- **Limite de crédito**: conferido **no Faturar**, quando a forma é escolhida (antes era
+  na criação). Boleto que passa do limite, ou parcelado sem crédito, é recusado pela
+  RPC (`hint = 'limite_credito'`); o pedido fica marcado `bloqueado_credito` para o
+  dashboard e a equipe recebe o aviso. Saídas: liberar com motivo no próprio bloco
+  Faturar (`admin_liberar_bloqueio_credito`, que deixou de exigir pedido já marcado) ou
+  escolher outra forma. Pix e cartão não passam por limite.
 - Ajuste de quantidade: permitido aumentar ou reduzir livremente até o lançamento do
   status "Impressão" (janela de ajuste fecha ali). Exige motivo obrigatório e fica
   registrado em auditoria. Só o **Dono** tem permissão de alterar quantidade
@@ -599,20 +609,21 @@ tabela genérica — `entidade` + `entidade_id` + `acao` + `campos` (JSON
 
 ## `criar_pedido` (carrinho) — o que ela valida e o que não valida
 
-Reescrita em `docs/sql/013` (13/09/2026), depois de o primeiro pedido real pelo carrinho
-expor três defeitos herdados:
+Reescrita em `supabase/migrations/20261007120000_forma_pagamento_no_faturamento.sql`
+(07/10/2026): só recebe `p_itens` e `p_notas`.
 
-- **Não checa valor.** A versão antiga recusava boleto abaixo do mínimo e parcela abaixo
-  do mínimo na criação, contra um `total` que só existe depois da estampa. O mínimo é
-  aplicado onde há valor: o modal de "Pedido pronto" avisa.
-- **Aceita `pix`** — estava fora da lista de formas desde antes de a forma existir — e
-  **parcelas no cartão de crédito**, que a configuração permite. Teto de parcelas vem de
-  `config_forma_pagamento(forma) ->> 'maxParcelas'`, com a chave antiga `max_parcelas`
-  de rede. Forma desativada em Configurações é recusada.
-- Limite de crédito (`cliente_pode_parcelar`) continua valendo só para boleto parcelado:
-  é contas a receber; cartão se resolve fora.
+- **Não recebe forma nem parcelas.** O pedido nasce com `forma_pagamento` nulo e
+  **nunca** com `bloqueado_credito = true`. Forma ativa, forma permitida ao cliente, teto
+  e mínimo de parcelas e limite de crédito passaram para
+  `admin_definir_forma_pagamento_faturamento`, chamada pelo Faturar — onde há valor real.
+- **Não checa valor.** O `total` só existe depois da estampa.
+- Continua validando: cliente ativo com preço, itens do próprio catálogo e ativos,
+  anti-duplicidade de 30 s. O gatilho de boleto atrasado segue valendo.
 - Roda com `search_path = ''`: tudo o que ela chama vem com `public.`. Foi esse contexto
   que expôs o gatilho `pedidos_congelar_taxa` sem qualificação (`docs/sql/012`).
+- Os gatilhos `pedidos_forma_permitida` e `trg_pedidos_congelar_taxa` só agem com forma
+  não nula e rodam em `insert or update of forma_pagamento`: a taxa congela no UPDATE do
+  Faturar.
 
 ## Formas de pagamento — configuráveis
 
@@ -631,9 +642,11 @@ e **taxa fixa** somados ao pedido.
   cobrança sai por fora e alguém marca como pago. Decidido assim para não travar a
   configuração esperando a definição do gateway.
 - **O carrinho não conhece o valor do pedido** — a cobrança é por metragem impressa, que
-  só existe depois da estampa. Então o carrinho só aplica: formas ativas, parcelas por
-  forma e o aviso do acréscimo. Valor mínimo por parcela e a taxa em si só podem ser
-  aplicados quando o valor existe.
+  só existe depois da estampa. Por isso (e por decisão do dono em 07/10/2026) o carrinho
+  não oferece forma nenhuma: forma, parcelas, mínimo e taxa são aplicados no Faturar,
+  quando o valor existe. O espelho em TypeScript do que a RPC valida está em
+  `src/lib/pagamento/faturar.ts` (`avaliarFatura`), usado pelo bloco Faturar e pelo
+  pop-up de confirmação.
 
 As chaves antigas `max_parcelas` e `valor_minimo_boleto` **não têm mais tela própria** —
 quem edita é a de Pagamento, que grava as duas como ponte, porque `parcelar_pedido` no

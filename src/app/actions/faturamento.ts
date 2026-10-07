@@ -11,16 +11,20 @@ import { salvarDocumento, baixarArquivo } from '@/lib/storage/documentos'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateNfEmitida } from '@/lib/resend/templates/nf-emitida'
 import { templateCobranca, type CobrancaEmail } from '@/lib/resend/templates/cobranca'
-import { taxaDoPedido } from '@/lib/pagamento/config'
+import { MAX_PARCELAS, taxaDoPedido } from '@/lib/pagamento/config'
 import { urlDoSite } from '@/lib/site'
+import { notificarEquipe } from '@/lib/notificacoes/enviar'
+import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito'
 
 /**
  * Faturamento a partir de "Pedido pronto".
  *
- * `faturarPedido` é o botão único: pedido de venda no Bling, cobrança
- * (boleto/Pix), NF-e quando o pedido é com nota, e-mails ao cliente e a
- * etapa "Faturado". `emitirNotaFiscal` e `gerarCobranca` continuam
- * disponíveis para repetir um passo que ficou pela metade.
+ * `faturarPedido` é o botão único: define a forma de pagamento (decisão de
+ * admin/financeiro desde 07/10/2026 — o cliente não escolhe mais no
+ * carrinho), pedido de venda no Bling, cobrança (boleto/Pix), NF-e quando o
+ * pedido é com nota, e-mails ao cliente e a etapa "Faturado".
+ * `emitirNotaFiscal` e `gerarCobranca` continuam disponíveis para repetir um
+ * passo que ficou pela metade.
  *
  * Nenhum passo muda o pedido no portal antes de o Bling confirmar — e todos
  * podem ser repetidos: NF que ficou "processando" é consultada de novo,
@@ -51,7 +55,9 @@ async function exigirAdmin() {
 type Pedido = {
   id: string
   numero: number
-  forma_pagamento: string
+  cliente_id: string
+  /** NULL até o faturamento definir. */
+  forma_pagamento: string | null
   total: number | string
   taxa_pagamento_percentual: number | string | null
   taxa_pagamento_fixa: number | string | null
@@ -80,7 +86,7 @@ async function carregar(pedidoId: string): Promise<Pedido | null> {
   const { data } = await admin
     .from('pedidos')
     .select(
-      'id, numero, forma_pagamento, total, taxa_pagamento_percentual, taxa_pagamento_fixa, ' +
+      'id, numero, cliente_id, forma_pagamento, total, taxa_pagamento_percentual, taxa_pagamento_fixa, ' +
         'emitir_nf, bling_pedido_id, bling_sync_status, bling_nf_id, nf_numero, cobranca_gerada_em, agrupado_em, link_pagamento, vencimento_avista, ' +
         'clientes(email, razao_social, bling_contato_id), ' +
         'pedido_parcelas(id, numero, valor, vencimento, link_boleto, link_pix)'
@@ -92,28 +98,73 @@ async function carregar(pedidoId: string): Promise<Pedido | null> {
 
 /* --------------------------------- faturar --------------------------------- */
 
+const FORMAS = ['boleto_avista', 'boleto_parcelado', 'pix', 'cartao_credito', 'cartao_debito'] as const
+
+export type OpcoesFatura = {
+  /** Forma escolhida no Faturar. Obrigatória quando o pedido ainda não tem forma. */
+  forma?: string
+  /** Boleto parcelado (obrigatório) ou cartão de crédito (opcional, 1 = à vista). */
+  parcelas?: number
+  /** Boleto parcelado: data do primeiro boleto (AAAA-MM-DD). */
+  primeiroVencimento?: string
+  /** Limite de crédito estourado: motivo da liberação pelo dono (mín. 10 caracteres). */
+  motivoLiberacao?: string
+  /** Cartão: link de pagamento gerado fora do portal (Bling ou maquininha). */
+  linkPagamento?: string
+}
+
+const schemaFatura = z.object({
+  pedidoId: z.string().uuid(),
+  forma: z.enum(FORMAS).optional(),
+  parcelas: z.number().int().min(1).max(MAX_PARCELAS).optional(),
+  primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida').optional(),
+  motivoLiberacao: z.string().trim().min(10, 'Descreva o motivo da liberação com pelo menos 10 caracteres').max(500).optional(),
+  linkPagamento: z.string().trim().url().startsWith('https://').max(500).optional(),
+})
+
 /**
  * Botão único. Cada passo é retomável: se algo parar no meio (SEFAZ lenta,
  * Bling sem link ainda), o retorno diz o que faltou e clicar de novo continua
  * de onde parou, sem duplicar pedido, cobrança ou nota.
+ *
+ * O passo zero é a forma de pagamento: a RPC
+ * `admin_definir_forma_pagamento_faturamento` valida forma ativa, permitida
+ * ao cliente, parcelas, parcela mínima pelo valor real e limite de crédito, e
+ * grava tudo (com as parcelas) antes de o Bling entrar. Se ela recusar, o
+ * Faturar para ali com a mensagem.
  */
 export async function faturarPedido(
   pedidoId: string,
-  /** Cartão: link de pagamento gerado fora do portal (Bling ou maquininha). */
-  linkPagamento?: string
+  opcoes: OpcoesFatura = {}
 ): Promise<Resultado> {
   if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
 
-  const parsed = z.object({
-    pedidoId: z.string().uuid(),
-    linkPagamento: z.string().trim().url().startsWith('https://').max(500).optional(),
-  }).safeParse({ pedidoId, linkPagamento: linkPagamento || undefined })
-  if (!parsed.success) return { ok: false, erro: 'Link de pagamento inválido — precisa começar com https://' }
+  const parsed = schemaFatura.safeParse({
+    pedidoId,
+    forma: opcoes.forma || undefined,
+    parcelas: opcoes.parcelas ?? undefined,
+    primeiroVencimento: opcoes.primeiroVencimento || undefined,
+    motivoLiberacao: opcoes.motivoLiberacao?.trim() || undefined,
+    linkPagamento: opcoes.linkPagamento?.trim() || undefined,
+  })
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]
+    const campo = issue.path[0]
+    return {
+      ok: false,
+      erro:
+        campo === 'linkPagamento'
+          ? 'Link de pagamento inválido — precisa começar com https://'
+          : campo === 'forma'
+          ? 'Escolha a forma de pagamento.'
+          : issue.message,
+    }
+  }
+  const d = parsed.data
 
-  let p = await carregar(parsed.data.pedidoId)
+  let p = await carregar(d.pedidoId)
   if (!p) return { ok: false, erro: 'Pedido não encontrado.' }
   if (p.agrupado_em) return { ok: false, erro: 'Pedido agrupado — fature pelo agrupador.' }
-
 
   const supabase = await createClient()
   const { data: statusAtual } = await supabase.rpc('status_atual', { p_pedido_id: p.id })
@@ -122,6 +173,47 @@ export async function faturarPedido(
   }
 
   const feito: string[] = []
+
+  // 0. Forma de pagamento — decisão de quem fatura, com o valor real em mãos.
+  //    Só em "pronto": depois de faturado a forma já foi ao Bling
+  if (statusAtual === 'pronto') {
+    const forma = d.forma ?? p.forma_pagamento
+    if (!forma) return { ok: false, erro: 'Escolha a forma de pagamento antes de faturar.' }
+
+    if (d.motivoLiberacao) {
+      const { error } = await supabase.rpc('admin_liberar_bloqueio_credito', {
+        p_pedido_id: p.id,
+        p_motivo: d.motivoLiberacao,
+      })
+      if (error) return { ok: false, erro: error.message }
+      feito.push('limite de crédito liberado')
+    }
+
+    const { error } = await supabase.rpc('admin_definir_forma_pagamento_faturamento', {
+      p_pedido_id: p.id,
+      p_forma: forma,
+      p_parcelas: d.parcelas ?? null,
+      p_primeiro_vencimento: d.primeiroVencimento ?? null,
+    })
+    if (error) {
+      // Limite estourado: fica marcado para o dashboard e a equipe é avisada.
+      // Quem fatura vê a mensagem na hora; o aviso é para quem decide o crédito
+      if (error.hint === 'limite_credito') {
+        await marcarBloqueioCredito(p, forma, d.parcelas ?? null)
+      }
+      return { ok: false, erro: error.message }
+    }
+
+    p = (await carregar(p.id)) ?? p
+    revalidatePath(`/admin/pedidos/${p.id}`)
+  }
+
+  // Daqui em diante a forma precisa existir (pedido antigo em "faturado"
+  // sem forma não deveria acontecer, mas o Bling e a cobrança dependem dela)
+  const forma = p.forma_pagamento
+  if (!forma) {
+    return { ok: false, erro: 'Este pedido está sem forma de pagamento. Defina-a antes de continuar.' }
+  }
 
   // 1. Pedido de venda no Bling (idempotente: adota o que já existe)
   if (!p.bling_pedido_id) {
@@ -134,7 +226,6 @@ export async function faturarPedido(
   }
 
   // 2. Cobrança — boleto/Pix pelo Bling; cartão é cobrado fora e só avisa
-  const forma = p.forma_pagamento
   if (forma.startsWith('boleto') || forma === 'pix') {
     if (!p.cobranca_gerada_em) {
       const c = await gerarCobrancaInterno(p)
@@ -151,7 +242,7 @@ export async function faturarPedido(
     if (!c.ok) return { ok: false, erro: `Pedido no Bling, mas a conta a receber falhou: ${c.erro}` }
     feito.push('conta a receber lançada')
 
-    const link = parsed.data.linkPagamento ?? p.link_pagamento
+    const link = d.linkPagamento ?? p.link_pagamento
     if (link) {
       const e = await enviarLinkPagamentoInterno(p, link)
       if (!e.ok) return { ok: false, erro: `Pedido no Bling, mas o link não foi enviado: ${e.erro}` }
@@ -181,11 +272,51 @@ export async function faturarPedido(
   revalidatePath(`/admin/pedidos/${p.id}`)
   revalidatePath('/admin/pedidos')
   revalidatePath('/admin')
+  revalidatePath('/pedidos')
 
   return {
     ok: true,
     detalhe:
       (feito.length ? `Faturado: ${feito.join(', ')}.` : 'Pedido já estava faturado.') + avisoNf,
+  }
+}
+
+/**
+ * A RPC recusou a forma por limite de crédito: o pedido fica marcado como
+ * bloqueado (aparece no dashboard em "precisa da sua decisão") e a equipe
+ * recebe o aviso. Nunca derruba o Faturar — a mensagem já voltou para a tela.
+ */
+async function marcarBloqueioCredito(p: Pedido, forma: string, parcelas: number | null) {
+  try {
+    const admin = createAdminClient()
+    await admin.from('pedidos').update({ bloqueado_credito: true }).eq('id', p.id)
+
+    const supabase = await createClient()
+    const [{ data: emUso }, { data: cliente }] = await Promise.all([
+      supabase.rpc('credito_em_uso', { p_cliente_id: p.cliente_id }),
+      admin.from('clientes').select('limite_credito').eq('id', p.cliente_id).maybeSingle(),
+    ])
+
+    const total = Number(p.total)
+    const rotulo =
+      (ROTULOS_PAGAMENTO[forma] ?? forma) + (parcelas && parcelas > 1 ? ` (${parcelas}x)` : '')
+
+    await notificarEquipe('pedido_bloqueado_credito', {
+      pedidoId: p.id,
+      assunto: `Pedido #${p.numero} bloqueado por limite de crédito — ${p.clientes?.razao_social ?? 'cliente'}`,
+      html: templateBloqueioCredito({
+        numero: Number(p.numero),
+        cliente: p.clientes?.razao_social ?? '—',
+        forma: rotulo,
+        valorPedido: total,
+        emUso: Number(emUso ?? 0),
+        limite: Number(cliente?.limite_credito ?? 0),
+        urlPedido: `${urlDoSite()}/admin/pedidos/${p.id}`,
+      }),
+    })
+    revalidatePath('/admin/dashboard')
+  } catch (e) {
+    console.error('[pedido_bloqueado_credito]', e)
   }
 }
 
@@ -206,7 +337,7 @@ export async function enviarLinkPagamento(pedidoId: string, linkPagamento: strin
 
   const p = await carregar(parsed.data.pedidoId)
   if (!p) return { ok: false, erro: 'Pedido não encontrado.' }
-  if (!p.forma_pagamento.startsWith('cartao')) {
+  if (!p.forma_pagamento?.startsWith('cartao')) {
     return { ok: false, erro: 'Link de pagamento é só para pedidos em cartão.' }
   }
 
@@ -217,7 +348,7 @@ export async function enviarLinkPagamento(pedidoId: string, linkPagamento: strin
 
 async function enviarLinkPagamentoInterno(p: Pedido, link: string): Promise<Resultado> {
   const admin = createAdminClient()
-  const forma = p.forma_pagamento
+  const forma = p.forma_pagamento ?? ''
 
   await admin.from('pedidos').update({ link_pagamento: link }).eq('id', p.id)
 
@@ -283,7 +414,7 @@ async function lancarContasCartao(p: Pedido): Promise<Resultado> {
   const contatoId = Number(p.clientes?.bling_contato_id ?? 0)
   if (!contatoId) return { ok: false, erro: 'Cliente sem vínculo com o Bling.' }
 
-  const forma = p.forma_pagamento
+  const forma = p.forma_pagamento ?? ''
   const total = Number(p.total)
   const parcelas = (p.pedido_parcelas ?? []).slice().sort((a, b) => a.numero - b.numero)
   const taxa = taxaDoPedido(
@@ -460,6 +591,7 @@ async function gerarCobrancaInterno(p: Pedido): Promise<Resultado> {
   if (!p.bling_pedido_id) return { ok: false, erro: 'O pedido ainda não foi enviado ao Bling. Use "Tentar de novo" primeiro.' }
 
   const forma = p.forma_pagamento
+  if (!forma) return { ok: false, erro: 'Pedido sem forma de pagamento. Defina-a no Faturar.' }
   if (!forma.startsWith('boleto') && forma !== 'pix') {
     // Cartão: só a conta a receber; o link vai pelo bloco "Pedido faturado"
     const c = await lancarContasCartao(p)

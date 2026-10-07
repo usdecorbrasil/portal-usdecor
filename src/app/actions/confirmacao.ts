@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/server'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templatePedidoConfirmado } from '@/lib/resend/templates/pedido-confirmado'
 import { urlDoSite } from '@/lib/site'
-import { MAX_PARCELAS } from '@/lib/pagamento/config'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { cancelarPedidoNoBling } from '@/lib/bling/pedido'
 import { templateInterno } from '@/lib/resend/templates/interno'
@@ -19,34 +18,16 @@ function revalidar() {
   revalidatePath('/pedidos')
 }
 
-/** Equipe confirma o pedido e libera a produção */
-export async function confirmarPedido(
-  pedidoId: string,
-  parcelamento?: { quantidade: number; primeiroVencimento: string }
-): Promise<Resultado> {
+/**
+ * Equipe confirma o pedido e libera a produção. Só isso: forma de pagamento
+ * e parcelas não existem nesta hora — são definidas no Faturar, com o valor
+ * real do pedido.
+ */
+export async function confirmarPedido(pedidoId: string): Promise<Resultado> {
   const parsedId = z.string().uuid().safeParse(pedidoId)
   if (!parsedId.success) return { ok: false, erro: 'Pedido inválido.' }
 
   const supabase = await createClient()
-
-  if (parcelamento) {
-    const parsedParc = z.object({
-      quantidade: z.number().int().min(2).max(MAX_PARCELAS),
-      primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida'),
-    }).safeParse(parcelamento)
-
-    if (!parsedParc.success) {
-      return { ok: false, erro: parsedParc.error.issues[0].message }
-    }
-
-    const { error: erroParc } = await supabase.rpc('parcelar_pedido', {
-      p_pedido_id: parsedId.data,
-      p_quantidade_parcelas: parsedParc.data.quantidade,
-      p_primeiro_vencimento: parsedParc.data.primeiroVencimento,
-    })
-
-    if (erroParc) return { ok: false, erro: erroParc.message }
-  }
 
   const { error } = await supabase.rpc('confirmar_pedido', {
     p_pedido_id: parsedId.data,
@@ -97,14 +78,14 @@ export async function confirmarPedido(
 }
 
 /**
- * Pedido bloqueado por limite de crédito: libera com motivo (só
- * admin/financeiro, regra no banco) e confirma pelo caminho normal. Sem a
- * liberação o gatilho recusa a etapa "recebido".
+ * Pedido bloqueado por limite de crédito (pedidos anteriores a 07/10/2026,
+ * que nasciam marcados): libera com motivo (só admin/financeiro, regra no
+ * banco) e confirma pelo caminho normal. Sem a liberação o gatilho recusa a
+ * etapa "recebido".
  */
 export async function confirmarPedidoBloqueado(
   pedidoId: string,
-  motivo: string,
-  parcelamento?: { quantidade: number; primeiroVencimento: string }
+  motivo: string
 ): Promise<Resultado> {
   const parsed = z.object({
     pedidoId: z.string().uuid(),
@@ -119,7 +100,7 @@ export async function confirmarPedidoBloqueado(
   })
   if (error) return { ok: false, erro: error.message }
 
-  return confirmarPedido(parsed.data.pedidoId, parcelamento)
+  return confirmarPedido(parsed.data.pedidoId)
 }
 
 /** Cliente cancela — só enquanto aguarda confirmação */

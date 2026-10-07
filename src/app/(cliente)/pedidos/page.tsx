@@ -14,6 +14,7 @@ const ETAPAS: Record<string, { label: string; cor: string }> = {
   estampando:    { label: 'Estampando',        cor: 'bg-[#FBF0D9] text-[#C79600]' },
   corte_costura: { label: 'Em corte / costura',cor: 'bg-[#FBF0D9] text-[#C79600]' },
   pronto:        { label: 'Pedido pronto',     cor: 'bg-[#FBF0D9] text-[#C79600]' },
+  faturado:      { label: 'Faturado',          cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
   nf_emitida:    { label: 'Nota fiscal emitida', cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
   expedido:      { label: 'Expedido',          cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
   entregue:      { label: 'Entregue',          cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
@@ -22,7 +23,7 @@ const ETAPAS: Record<string, { label: string; cor: string }> = {
 
 const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
 
 export default async function PedidosPage() {
@@ -142,7 +143,8 @@ export default async function PedidosPage() {
                             Number(p.total),
                             Number(p.taxa_pagamento_percentual ?? 0),
                             Number(p.taxa_pagamento_fixa ?? 0),
-                            p.forma_pagamento,
+                            // Sem forma (antes do faturamento) a taxa é zero
+                            p.forma_pagamento ?? '',
                             (p.pedido_parcelas ?? []).length ||
                               Number(p.parcelas_solicitadas ?? 1)
                           )
