@@ -431,6 +431,39 @@ em aberto (vencidos primeiro), **a emitir** (pedidos em boleto sem parcela nem c
 gerada, `carregarPrevistos`, espelho da 2ª metade de `credito_em_uso`) e pagos — para o
 "em boletos hoje" fechar com o que está listado.
 
+## Despesas por nota e estoque de suprimentos (08/10/2026)
+
+Pedido do dono: fotografar ou anexar a nota de compra, a IA lê e pré-preenche, a equipe
+confere e salva; controle de gastos por categoria e estoque de suprimentos (tinta, papel)
+com consumo manual ou automático por metro estampado. Migration `20261008150000`.
+
+- **Onde**: Estoque ganhou divisões — Tecido dos clientes (o que existia), **Suprimentos**
+  (`/admin/estoque/suprimentos`, equipe inteira; custo só para quem vê valores) e
+  **Despesas e notas** (`/admin/estoque/despesas`, só admin/financeiro).
+- **Leitura por IA** em `src/lib/despesas/ler-documento.ts`: Claude (`claude-opus-5-5`,
+  `messages.parse` com saída estruturada por zod) recebe a imagem/PDF e devolve
+  cabeçalho, itens e confiança por campo. Exige `ANTHROPIC_API_KEY`; sem ela a tela só
+  aceita à mão. **A IA nunca grava**: `lerDespesa` guarda o arquivo no bucket
+  `despesas` e devolve um rascunho; a tela de conferência (`despesas/nova/captura.tsx`)
+  é a mesma com ou sem IA, campo com confiança < 0,7 fica amarelo, e `salvarDespesa`
+  grava documento + itens.
+- **Compressão no aparelho**: a foto é reduzida no navegador (lado maior 1600 px,
+  JPEG 82%, `createImageBitmap` com orientação do EXIF) antes de subir. O original não
+  sobe. `next.config.ts` tem `serverActions.bodySizeLimit: 12mb` por isso.
+- **Tabelas**: `categorias_despesa` (semeadas: Tinta, Papel sublimático…), `despesas`
+  (chave de acesso única entre as não excluídas; exclusão lógica com motivo pela RPC
+  `admin_excluir_despesa`), `despesa_itens` (categoria + `suprimento_id` opcional),
+  `suprimentos` (unidade, mínimo, `consumo_por_metro`), `suprimento_movimentos`
+  (entrada | consumo | ajuste) e a view `suprimento_saldos`.
+- **Item de nota com suprimento vira entrada no estoque** (gatilho
+  `despesa_item_entrada_suprimento`, com o custo). Excluir a nota lança o ajuste inverso.
+- **Consumo automático**: `pedidos_sincronizar_consumo_suprimentos`, espelho do consumo
+  de tecido — para cada suprimento com `consumo_por_metro`, mantém o consumo do pedido
+  igual a `metragem_impressa × fator`; roda no mesmo UPDATE do romaneio e do ajuste de
+  metragem. Suprimento sem fator é só manual (`registrar_movimento_suprimento`, equipe).
+- Não existe XML/SEFAZ nem QR code de NFC-e ainda (está na especificação do dono como
+  caminho preferencial); hoje é só imagem/PDF + IA ou digitação.
+
 ## Ajuste de metragem (13/09/2026, `docs/sql/016`)
 
 Em **Estampando** e **Corte/costura** o botão "Ajustar quantidades" dá lugar a
