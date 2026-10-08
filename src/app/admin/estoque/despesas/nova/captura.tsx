@@ -3,7 +3,9 @@
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespesa } from '@/app/actions/despesas'
+import { criarSuprimento } from '@/app/actions/suprimentos'
 import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
+import { UNIDADES, type Unidade } from '@/lib/suprimentos/unidades'
 
 /**
  * Captura + conferência. Duas etapas:
@@ -17,6 +19,28 @@ import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
 
 type Categoria = { id: string; nome: string }
 type Suprimento = { id: string; nome: string; unidade: string }
+
+/** Cadastro rápido de suprimento a partir de um item da nota. */
+type NovoSuprimento = { nome: string; unidade: Unidade; categoriaId: string; consumoPorMetro: string }
+
+const NOVO = '__novo__'
+
+/** Traduz a unidade escrita na nota (LT, RL, MTS…) para uma das unidades do estoque. */
+function unidadeDoEstoque(u: string): Unidade {
+  const x = u.trim().toLowerCase().replace(/\./g, '')
+  if (['l', 'lt', 'lts', 'litro', 'litros'].includes(x)) return 'L'
+  if (['ml'].includes(x)) return 'mL'
+  if (['kg', 'kgs', 'quilo'].includes(x)) return 'kg'
+  if (['g', 'gr', 'grama', 'gramas'].includes(x)) return 'g'
+  if (['m', 'mt', 'mts', 'metro', 'metros'].includes(x)) return 'm'
+  if (['rl', 'rolo', 'rolos'].includes(x)) return 'rolo'
+  if (['cx', 'caixa', 'caixas'].includes(x)) return 'cx'
+  if (['pct', 'pc', 'pacote', 'pacotes'].includes(x)) return 'pct'
+  return 'un'
+}
+
+/** Categorias que costumam ser estoque — item delas sem suprimento ganha o aviso. */
+const ehDeEstoque = (categoria: string | undefined) => !!categoria && /tinta|papel|embalag|suprimento|insumo/i.test(categoria)
 
 type ItemForm = {
   descricao: string
@@ -97,8 +121,13 @@ async function comprimir(arquivo: File): Promise<File> {
   }
 }
 
-export default function Captura({ categorias, suprimentos }: { categorias: Categoria[]; suprimentos: Suprimento[] }) {
+export default function Captura({ categorias, suprimentos: suprimentosIniciais }: { categorias: Categoria[]; suprimentos: Suprimento[] }) {
   const router = useRouter()
+  const [suprimentos, setSuprimentos] = useState<Suprimento[]>(suprimentosIniciais)
+  /** Itens com o cadastro rápido aberto, pelo índice. */
+  const [novos, setNovos] = useState<Record<number, NovoSuprimento>>({})
+  const [erroNovo, setErroNovo] = useState<Record<number, string>>({})
+  const [criando, setCriando] = useState<number | null>(null)
   const [etapa, setEtapa] = useState<'captura' | 'conferencia'>('captura')
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -124,6 +153,8 @@ export default function Captura({ categorias, suprimentos }: { categorias: Categ
 
   function aplicarRascunho(rascunhoNovo: Rascunho) {
     setRascunho(rascunhoNovo)
+    setNovos({})
+    setErroNovo({})
     const d = rascunhoNovo.documento
     if (d) {
       const porNome = (nome: string | null, lista: { id: string; nome: string }[]) =>
@@ -201,6 +232,57 @@ export default function Captura({ categorias, suprimentos }: { categorias: Categ
   const totalCalculado = somaItens - num(form.desconto) + num(form.frete) + num(form.impostos)
   const totalInformado = num(form.total)
   const diferenca = Math.round((totalInformado - totalCalculado) * 100) / 100
+
+  const nomeCategoria = (id: string) => categorias.find((c) => c.id === id)?.nome
+
+  function removerItem(idx: number) {
+    setForm((f) => ({ ...f, itens: f.itens.filter((_, j) => j !== idx) }))
+    // Os cadastros abertos são por índice: os de baixo sobem uma posição
+    const reindexa = <T,>(m: Record<number, T>) =>
+      Object.fromEntries(Object.entries(m).filter(([k]) => Number(k) !== idx).map(([k, v]) => [Number(k) > idx ? Number(k) - 1 : Number(k), v])) as Record<number, T>
+    setNovos(reindexa)
+    setErroNovo(reindexa)
+  }
+
+  function abrirNovo(idx: number) {
+    const i = form.itens[idx]
+    setNovos((n) => ({
+      ...n,
+      [idx]: { nome: i.descricao.slice(0, 120), unidade: unidadeDoEstoque(i.unidade), categoriaId: i.categoriaId, consumoPorMetro: '' },
+    }))
+    setErroNovo((e) => ({ ...e, [idx]: '' }))
+  }
+
+  function fecharNovo(idx: number) {
+    setNovos((n) => {
+      const r = { ...n }
+      delete r[idx]
+      return r
+    })
+  }
+
+  async function cadastrarNovo(idx: number) {
+    const n = novos[idx]
+    if (!n) return
+    setCriando(idx)
+    setErroNovo((e) => ({ ...e, [idx]: '' }))
+    const r = await criarSuprimento({
+      nome: n.nome,
+      unidade: n.unidade,
+      categoriaId: n.categoriaId || null,
+      minimo: 0,
+      consumoPorMetro: n.consumoPorMetro ? num(n.consumoPorMetro) : null,
+    })
+    setCriando(null)
+    if (!r.ok) {
+      setErroNovo((e) => ({ ...e, [idx]: r.erro }))
+      return
+    }
+    const novo = { id: r.id, nome: n.nome.trim(), unidade: n.unidade }
+    setSuprimentos((l) => [...l, novo].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
+    setItem(idx, { suprimentoId: r.id })
+    fecharNovo(idx)
+  }
 
   function setItem(idx: number, patch: Partial<ItemForm>) {
     setForm((f) => {
@@ -396,14 +478,71 @@ export default function Captura({ categorias, suprimentos }: { categorias: Categ
                   </select>
                 </label>
                 <label className={rotulo + ' col-span-3 sm:col-span-6'}>ENTRA NO ESTOQUE COMO
-                  <select value={i.suprimentoId} onChange={(e) => setItem(idx, { suprimentoId: e.target.value })} className={campo + ' ' + normal}>
+                  <select
+                    value={novos[idx] ? NOVO : i.suprimentoId}
+                    onChange={(e) => {
+                      if (e.target.value === NOVO) return abrirNovo(idx)
+                      fecharNovo(idx)
+                      setItem(idx, { suprimentoId: e.target.value })
+                    }}
+                    className={campo + ' ' + (!i.suprimentoId && !novos[idx] && ehDeEstoque(nomeCategoria(i.categoriaId)) ? duvida : normal)}
+                  >
                     <option value="">— só despesa —</option>
                     {suprimentos.map((s) => <option key={s.id} value={s.id}>{s.nome} ({s.unidade})</option>)}
+                    <option value={NOVO}>+ cadastrar novo suprimento…</option>
                   </select>
                 </label>
                 <div className="col-span-6 sm:col-span-1 flex items-end justify-end">
-                  <button onClick={() => setForm({ ...form, itens: form.itens.filter((_, j) => j !== idx) })} className="text-xs text-[#B00063] hover:underline" title="remover item">remover</button>
+                  <button onClick={() => removerItem(idx)} className="text-xs text-[#B00063] hover:underline" title="remover item">remover</button>
                 </div>
+                {!i.suprimentoId && !novos[idx] && ehDeEstoque(nomeCategoria(i.categoriaId)) && (
+                  <p className="col-span-6 sm:col-span-12 text-xs text-[#8A6100]">
+                    Este item não está ligado a nenhum suprimento. Escolha um da lista para vincular, ou{' '}
+                    <button onClick={() => abrirNovo(idx)} className="underline font-semibold">cadastre um novo</button>.
+                  </p>
+                )}
+                {i.suprimentoId && !novos[idx] && (() => {
+                  const s = suprimentos.find((x) => x.id === i.suprimentoId)
+                  return s && unidadeDoEstoque(i.unidade) !== s.unidade ? (
+                    <p className="col-span-6 sm:col-span-12 text-xs text-[#8A6100]">
+                      A nota está em {i.unidade || '—'} e o suprimento em {s.unidade}: a quantidade entra no estoque em {s.unidade}. Se for preciso, converta a QTD antes de salvar (ex.: rolos em metros).
+                    </p>
+                  ) : null
+                })()}
+                {novos[idx] && (
+                  <div className="col-span-6 sm:col-span-12 border border-dashed border-[#131A2E] rounded-sm p-2 mt-1 bg-[#FAFAF7]">
+                    <p className="text-[10px] font-mono tracking-wider text-[#131A2E] mb-1.5">NOVO SUPRIMENTO</p>
+                    <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                      <label className={rotulo + ' col-span-6 sm:col-span-5'}>NOME
+                        <input value={novos[idx].nome} onChange={(e) => setNovos({ ...novos, [idx]: { ...novos[idx], nome: e.target.value } })} className={campo + ' ' + normal} />
+                      </label>
+                      <label className={rotulo + ' col-span-2 sm:col-span-2'}>UNIDADE
+                        <select value={novos[idx].unidade} onChange={(e) => setNovos({ ...novos, [idx]: { ...novos[idx], unidade: e.target.value as Unidade } })} className={campo + ' ' + normal}>
+                          {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </label>
+                      <label className={rotulo + ' col-span-4 sm:col-span-3'}>CATEGORIA
+                        <select value={novos[idx].categoriaId} onChange={(e) => setNovos({ ...novos, [idx]: { ...novos[idx], categoriaId: e.target.value } })} className={campo + ' ' + normal}>
+                          <option value="">—</option>
+                          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                        </select>
+                      </label>
+                      <label className={rotulo + ' col-span-6 sm:col-span-2'}>CONSUMO/METRO
+                        <input value={novos[idx].consumoPorMetro} onChange={(e) => setNovos({ ...novos, [idx]: { ...novos[idx], consumoPorMetro: e.target.value } })} inputMode="decimal" placeholder="opcional" className={campo + ' ' + normal} />
+                      </label>
+                    </div>
+                    <p className="text-xs text-[#6E6E68] mt-1.5">
+                      Papel em metros (m) e tinta em litros (L ou mL) entram na média de custos. Consumo por metro é quanto se gasta por metro estampado, na unidade do suprimento.
+                    </p>
+                    {erroNovo[idx] && <p className="text-xs text-[#B00063] mt-1">{erroNovo[idx]}</p>}
+                    <div className="flex gap-3 mt-2">
+                      <button onClick={() => cadastrarNovo(idx)} disabled={criando === idx || novos[idx].nome.trim().length < 2} className={botao + ' bg-[#131A2E] text-white'}>
+                        {criando === idx ? 'CADASTRANDO…' : 'CADASTRAR E VINCULAR'}
+                      </button>
+                      <button onClick={() => fecharNovo(idx)} className="text-xs text-[#6E6E68] hover:underline">cancelar</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}

@@ -468,6 +468,12 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   `admin_excluir_despesa`), `despesa_itens` (categoria + `suprimento_id` opcional),
   `suprimentos` (unidade, mínimo, `consumo_por_metro`), `suprimento_movimentos`
   (entrada | consumo | ajuste) e a view `suprimento_saldos`.
+- **Item sem suprimento na conferência** (08/10/2026): o seletor "Entra no estoque como"
+  vincula a um suprimento existente ou abre "+ cadastrar novo suprimento…", um cadastro
+  rápido no próprio item (nome da descrição, unidade da nota traduzida — LT→L, RL→rolo,
+  MTS→m —, categoria, consumo por metro) que chama `criarSuprimento` e já vincula. Item de
+  categoria de estoque (tinta, papel, embalagem) sem vínculo fica amarelo com o aviso, e
+  unidade da nota diferente da do suprimento avisa que a QTD entra na unidade do estoque.
 - **Item de nota com suprimento vira entrada no estoque** (gatilho
   `despesa_item_entrada_suprimento`, com o custo). Excluir a nota lança o ajuste inverso.
 - **Custos pelas compras** (08/10/2026): Financeiro → Custos mostra a média
