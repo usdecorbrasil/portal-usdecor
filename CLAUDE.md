@@ -474,6 +474,13 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   MTS→m —, categoria, consumo por metro) que chama `criarSuprimento` e já vincula. Item de
   categoria de estoque (tinta, papel, embalagem) sem vínculo fica amarelo com o aviso, e
   unidade da nota diferente da do suprimento avisa que a QTD entra na unidade do estoque.
+- **Sugestão de vínculo** (`src/lib/suprimentos/sugerir-vinculo.ts`, puro): para item sem
+  suprimento, procura primeiro no histórico de notas salvas (mesmo código do mesmo
+  fornecedor, ou mesma descrição — aprende a cada nota) e depois pelo nome do suprimento
+  dentro da descrição, com sinônimos de nota (SUBLIM, LT, MTS, GR…) e números pesando em
+  dobro (1 L × 5 L). Certeza alta vincula sozinho com o aviso verde "vinculado sozinho…
+  confira"; média mostra "Parece ser X · vincular · não é este". Empate entre dois
+  candidatos não sugere. O cadastro rápido avisa "já existe parecido" antes de duplicar.
 - **Item de nota com suprimento vira entrada no estoque** (gatilho
   `despesa_item_entrada_suprimento`, com o custo). Excluir a nota lança o ajuste inverso.
 - **Custos pelas compras** (08/10/2026): Financeiro → Custos mostra a média

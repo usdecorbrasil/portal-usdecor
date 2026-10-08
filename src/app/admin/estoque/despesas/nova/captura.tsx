@@ -6,6 +6,7 @@ import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespe
 import { criarSuprimento } from '@/app/actions/suprimentos'
 import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
 import { UNIDADES, type Unidade } from '@/lib/suprimentos/unidades'
+import { sugerirVinculo, parecidos, type VinculoAnterior } from '@/lib/suprimentos/sugerir-vinculo'
 
 /**
  * Captura + conferência. Duas etapas:
@@ -52,6 +53,10 @@ type ItemForm = {
   categoriaId: string
   suprimentoId: string
   confianca: number | null
+  /** Por que o vínculo foi feito sozinho (leitura ou histórico); vazio quando foi à mão. */
+  origemVinculo: string
+  /** Quem confere disse "não é este" para a sugestão. */
+  semSugestao: boolean
 }
 
 type Form = {
@@ -90,7 +95,7 @@ const num = (s: string) => {
 const txt = (v: number | null | undefined) => (v == null ? '' : String(v).replace('.', ','))
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const itemVazio = (): ItemForm => ({ descricao: '', codigo: '', quantidade: '1', unidade: 'un', valorUnitario: '', valorTotal: '', categoriaId: '', suprimentoId: '', confianca: null })
+const itemVazio = (): ItemForm => ({ descricao: '', codigo: '', quantidade: '1', unidade: 'un', valorUnitario: '', valorTotal: '', categoriaId: '', suprimentoId: '', confianca: null, origemVinculo: '', semSugestao: false })
 
 function formVazio(): Form {
   return {
@@ -121,7 +126,15 @@ async function comprimir(arquivo: File): Promise<File> {
   }
 }
 
-export default function Captura({ categorias, suprimentos: suprimentosIniciais }: { categorias: Categoria[]; suprimentos: Suprimento[] }) {
+export default function Captura({
+  categorias,
+  suprimentos: suprimentosIniciais,
+  historico,
+}: {
+  categorias: Categoria[]
+  suprimentos: Suprimento[]
+  historico: VinculoAnterior[]
+}) {
   const router = useRouter()
   const [suprimentos, setSuprimentos] = useState<Suprimento[]>(suprimentosIniciais)
   /** Itens com o cadastro rápido aberto, pelo índice. */
@@ -175,7 +188,7 @@ export default function Captura({ categorias, suprimentos: suprimentosIniciais }
         total: txt(d.total),
         observacoes: d.observacoes ?? '',
         itens: d.itens.length
-          ? d.itens.map((i) => ({
+          ? d.itens.map((i): ItemForm => ({
               descricao: i.descricao,
               codigo: i.codigo ?? '',
               quantidade: txt(i.quantidade) || '1',
@@ -185,7 +198,14 @@ export default function Captura({ categorias, suprimentos: suprimentosIniciais }
               categoriaId: porNome(i.categoria, categorias),
               suprimentoId: porNome(i.suprimento, suprimentos),
               confianca: i.confianca,
-            }))
+              origemVinculo: porNome(i.suprimento, suprimentos) ? 'reconhecido na leitura da nota' : '',
+              semSugestao: false,
+            })).map((it) => {
+              if (it.suprimentoId) return it
+              // Sem vínculo da leitura: certeza alta (histórico ou nome inteiro) já vincula
+              const sug = sugerirVinculo(it, d.fornecedor_doc ?? '', suprimentos, historico)
+              return sug?.certeza === 'alta' ? { ...it, suprimentoId: sug.suprimentoId, origemVinculo: sug.motivo } : it
+            })
           : [itemVazio()],
       })
       setConfianca(d.confianca)
@@ -280,7 +300,7 @@ export default function Captura({ categorias, suprimentos: suprimentosIniciais }
     }
     const novo = { id: r.id, nome: n.nome.trim(), unidade: n.unidade }
     setSuprimentos((l) => [...l, novo].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
-    setItem(idx, { suprimentoId: r.id })
+    setItem(idx, { suprimentoId: r.id, origemVinculo: '' })
     fecharNovo(idx)
   }
 
@@ -343,6 +363,11 @@ export default function Captura({ categorias, suprimentos: suprimentosIniciais }
       router.refresh()
     })
   }
+
+  // Sugestão para itens ainda sem vínculo (recalcula quando a descrição muda)
+  const sugestoes = form.itens.map((it) =>
+    it.suprimentoId || it.semSugestao ? null : sugerirVinculo(it, form.fornecedorDoc, suprimentos, historico)
+  )
 
   const cls = (chave: string) => campo + ' ' + ((confianca[chave] ?? 1) < LIMIAR ? duvida : normal)
 
@@ -483,7 +508,7 @@ export default function Captura({ categorias, suprimentos: suprimentosIniciais }
                     onChange={(e) => {
                       if (e.target.value === NOVO) return abrirNovo(idx)
                       fecharNovo(idx)
-                      setItem(idx, { suprimentoId: e.target.value })
+                      setItem(idx, { suprimentoId: e.target.value, origemVinculo: '' })
                     }}
                     className={campo + ' ' + (!i.suprimentoId && !novos[idx] && ehDeEstoque(nomeCategoria(i.categoriaId)) ? duvida : normal)}
                   >
@@ -495,7 +520,26 @@ export default function Captura({ categorias, suprimentos: suprimentosIniciais }
                 <div className="col-span-6 sm:col-span-1 flex items-end justify-end">
                   <button onClick={() => removerItem(idx)} className="text-xs text-[#B00063] hover:underline" title="remover item">remover</button>
                 </div>
-                {!i.suprimentoId && !novos[idx] && ehDeEstoque(nomeCategoria(i.categoriaId)) && (
+                {i.suprimentoId && i.origemVinculo && !novos[idx] && (
+                  <p className="col-span-6 sm:col-span-12 text-xs text-[#2E7D4F]">
+                    ✓ Vinculado sozinho a <strong>{suprimentos.find((x) => x.id === i.suprimentoId)?.nome}</strong> ({i.origemVinculo}). Confira; se não for, troque na lista.
+                  </p>
+                )}
+                {!i.suprimentoId && !novos[idx] && sugestoes[idx] && (
+                  <div className="col-span-6 sm:col-span-12 text-xs bg-[#FFFBEE] border border-[#C79600] rounded-sm px-2 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span>
+                      Parece ser <strong>{suprimentos.find((x) => x.id === sugestoes[idx]!.suprimentoId)?.nome}</strong>{' '}
+                      <span className="text-[#6E6E68]">({sugestoes[idx]!.motivo})</span>
+                    </span>
+                    <button onClick={() => setItem(idx, { suprimentoId: sugestoes[idx]!.suprimentoId, origemVinculo: '' })} className="font-semibold text-[#131A2E] underline">
+                      vincular
+                    </button>
+                    <button onClick={() => setItem(idx, { semSugestao: true })} className="text-[#6E6E68] hover:underline">
+                      não é este
+                    </button>
+                  </div>
+                )}
+                {!i.suprimentoId && !novos[idx] && !sugestoes[idx] && ehDeEstoque(nomeCategoria(i.categoriaId)) && (
                   <p className="col-span-6 sm:col-span-12 text-xs text-[#8A6100]">
                     Este item não está ligado a nenhum suprimento. Escolha um da lista para vincular, ou{' '}
                     <button onClick={() => abrirNovo(idx)} className="underline font-semibold">cadastre um novo</button>.
@@ -531,6 +575,29 @@ export default function Captura({ categorias, suprimentos: suprimentosIniciais }
                         <input value={novos[idx].consumoPorMetro} onChange={(e) => setNovos({ ...novos, [idx]: { ...novos[idx], consumoPorMetro: e.target.value } })} inputMode="decimal" placeholder="opcional" className={campo + ' ' + normal} />
                       </label>
                     </div>
+                    {(() => {
+                      const ja = parecidos(novos[idx].nome, suprimentos)
+                      return ja.length ? (
+                        <p className="text-xs text-[#8A6100] mt-1.5">
+                          Já existe parecido:{' '}
+                          {ja.map((x, k) => (
+                            <span key={x.id}>
+                              {k > 0 && ', '}
+                              <button
+                                onClick={() => {
+                                  fecharNovo(idx)
+                                  setItem(idx, { suprimentoId: x.id, origemVinculo: '' })
+                                }}
+                                className="underline font-semibold"
+                              >
+                                {x.nome}
+                              </button>
+                            </span>
+                          ))}
+                          . Clique para vincular a ele em vez de cadastrar outro.
+                        </p>
+                      ) : null
+                    })()}
                     <p className="text-xs text-[#6E6E68] mt-1.5">
                       Papel em metros (m) e tinta em litros (L ou mL) entram na média de custos. Consumo por metro é quanto se gasta por metro estampado, na unidade do suprimento.
                     </p>
