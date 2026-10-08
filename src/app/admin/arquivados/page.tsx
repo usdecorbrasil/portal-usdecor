@@ -10,7 +10,7 @@ const brl = (v: number) =>
 
 const ATIVOS = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
-  'faturado', 'nf_emitida', 'expedido', 'entregue', 'corte_costura', 'fechado',
+  'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
 
 export default async function ArquivadosPage({

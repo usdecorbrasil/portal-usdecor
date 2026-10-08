@@ -32,7 +32,7 @@ const ROTULOS: Record<string, string> = {
   pronto: 'Estampa pronta',
   faturado: 'Faturado',
   nf_emitida: 'Nota fiscal emitida',
-  corte_costura: 'Em corte / costura',
+  corte_costura: 'Em corte / costura (etapa extinta)',
   expedido: 'Expedido',
   entregue: 'Entregue',
   fechado: 'Pedido fechado',
@@ -252,8 +252,8 @@ export default async function PedidoAdminPage({
   )
   const antesDoEstampando = ['aguardando', 'recebido', 'impressao'].includes(atual)
 
-  // Faturamento: só o dono, e só depois de o pedido existir no Bling
-  const mostrarFaturamento = dono && usados.includes('pronto') && !!p.bling_pedido_id
+  // Documentos do faturamento: só o dono, e só com o pedido já faturado
+  const mostrarFaturamento = dono && usados.includes('faturado') && !!p.bling_pedido_id
 
   // Outros pedidos prontos do mesmo cliente: o Faturar oferece reunir tudo
   // numa cobrança só. Só interessa a quem fatura, e só em "pronto"
@@ -494,7 +494,6 @@ export default async function PedidoAdminPage({
 
       {mostrarFaturamento && (
         <Faturamento
-          pedidoId={p.id}
           blingNumero={p.bling_numero ? String(p.bling_numero) : null}
           emitirNf={p.emitir_nf !== false}
           nf={nf}
@@ -693,6 +692,8 @@ export default async function PedidoAdminPage({
           podeCancelarOuAjustar={dono}
           formaPagamento={(p.forma_pagamento as string | null) ?? null}
           emitirNf={p.emitir_nf !== false}
+          temNf={!!p.nf_numero}
+          cobrancaGerada={!!p.cobranca_gerada_em}
           parcelasSolicitadas={p.parcelas_solicitadas}
           parcelasAtuais={parcelas.length}
           primeiroVencimentoAtual={

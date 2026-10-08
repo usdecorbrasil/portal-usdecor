@@ -38,7 +38,7 @@ const ROTULOS_STATUS: Record<string, string> = {
 
 const ORDEM_STATUS = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
-  'faturado', 'nf_emitida', 'expedido', 'entregue', 'corte_costura', 'fechado',
+  'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
 
 const ROTULOS_PAGAMENTO: Record<string, string> = {

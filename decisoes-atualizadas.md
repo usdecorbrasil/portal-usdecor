@@ -48,15 +48,18 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | 7 | Nota fiscal emitida | `nf_emitida` | Faturar / Emitir NF | ✅ |
 | 8 | Expedido | `expedido` | Bling | 🔧 sincronização |
 | 9 | Entregue | `entregue` | Bling | 🔧 sincronização |
-| 10 | Em corte / costura | `corte_costura` | painel (opcional) | ✅ |
-| 11 | Pedido fechado | `fechado` | painel (Fechar pedido) | ✅ |
+| 10 | Pedido fechado | `fechado` | painel (Fechar pedido) | ✅ |
 
-- **Corte/costura é a última etapa antes de fechar** (decidido em 08/10/2026):
-  o que se fatura é impressão e estampa; a estampa é expedida e entregue, e a
-  costura é terceirizada, sem receita. A etapa continua opcional e lançada à
-  mão, só com o pedido já faturado — o banco recusa antes disso. Enquanto
-  expedição e entrega não chegam do Bling, a costura pode ser lançada de
-  qualquer etapa a partir de Faturado. O rótulo "Pedido pronto" passou a **"Estampa pronta"**
+- **Corte/costura saiu do processo** (decidido em 08/10/2026, depois de dois
+  rearranjos no mesmo dia): o que se fatura é impressão e estampa. O banco
+  recusa qualquer lançamento novo da etapa; os pedidos que estavam nela
+  voltaram para Estampa pronta por migração (registro `pronto`, origem
+  `sistema`). O valor segue no enum só pelo histórico dos pedidos antigos.
+- **O botão Faturar faz tudo**: pedido de venda no Bling, cobrança, etapa
+  Faturado e nota fiscal. O card com botões "Emitir NF" e "Gerar cobrança"
+  virou "Documentos do faturamento", só leitura (links da DANFE, XML e
+  boletos). Se a nota ou a cobrança ficaram pendentes, o bloco "Pedido
+  faturado" oferece "Concluir faturamento", que repete só o que faltou. O rótulo "Pedido pronto" passou a **"Estampa pronta"**
   (a chave `pronto` não muda). Ajuste de metragem só existe em Estampando:
   depois do faturamento o valor está no Bling, e quebra na costura é do
   terceiro.
