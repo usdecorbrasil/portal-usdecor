@@ -24,6 +24,13 @@ export const MAX_PARCELAS = 4
  */
 export const BOLETO_AVISTA_DIAS_UTEIS = 4
 
+/**
+ * Quem fatura pode escolher outro vencimento para o boleto à vista (pedido do
+ * dono em 08/10/2026), até este número de dias corridos a partir de hoje.
+ * Espelha a regra da RPC `admin_definir_forma_pagamento_faturamento`.
+ */
+export const PRAZO_MAXIMO_BOLETO_AVISTA_DIAS = 30
+
 export const FORMAS = ['boleto', 'pix', 'cartao_credito', 'cartao_debito'] as const
 
 export type Forma = (typeof FORMAS)[number]

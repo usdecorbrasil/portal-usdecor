@@ -268,6 +268,11 @@ ali a imagem é o conteúdo.
   (`src/lib/bling/cobranca.ts`). A busca é por contato e casa parcela por
   **vencimento + valor**, porque o vínculo com o pedido não é exposto de forma
   confiável — a conta que inspecionei tinha `origem` zerado.
+- **Boleto à vista com vencimento escolhido** (08/10/2026): no Faturar o campo
+  "Vencimento" vem com o padrão de 4 dias úteis e pode ser alterado até **30 dias
+  corridos** (`PRAZO_MAXIMO_BOLETO_AVISTA_DIAS` em `config.ts`, espelhado na RPC
+  `admin_definir_forma_pagamento_faturamento`, migration `20261008180000`). A RPC grava
+  `pedidos.vencimento_avista`, que `criarPedidoNoBling` e a cobrança já usavam.
 - **Teto de parcelas é 4** (decidido em 13/09/2026), em três lugares que precisam
   concordar: `MAX_PARCELAS` em `src/lib/pagamento/config.ts`, os schemas zod das
   actions, e o CHECK `pedidos_parcelas_solicitadas_check` no banco. Já houve

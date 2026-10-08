@@ -134,6 +134,7 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | O boleto único vence em **4 dias úteis** a partir do faturamento (`BOLETO_AVISTA_DIAS_UTEIS`, `proximo_dia_util()` no banco) | ✅ |
 | Pula sábados, domingos e feriados nacionais, fixos e móveis; feriados estaduais e municipais ficam de fora, porque o banco segue o calendário nacional | ✅ |
 | A data usada fica em `pedidos.vencimento_avista`, para a leitura das contas casar pelo mesmo vencimento | ✅ |
+| **Vencimento escolhido no Faturar** (08/10/2026): o campo "Vencimento" aparece para boleto à vista, já com o padrão de 4 dias úteis; quem fatura pode mudar (ex.: 15 dias a pedido do cliente). **Teto de 30 dias corridos** a partir de hoje, recusado pela RPC (`admin_definir_forma_pagamento_faturamento`, migration `20261008180000`) e avisado na tela (`PRAZO_MAXIMO_BOLETO_AVISTA_DIAS`). A data fica em `pedidos.vencimento_avista`, que o Bling e a cobrança usam | ✅ |
 
 ### Parcela mínima no boleto parcelado
 

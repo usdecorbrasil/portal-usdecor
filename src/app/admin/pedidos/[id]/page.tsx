@@ -18,7 +18,7 @@ import DesfazerFaturamento from './desfazer-faturamento'
 import Faturamento, { type CobrancaLinha } from './faturamento'
 import Desagrupar from './desagrupar'
 import { urlDocumento } from '@/lib/storage/documentos'
-import { taxaDoPedido } from '@/lib/pagamento/config'
+import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
 import InstrucoesInternas from './instrucoes-internas'
 import LiberarAtraso from '@/app/admin/clientes/[id]/liberar-atraso'
@@ -116,7 +116,7 @@ export default async function PedidoAdminPage({
       bling_pedido_id, bling_numero, bling_sync_status, bling_erro,
       bling_nf_id, nf_numero, nf_chave, nf_emitida_em, nf_pdf_path, nf_xml_path, nf_link_danfe,
       link_boleto, link_pix, boleto_pdf_path, cobranca_gerada_em, link_pagamento,
-      forma_pagamento, parcelas_solicitadas, cliente_id,
+      forma_pagamento, parcelas_solicitadas, cliente_id, vencimento_avista,
       emitir_nf, emitir_nf_motivo,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
       ${camposFinanceiros}
@@ -142,7 +142,8 @@ export default async function PedidoAdminPage({
     `
 
   // As configurações não dependem do pedido: buscar em paralelo
-  const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto, configPagamento, { data: agrupamento }] =
+  const hojeIso = new Date().toISOString().slice(0, 10)
+  const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto, configPagamento, { data: agrupamento }, { data: vencAvista }] =
     await Promise.all([
       supabase.from('pedidos').select(campos).eq('id', id).single(),
       buscarMaxParcelas(),
@@ -154,7 +155,11 @@ export default async function PedidoAdminPage({
         .select('pedidos_numeros, pedidos_ids')
         .eq('agrupador_id', id)
         .maybeSingle(),
+      // Padrão do boleto à vista: dias úteis contados pelo banco (feriados)
+      supabase.rpc('proximo_dia_util', { p_data: hojeIso, p_dias: BOLETO_AVISTA_DIAS_UTEIS }),
     ])
+  const vencimentoAvistaPadrao =
+    typeof vencAvista === 'string' && /^\d{4}-\d{2}-\d{2}/.test(vencAvista) ? vencAvista.slice(0, 10) : hojeIso
 
   // Só "nenhuma linha" é 404. Qualquer outra falha da consulta (permissão,
   // tabela embutida sem grant, coluna inexistente) precisa aparecer como erro
@@ -752,8 +757,13 @@ export default async function PedidoAdminPage({
           parcelasSolicitadas={p.parcelas_solicitadas}
           parcelasAtuais={parcelas.length}
           primeiroVencimentoAtual={
-            parcelas[0]?.vencimento ? String(parcelas[0].vencimento).slice(0, 10) : null
+            parcelas[0]?.vencimento
+              ? String(parcelas[0].vencimento).slice(0, 10)
+              : p.vencimento_avista
+              ? String(p.vencimento_avista).slice(0, 10)
+              : null
           }
+          vencimentoAvistaPadrao={vencimentoAvistaPadrao}
           maxParcelas={maxParcelas}
           valorMinimoBoleto={valorMinimoBoleto}
           valorDocumentoBoleto={valorDocumentoBoleto}

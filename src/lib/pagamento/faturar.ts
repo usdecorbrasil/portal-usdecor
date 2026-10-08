@@ -10,6 +10,7 @@
 
 import {
   MAX_PARCELAS,
+  PRAZO_MAXIMO_BOLETO_AVISTA_DIAS,
   valorCobranca,
   type ConfigForma,
   type ConfigPagamento,
@@ -176,6 +177,8 @@ export function avaliarFatura({
     vencimento:
       forma === 'boleto_parcelado' && primeiroVencimento
         ? somarDias(primeiroVencimento, i * cfg.intervaloDias)
+        : forma === 'boleto_avista' && primeiroVencimento
+        ? primeiroVencimento
         : null,
   }))
 
@@ -197,6 +200,14 @@ export function avaliarFatura({
   if (forma === 'boleto_parcelado') {
     if (!primeiroVencimento) bloqueios.push('Informe o primeiro vencimento do boleto.')
     else if (primeiroVencimento < hojeIso()) bloqueios.push('O primeiro vencimento não pode ser no passado.')
+  }
+
+  // À vista: data escolhida por quem fatura, até o teto de dias corridos
+  if (forma === 'boleto_avista' && primeiroVencimento) {
+    const teto = somarDias(hojeIso(), PRAZO_MAXIMO_BOLETO_AVISTA_DIAS)
+    if (primeiroVencimento < hojeIso()) bloqueios.push('O vencimento do boleto não pode ser no passado.')
+    else if (primeiroVencimento > teto)
+      bloqueios.push(`O boleto à vista pode vencer em no máximo ${PRAZO_MAXIMO_BOLETO_AVISTA_DIAS} dias (até ${teto.split('-').reverse().join('/')}).`)
   }
 
   // Limite de crédito: só boleto é conta a receber; liberação do dono dispensa
