@@ -53,7 +53,10 @@ export default function Abas({ children }: { children: React.ReactNode }) {
                     className={
                       'min-w-0 flex-1 text-center border-2 rounded-t-lg ' +
                       'px-1.5 sm:px-4 py-2 text-xs sm:text-sm truncate relative ' +
-                      (ativa ? 'border-b-0 -mb-0.5 ' : 'rounded-b-lg ') +
+                      // Só a aba aberta desce sobre a borda da caixa (e a apaga
+                      // com o próprio fundo); as outras param em cima dela, para a
+                      // linha da caixa continuar visível embaixo delas
+                      (aberta ? 'border-b-0 -mb-0.5 ' : ativa ? 'border-b-0 ' : 'rounded-b-lg ') +
                       (aberta
                         ? 'bg-[#F2F1ED] border-[#131A2E] text-[#131A2E] font-semibold z-10'
                         : 'bg-[#E4E3DD] border-[#DDDCD5] text-[#6E6E68] hover:text-[#131A2E]')
