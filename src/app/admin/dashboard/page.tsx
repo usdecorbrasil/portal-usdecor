@@ -7,7 +7,8 @@ import FiltroPeriodo from './filtro-periodo'
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'corte_costura', 'pronto']
+// Corte/costura vem depois do faturamento e fica fora deste bloco
+const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'pronto']
 
 // "Em andamento" termina em Pedido pronto. Faturar já emite nota e cobrança,
 // então daí em diante o pedido é assunto do financeiro e do Bling, não deste bloco
@@ -430,8 +431,8 @@ function rotuloEtapa(e: string) {
     recebido: 'Confirmado',
     impressao: 'Impressão',
     estampando: 'Estampando',
+    pronto: 'Estampa pronta',
     corte_costura: 'Corte/costura',
-    pronto: 'Pronto',
   }
   return r[e] ?? e
 }

@@ -27,17 +27,18 @@ const ROTULOS_STATUS: Record<string, string> = {
   recebido: 'Pedido confirmado',
   impressao: 'Impressão',
   estampando: 'Estampando',
-  corte_costura: 'Em corte / costura',
-  pronto: 'Pedido pronto',
+  pronto: 'Estampa pronta',
+  faturado: 'Faturado',
   nf_emitida: 'Nota fiscal emitida',
+  corte_costura: 'Em corte / costura',
   expedido: 'Expedido',
   entregue: 'Entregue',
   fechado: 'Pedido fechado',
 }
 
 const ORDEM_STATUS = [
-  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
+  'faturado', 'nf_emitida', 'expedido', 'entregue', 'corte_costura', 'fechado',
 ]
 
 const ROTULOS_PAGAMENTO: Record<string, string> = {

@@ -42,20 +42,22 @@ import {
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+// Corte/costura é a última etapa antes de fechar (08/10/2026): o que se
+// fatura é a estampa; a costura é terceirizada e não gera receita
 const MANUAIS = [
   { chave: 'impressao', rotulo: 'Impressão', email: true },
   { chave: 'estampando', rotulo: 'Estampando', email: false },
+  { chave: 'pronto', rotulo: 'Estampa pronta', email: true },
   { chave: 'corte_costura', rotulo: 'Em corte / costura', email: false },
-  { chave: 'pronto', rotulo: 'Pedido pronto', email: true },
 ]
 
 const ORDEM = [
-  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
+  'faturado', 'nf_emitida', 'expedido', 'entregue', 'corte_costura', 'fechado',
 ]
 
 /** Etapas a partir das quais a equipe pode fechar o pedido (depois de faturado). */
-const PODE_FECHAR = ['faturado', 'nf_emitida', 'expedido', 'entregue']
+const PODE_FECHAR = ['faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue']
 
 const ROTULOS_PAGAMENTO: Record<string, string> = ROTULOS_FATURA
 
@@ -199,7 +201,8 @@ export default function PainelAcoes({
 
   const idx = ORDEM.indexOf(statusAtual)
   const aguardando = statusAtual === 'aguardando'
-  const emProducao = idx >= 2 && idx <= 5
+  // Impressão até Estampa pronta: antes do faturamento, ainda dá para reimprimir
+  const emProducao = idx >= 2 && idx <= ORDEM.indexOf('pronto')
   const antesDoEstampando = idx < ORDEM.indexOf('estampando')
   const passouNF = usados.some((s) =>
     ['nf_emitida', 'expedido', 'entregue', 'fechado'].includes(s)
@@ -208,8 +211,9 @@ export default function PainelAcoes({
   // faturar. Mexer em quantidade ou preço deixaria o ERP com outro pedido
   const valorFechado = passouNF || idx >= ORDEM.indexOf('pronto')
   // Com o romaneio lançado, quantidade não muda mais nada; o que pode
-  // mudar é a metragem — quebra na estamparia, por exemplo
-  const emEstampa = statusAtual === 'estampando' || statusAtual === 'corte_costura'
+  // mudar é a metragem — quebra na estamparia. Só em Estampando: a costura
+  // vem depois do faturamento, com o valor já no Bling
+  const emEstampa = statusAtual === 'estampando'
   const ehCartao = (formaPagamento ?? '').startsWith('cartao')
 
   const precoAtual = itens[0]?.precoMetro ?? 0
@@ -267,10 +271,12 @@ export default function PainelAcoes({
     }
   }
 
+  // Costura é opcional e fica depois da entrega; como expedição e entrega
+  // ainda não chegam do Bling, pode ser lançada de qualquer etapa pós-Faturado
   const disponiveis = aguardando
     ? []
-    : statusAtual === 'estampando'
-    ? MANUAIS.filter((m) => ['corte_costura', 'pronto'].includes(m.chave))
+    : ['faturado', 'nf_emitida', 'expedido', 'entregue'].includes(statusAtual)
+    ? MANUAIS.filter((m) => m.chave === 'corte_costura')
     : MANUAIS.filter((m) => ORDEM.indexOf(m.chave) === idx + 1)
 
   function avancar(chave: string) {

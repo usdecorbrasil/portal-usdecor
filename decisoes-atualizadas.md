@@ -43,13 +43,23 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | 2 | Pedido confirmado | `recebido` | painel | ✅ |
 | 3 | Impressão | `impressao` | painel | ✅ |
 | 4 | Estampando | `estampando` | painel (romaneio) | ✅ |
-| 5 | Em corte / costura | `corte_costura` | painel | ✅ |
-| 6 | Pedido pronto | `pronto` | painel | ✅ |
-| 7 | Faturado | `faturado` | botão Faturar | ✅ |
-| 8 | Nota fiscal emitida | `nf_emitida` | Faturar / Emitir NF | ✅ |
-| 9 | Expedido | `expedido` | Bling | 🔧 sincronização |
-| 10 | Entregue | `entregue` | Bling | 🔧 sincronização |
+| 5 | Estampa pronta | `pronto` | painel | ✅ |
+| 6 | Faturado | `faturado` | botão Faturar | ✅ |
+| 7 | Nota fiscal emitida | `nf_emitida` | Faturar / Emitir NF | ✅ |
+| 8 | Expedido | `expedido` | Bling | 🔧 sincronização |
+| 9 | Entregue | `entregue` | Bling | 🔧 sincronização |
+| 10 | Em corte / costura | `corte_costura` | painel (opcional) | ✅ |
 | 11 | Pedido fechado | `fechado` | painel (Fechar pedido) | ✅ |
+
+- **Corte/costura é a última etapa antes de fechar** (decidido em 08/10/2026):
+  o que se fatura é impressão e estampa; a estampa é expedida e entregue, e a
+  costura é terceirizada, sem receita. A etapa continua opcional e lançada à
+  mão, só com o pedido já faturado — o banco recusa antes disso. Enquanto
+  expedição e entrega não chegam do Bling, a costura pode ser lançada de
+  qualquer etapa a partir de Faturado. O rótulo "Pedido pronto" passou a **"Estampa pronta"**
+  (a chave `pronto` não muda). Ajuste de metragem só existe em Estampando:
+  depois do faturamento o valor está no Bling, e quebra na costura é do
+  terceiro.
 
 - **Faturado** é a etapa que fala com o Bling. O botão **Faturar**
   (`faturarPedido`, `src/app/actions/faturamento.ts`) faz tudo de uma vez:

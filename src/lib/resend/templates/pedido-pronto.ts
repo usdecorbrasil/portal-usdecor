@@ -117,7 +117,7 @@ export function templatePedidoPronto({
             <td style="padding: 32px;">
               <h1 style="font-size:18px; color:#131A2E; margin: 0 0 16px;">Olá, ${clienteNome}</h1>
               <p style="font-size:14px; color:#131A2E; line-height:1.6; margin: 0 0 20px;">
-                Seu pedido <strong style="font-family: monospace;">#${numero}</strong> está pronto.
+                A estampa do seu pedido <strong style="font-family: monospace;">#${numero}</strong> está pronta.
                 Abaixo está o valor final, calculado pela metragem realmente impressa.
               </p>
 
