@@ -300,3 +300,14 @@ Hobby da Vercel não aceita cron horário.
 - Calandra não é afetada.
 - Atualização automática a cada nota é opcional e começa desligada. Mudanças passam pela
   mesma função `atualizar_custos_producao` e só valem para romaneios futuros.
+
+## Contas a pagar (08/10/2026)
+
+- Toda nota lançada em Despesas informa como foi paga: já pago, cartão de débito, cartão de
+  crédito, boleto ou a pagar. Sem isso a nota não salva.
+- Já pago e débito entram em contas a pagar quitados na data da nota. Crédito, boleto e a
+  pagar geram uma conta por parcela, com vencimento e valor; a soma das parcelas tem de
+  bater com o total da nota.
+- Contas sem nota (aluguel, energia) são lançadas direto em Financeiro → A pagar.
+- Pagar, mudar vencimento/valor, estornar e cancelar ficam registrados; os três últimos
+  exigem motivo. Excluir a nota cancela as parcelas ainda não pagas.

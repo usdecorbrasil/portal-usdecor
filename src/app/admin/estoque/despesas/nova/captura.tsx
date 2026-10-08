@@ -6,6 +6,16 @@ import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespe
 import { criarSuprimento } from '@/app/actions/suprimentos'
 import CameraNota from './camera-nota'
 import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
+import {
+  CONDICOES,
+  ROTULO_CONDICAO,
+  MAX_PARCELAS_CONTA,
+  quitadaNaCompra,
+  gerarParcelas,
+  validarParcelas,
+  primeiroVencimentoPadrao,
+  type Condicao,
+} from '@/lib/contas-pagar/condicoes'
 import { UNIDADES, type Unidade } from '@/lib/suprimentos/unidades'
 import { sugerirVinculo, parecidos, type VinculoAnterior } from '@/lib/suprimentos/sugerir-vinculo'
 
@@ -69,6 +79,10 @@ type Form = {
   chaveAcesso: string
   emissao: string
   formaPagamento: string
+  /** Como a nota foi paga — obrigatório, gera as contas a pagar. */
+  condicao: Condicao | ''
+  /** Parcelas a pagar (vencimento AAAA-MM-DD, valor em texto). Vazio quando já pago. */
+  parcelas: { vencimento: string; valor: string }[]
   subtotal: string
   desconto: string
   frete: string
@@ -96,12 +110,14 @@ const num = (s: string) => {
 const txt = (v: number | null | undefined) => (v == null ? '' : String(v).replace('.', ','))
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+const hoje = () => new Date().toISOString().slice(0, 10)
+
 const itemVazio = (): ItemForm => ({ descricao: '', codigo: '', quantidade: '1', unidade: 'un', valorUnitario: '', valorTotal: '', categoriaId: '', suprimentoId: '', confianca: null, origemVinculo: '', semSugestao: false })
 
 function formVazio(): Form {
   return {
     tipo: 'outro', fornecedorNome: '', fornecedorDoc: '', numero: '', serie: '', chaveAcesso: '',
-    emissao: new Date().toISOString().slice(0, 10), formaPagamento: '', subtotal: '', desconto: '', frete: '', impostos: '', total: '',
+    emissao: new Date().toISOString().slice(0, 10), formaPagamento: '', condicao: '', parcelas: [], subtotal: '', desconto: '', frete: '', impostos: '', total: '',
     observacoes: '', itens: [itemVazio()],
   }
 }
@@ -183,6 +199,17 @@ export default function Captura({
         chaveAcesso: d.chave_acesso ?? '',
         emissao: d.emissao ?? new Date().toISOString().slice(0, 10),
         formaPagamento: d.forma_pagamento ?? '',
+        // Duplicatas impressas na nota viram as parcelas; sem elas, a condição
+        // escolhida gera um vencimento padrão
+        condicao: d.condicao_pagamento ?? (d.duplicatas.length ? 'boleto' : ''),
+        parcelas:
+          d.condicao_pagamento === 'pago' || d.condicao_pagamento === 'debito'
+            ? []
+            : d.duplicatas.length
+              ? d.duplicatas.map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) }))
+              : d.condicao_pagamento && d.total
+                ? gerarParcelas(d.total, 1, primeiroVencimentoPadrao(d.condicao_pagamento, d.emissao ?? hoje())).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) }))
+                : [],
         subtotal: txt(d.subtotal),
         desconto: txt(d.desconto),
         frete: txt(d.frete),
@@ -255,6 +282,33 @@ export default function Captura({
   const totalInformado = num(form.total)
   const diferenca = Math.round((totalInformado - totalCalculado) * 100) / 100
 
+  // Pagamento → contas a pagar
+  const aPrazo = !!form.condicao && !quitadaNaCompra(form.condicao)
+  const parcelasNum = aPrazo ? form.parcelas.map((p) => ({ vencimento: p.vencimento, valor: num(p.valor) })) : []
+  const somaParcelas = Math.round(parcelasNum.reduce((s, p) => s + p.valor, 0) * 100) / 100
+  const erroParcelas = aPrazo ? validarParcelas(parcelasNum, totalInformado) : null
+
+  function escolherCondicao(c: Condicao | '') {
+    setForm((f) => {
+      if (!c || quitadaNaCompra(c)) return { ...f, condicao: c }
+      // Primeira vez a prazo: um vencimento padrão com o total
+      const parcelas = f.parcelas.length
+        ? f.parcelas
+        : gerarParcelas(num(f.total), 1, primeiroVencimentoPadrao(c, f.emissao || hoje())).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) }))
+      return { ...f, condicao: c, parcelas }
+    })
+  }
+
+  function redistribuir(qtd: number) {
+    if (!form.condicao || quitadaNaCompra(form.condicao)) return
+    const primeiro = form.parcelas[0]?.vencimento || primeiroVencimentoPadrao(form.condicao, form.emissao || hoje())
+    setForm({ ...form, parcelas: gerarParcelas(totalInformado, qtd, primeiro).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) })) })
+  }
+
+  function setParcela(idx: number, patch: Partial<{ vencimento: string; valor: string }>) {
+    setForm((f) => ({ ...f, parcelas: f.parcelas.map((p, j) => (j === idx ? { ...p, ...patch } : p)) }))
+  }
+
   const nomeCategoria = (id: string) => categorias.find((c) => c.id === id)?.nome
 
   function removerItem(idx: number) {
@@ -321,6 +375,14 @@ export default function Captura({
 
   function salvar() {
     setErro('')
+    if (!form.condicao) {
+      setErro('Escolha como a nota foi paga (seção Pagamento).')
+      return
+    }
+    if (erroParcelas) {
+      setErro(erroParcelas)
+      return
+    }
     const dados: DadosDespesa = {
       arquivoPath: rascunho?.arquivoPath ?? null,
       origem: rascunho?.origem ?? origem,
@@ -334,6 +396,8 @@ export default function Captura({
       chaveAcesso: form.chaveAcesso || null,
       emissao: form.emissao,
       formaPagamento: form.formaPagamento || null,
+      condicao: form.condicao as Condicao,
+      parcelas: parcelasNum,
       subtotal: form.subtotal ? num(form.subtotal) : null,
       desconto: num(form.desconto),
       frete: num(form.frete),
@@ -481,9 +545,6 @@ export default function Captura({
           </label>
           <label className={rotulo + ' col-span-2 sm:col-span-3'}>CHAVE DE ACESSO (44 dígitos)
             <input value={form.chaveAcesso} onChange={(e) => setForm({ ...form, chaveAcesso: e.target.value })} inputMode="numeric" className={campo + ' ' + normal + ' font-mono text-xs'} />
-          </label>
-          <label className={rotulo}>PAGAMENTO
-            <input value={form.formaPagamento} onChange={(e) => setForm({ ...form, formaPagamento: e.target.value })} className={campo + ' ' + normal} placeholder="pix, boleto…" />
           </label>
         </div>
 
@@ -654,6 +715,64 @@ export default function Captura({
           <label className={rotulo + ' col-span-2 sm:col-span-5'}>OBSERVAÇÕES
             <input value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} className={campo + ' ' + normal} />
           </label>
+        </div>
+
+        <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-5 mb-2 flex items-center gap-2">
+          PAGAMENTO <span className="flex-1 h-px bg-[#DDDCD5]" />
+        </h2>
+        <div className={'bg-white border rounded-sm p-3 ' + (form.condicao ? 'border-[#DDDCD5]' : 'border-[#C79600]')}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className={rotulo}>COMO FOI PAGA
+              <select value={form.condicao} onChange={(e) => escolherCondicao(e.target.value as Condicao | '')} className={campo + ' ' + (form.condicao ? normal : duvida)}>
+                <option value="">— escolher —</option>
+                {CONDICOES.map((c) => <option key={c} value={c}>{ROTULO_CONDICAO[c]}</option>)}
+              </select>
+            </label>
+            <label className={rotulo}>O QUE DIZ A NOTA
+              <input value={form.formaPagamento} onChange={(e) => setForm({ ...form, formaPagamento: e.target.value })} className={campo + ' ' + normal} placeholder="ex.: PIX, crédito 3x, 28/56 DDL" />
+            </label>
+          </div>
+
+          {!form.condicao && (
+            <p className="text-xs text-[#8A6100] mt-2">Obrigatório: a forma de pagamento gera as contas a pagar no Financeiro.</p>
+          )}
+          {form.condicao && quitadaNaCompra(form.condicao) && (
+            <p className="text-xs text-[#2E7D4F] mt-2">
+              Entra em contas a pagar já quitada em {form.emissao ? form.emissao.split('-').reverse().join('/') : 'na emissão'}, no valor total da nota.
+            </p>
+          )}
+
+          {aPrazo && (
+            <div className="mt-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <label className={rotulo + ' w-24'}>PARCELAS
+                  <select value={form.parcelas.length || 1} onChange={(e) => redistribuir(Number(e.target.value))} className={campo + ' ' + normal}>
+                    {Array.from({ length: MAX_PARCELAS_CONTA }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}x</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={() => redistribuir(form.parcelas.length || 1)} className="text-xs text-[#0090D8] hover:underline pb-2">
+                  dividir o total igualmente, mês a mês a partir da 1ª
+                </button>
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {form.parcelas.map((p, idx) => (
+                  <div key={idx} className="grid grid-cols-[2.5rem_1fr_1fr] gap-1.5 items-end">
+                    <span className="font-mono text-xs text-[#6E6E68] pb-2">{idx + 1}/{form.parcelas.length}</span>
+                    <label className={rotulo}>VENCIMENTO
+                      <input type="date" value={p.vencimento} onChange={(e) => setParcela(idx, { vencimento: e.target.value })} className={campo + ' ' + normal} />
+                    </label>
+                    <label className={rotulo}>VALOR
+                      <input value={p.valor} onChange={(e) => setParcela(idx, { valor: e.target.value })} inputMode="decimal" className={campo + ' ' + normal} />
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <p className={'text-xs mt-2 ' + (erroParcelas ? 'text-[#B00063]' : 'text-[#2E7D4F]')}>
+                Parcelas somam R$ {brl(somaParcelas)}
+                {erroParcelas ? ` · ${erroParcelas}` : ' · confere com o total.'}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 mt-4">
