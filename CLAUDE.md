@@ -460,6 +460,12 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   `despesas` e devolve um rascunho; a tela de conferência (`despesas/nova/captura.tsx`)
   é a mesma com ou sem IA, campo com confiança < 0,7 fica amarelo, e `salvarDespesa`
   grava documento + itens.
+- **Câmera com moldura** (`despesas/nova/camera-nota.tsx`): "Tirar foto" abre a câmera
+  traseira dentro do portal (`getUserMedia`, tela cheia) com moldura Nota (A4) ou Cupom,
+  fora dela escurecido, lanterna quando o aparelho deixa, e prévia "tirar outra / usar
+  esta foto". A foto sai recortada na moldura (+4% de margem), convertendo a moldura da
+  tela para pixels do vídeo em `object-cover`. Sem permissão ou suporte, botão "usar a
+  câmera do celular" cai no input de arquivo de antes.
 - **Compressão no aparelho**: a foto é reduzida no navegador (lado maior 1600 px,
   JPEG 82%, `createImageBitmap` com orientação do EXIF) antes de subir. O original não
   sobe. `next.config.ts` tem `serverActions.bodySizeLimit: 12mb` por isso.
