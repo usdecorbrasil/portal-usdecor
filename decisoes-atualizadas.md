@@ -158,6 +158,26 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | Quem fecha é admin/financeiro, pelo bloco "Fechar pedido" do painel, de Faturado em diante (`admin_fechar_pedido`) | ✅ |
 | Pedido fechado vai para Arquivados | ✅ |
 
+### Painel de crédito (Financeiro → Crédito)
+
+Decidido em 08/10/2026. Uma tela para acompanhar e gerenciar o financeiro de
+cada cliente: limite, crédito em uso, histórico de boletos, score e sugestão
+de limite, com exportação em CSV. Regra em `src/lib/credito/score.ts`, pura.
+
+| Regra | Situação |
+|---|---|
+| Score 0–100 = pontualidade (−50 a +50) + volume (até 30) + frequência (até 20), menos 10 por boleto vencido em aberto (até 30); o resultado é preso entre 0 e 100 | ✅ |
+| Pontualidade (08/10/2026: atraso desconta, não só rende menos): boleto pago em dia vale +1; pago com até 7 dias de atraso −0,3; até 30 dias −0,6; mais de 30 dias −1; vencido sem pagar −1. A média × 50 é a pontualidade. Sem boleto vencido ainda: 25 pontos neutros | ✅ |
+| Volume: faturamento do cliente no período comparado ao maior cliente (raiz quadrada, para o segundo lugar não ficar com quase nada) | ✅ |
+| Frequência: pedidos no período contra um alvo de 0,75 pedido por mês (mínimo 4) | ✅ |
+| Classes: Excelente ≥ 80 · Bom ≥ 60 · Atenção ≥ 40 · Risco abaixo · Sem histórico quando não há pedido nem boleto | ✅ |
+| Sugestão: boleto vencido há mais de 30 dias → reduzir (maior entre o que está em uso e 75% do limite); score < 40 → reduzir 25%; score ≥ 80 com ≥ 60% do limite em uso → aumentar 25% ou 2× a média mensal faturada; sem limite e score ≥ 60 → definir 2× a média mensal; senão manter | ✅ |
+| A sugestão é só sugestão: o ajuste passa pela mesma RPC do cadastro (`atualizar_limite_credito`), com motivo obrigatório e registro em `cliente_limite_historico` e `auditoria` | ✅ |
+| Período de análise escolhível: 6, 12 ou 24 meses | ✅ |
+| Boletos à vista entram no histórico (vêm de `pedidos`, não de `pedido_parcelas`) | ✅ |
+| Exportação CSV da lista de clientes e do histórico de boletos de cada um | ✅ |
+| Só admin/financeiro (aba Financeiro inteira) | ✅ |
+
 ## Estoque de tecido do cliente
 
 Decidido em 06/10/2026, implementado nos PRs #22, #23 e #24.
