@@ -161,7 +161,7 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | Quem fecha é admin/financeiro, pelo bloco "Fechar pedido" do painel, de Faturado em diante (`admin_fechar_pedido`) | ✅ |
 | Pedido fechado vai para Arquivados | ✅ |
 
-### Painel de crédito (Financeiro → Crédito)
+### Painel de crédito (Financeiro → card Crédito, separado das abas)
 
 Decidido em 08/10/2026. Uma tela para acompanhar e gerenciar o financeiro de
 cada cliente: limite, crédito em uso, histórico de boletos, score e sugestão

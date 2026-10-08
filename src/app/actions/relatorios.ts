@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { ROTULOS_STATUS } from '@/app/admin/financeiro/relatorios/rotulos'
+import { ROTULOS_STATUS } from '@/app/admin/financeiro/(abas)/relatorios/rotulos'
 
 export type LinhaPedido = {
   id: string
