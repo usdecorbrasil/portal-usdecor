@@ -90,14 +90,17 @@ Repositório: `usdecorbrasil/portal-bello-tecido` (GitHub)
 | 6 | Nota fiscal emitida | Faturar |
 | 7 | Expedido | Bling |
 | 8 | Entregue | Bling |
-| 9 | Em corte / costura | Manual — painel, **depois da entrega**, opcional |
-| 10 | Pedido fechado | Painel (Fechar pedido), sem depender da baixa |
+| 9 | Pedido fechado | Painel (Fechar pedido), sem depender da baixa |
 
-Corte/costura é a **última etapa antes de fechar** (08/10/2026): o que se fatura é
-a estampa; a costura é terceirizada e não gera receita. `validar_status_pedido`
-recusa `corte_costura` sem `faturado` no histórico, e `admin_ajustar_metragem` só
-aceita Estampando. Enquanto expedição e entrega não chegam do Bling, a costura
-pode ser lançada de qualquer etapa a partir de Faturado (`destinosPermitidos`).
+**Corte/costura não existe mais** (08/10/2026): `validar_status_pedido` recusa
+qualquer lançamento da etapa; o valor fica no enum só pelo histórico. Os pedidos
+que estavam nela foram movidos para Estampa pronta pela migration
+`20261008120000`. `admin_ajustar_metragem` só aceita Estampando.
+
+**Faturar faz tudo** (pedido no Bling, cobrança, etapa, nota). O card
+"Documentos do faturamento" na tela do pedido é só leitura; nota ou cobrança
+pendentes se concluem pelo botão "Concluir faturamento" no bloco Pedido faturado,
+que chama `faturarPedido` de novo (retomável).
 
 Importante:
 - O pedido **não** precisa passar por todas as etapas (ex.: sem costura pula direto de

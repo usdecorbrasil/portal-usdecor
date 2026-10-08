@@ -42,22 +42,20 @@ import {
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// Corte/costura é a última etapa antes de fechar (08/10/2026): o que se
-// fatura é a estampa; a costura é terceirizada e não gera receita
+// Corte/costura deixou de existir em 08/10/2026: o que se fatura é a estampa
 const MANUAIS = [
   { chave: 'impressao', rotulo: 'Impressão', email: true },
   { chave: 'estampando', rotulo: 'Estampando', email: false },
   { chave: 'pronto', rotulo: 'Estampa pronta', email: true },
-  { chave: 'corte_costura', rotulo: 'Em corte / costura', email: false },
 ]
 
 const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
-  'faturado', 'nf_emitida', 'expedido', 'entregue', 'corte_costura', 'fechado',
+  'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
 ]
 
 /** Etapas a partir das quais a equipe pode fechar o pedido (depois de faturado). */
-const PODE_FECHAR = ['faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue']
+const PODE_FECHAR = ['faturado', 'nf_emitida', 'expedido', 'entregue']
 
 const ROTULOS_PAGAMENTO: Record<string, string> = ROTULOS_FATURA
 
@@ -97,6 +95,8 @@ export default function PainelAcoes({
   podeCancelarOuAjustar,
   formaPagamento,
   emitirNf,
+  temNf,
+  cobrancaGerada,
   parcelasSolicitadas,
   parcelasAtuais,
   primeiroVencimentoAtual,
@@ -131,6 +131,10 @@ export default function PainelAcoes({
   /** NULL até o faturamento definir (pedidos a partir de 07/10/2026). */
   formaPagamento: string | null
   emitirNf: boolean
+  /** NF já emitida (nf_numero preenchido). */
+  temNf: boolean
+  /** Cobrança já lançada no Bling (cobranca_gerada_em). */
+  cobrancaGerada: boolean
   parcelasSolicitadas: number | null
   parcelasAtuais: number
   /** Vencimento da 1ª parcela já gerada (pedidos antigos), AAAA-MM-DD. */
@@ -271,12 +275,8 @@ export default function PainelAcoes({
     }
   }
 
-  // Costura é opcional e fica depois da entrega; como expedição e entrega
-  // ainda não chegam do Bling, pode ser lançada de qualquer etapa pós-Faturado
   const disponiveis = aguardando
     ? []
-    : ['faturado', 'nf_emitida', 'expedido', 'entregue'].includes(statusAtual)
-    ? MANUAIS.filter((m) => m.chave === 'corte_costura')
     : MANUAIS.filter((m) => ORDEM.indexOf(m.chave) === idx + 1)
 
   function avancar(chave: string) {
@@ -318,6 +318,23 @@ export default function PainelAcoes({
     const ids = faturaPendente ?? []
     if (ids.length === 0) faturar()
     else unificarEFaturar(ids)
+  }
+
+  /**
+   * Faturado, mas a nota ou a cobrança ficaram pela metade (SEFAZ lenta, Bling
+   * sem link): repete só o que faltou. `faturarPedido` é retomável e, com o
+   * pedido já no Bling, não mexe em forma nem parcelas.
+   */
+  function concluirFaturamento() {
+    setErro('')
+    iniciar(async () => {
+      const r = await faturarPedido(pedidoId, {})
+      if (!r.ok) {
+        setErro(r.erro)
+        return
+      }
+      setRecadoFatura(r.detalhe)
+    })
   }
 
   function faturar() {
@@ -1086,8 +1103,30 @@ export default function PainelAcoes({
             {recadoFatura ||
               (ehCartao && !linkPagamentoAtual
                 ? 'Pedido no Bling. Gere o link de pagamento por cartão e envie abaixo.'
-                : 'Pedido no Bling e cobrança enviada. Nota fiscal e expedição seguem pelo Bling; o fechamento é feito aqui, abaixo.')}
+                : 'Pedido no Bling e cobrança enviada. Expedição e entrega seguem pelo Bling; o fechamento é feito aqui, abaixo.')}
           </p>
+
+          {/* O Faturar emite a nota e gera a cobrança; se uma delas ficou
+              pendente (SEFAZ lenta, Bling sem link), repete-se daqui */}
+          {podeCancelarOuAjustar && ((emitirNf && !temNf) || !cobrancaGerada) && (
+            <div className="mt-3 pt-3 border-t border-[#DDDCD5] flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-[#8A6A00] leading-relaxed">
+                {emitirNf && !temNf && !cobrancaGerada
+                  ? 'Nota fiscal e cobrança ainda não concluídas.'
+                  : emitirNf && !temNf
+                  ? 'Nota fiscal ainda não emitida (a SEFAZ pode estar lenta).'
+                  : 'Cobrança ainda não lançada no Bling.'}
+              </p>
+              <button
+                type="button"
+                onClick={concluirFaturamento}
+                disabled={pendente}
+                className="shrink-0 bg-[#131A2E] text-white text-[11px] font-semibold tracking-wide rounded-sm px-3 py-1.5 disabled:opacity-50"
+              >
+                {pendente ? '...' : 'CONCLUIR FATURAMENTO'}
+              </button>
+            </div>
+          )}
 
           {ehCartao && podeCancelarOuAjustar && (
             <div className="mt-3 pt-3 border-t border-[#DDDCD5]">

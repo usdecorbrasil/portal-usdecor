@@ -11,7 +11,7 @@ import { urlDoSite } from '@/lib/site'
 import { cancelarPedidoNoBling } from '@/lib/bling/pedido'
 import { buscarValorMinimoBoleto } from './configuracoes'
 
-const ETAPAS_MANUAIS = ['impressao', 'estampando', 'corte_costura', 'pronto'] as const
+const ETAPAS_MANUAIS = ['impressao', 'estampando', 'pronto'] as const
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
@@ -272,7 +272,7 @@ export async function cancelarPedido(
 }
 
 /** Etapas em que quantidade e preço não mudam mais: o valor já foi ao Bling. */
-const VALOR_FECHADO = ['pronto', 'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue', 'fechado']
+const VALOR_FECHADO = ['pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado']
 
 async function valorFechado(pedidoId: string): Promise<boolean> {
   const supabase = await createClient()
