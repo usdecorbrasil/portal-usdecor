@@ -9,8 +9,8 @@ const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const ATIVOS = [
-  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
+  'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue', 'fechado',
 ]
 
 export default async function ArquivadosPage({

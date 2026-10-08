@@ -13,10 +13,10 @@ const ROTULOS: Record<string, string> = {
   recebido: 'Pedido confirmado',
   impressao: 'Impressão',
   estampando: 'Estampando',
-  corte_costura: 'Em corte / costura',
-  pronto: 'Pedido pronto',
+  pronto: 'Estampa pronta',
   faturado: 'Faturado',
   nf_emitida: 'Nota fiscal emitida',
+  corte_costura: 'Em corte / costura',
   expedido: 'Expedido',
   entregue: 'Entregue',
   fechado: 'Pedido fechado',
@@ -31,8 +31,8 @@ const ROTULOS_PAGAMENTO: Record<string, string> = {
 }
 
 const ORDEM = [
-  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
+  'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue', 'fechado',
 ]
 
 function dataHora(iso: string) {
