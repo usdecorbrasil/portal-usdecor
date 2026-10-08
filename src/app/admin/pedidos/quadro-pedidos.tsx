@@ -992,7 +992,7 @@ function BarraRomaneio({
 /** Larguras das colunas, iguais no cabeçalho e nas linhas. */
 const COL = {
   numero: 'w-9 shrink-0 tabular-nums',
-  entrada: 'w-11 shrink-0 text-right tabular-nums hidden sm:block',
+  entrada: 'w-11 shrink-0 text-right tabular-nums',
   parado: 'w-16 shrink-0 text-center',
   qtd: 'w-14 shrink-0 text-right tabular-nums',
   valor: 'w-20 shrink-0 text-right tabular-nums hidden sm:block',
