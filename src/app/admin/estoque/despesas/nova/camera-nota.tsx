@@ -17,7 +17,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 type Formato = 'nota' | 'cupom'
 /** Altura ÷ largura da moldura. */
-const PROPORCAO: Record<Formato, number> = { nota: 1.414, cupom: 2.6 }
+const PROPORCAO: Record<Formato, number> = { nota: 1.414, cupom: 2.2 }
 /** Margem em volta da moldura que também vai na foto. */
 const FOLGA = 0.04
 
@@ -117,14 +117,16 @@ export default function CameraNota({
     const { w, h } = tamanho
     if (!w || !h) return { x: 0, y: 0, w: 0, h: 0 }
     const p = PROPORCAO[formato]
-    let fw = w * 0.86
+    // Quase a tela toda: só o respiro para os cantos e o texto de cima
+    const topo = 44
+    let fw = w - 24
     let fh = fw * p
-    const maxH = h * 0.7
+    const maxH = h - topo - 16
     if (fh > maxH) {
       fh = maxH
       fw = fh / p
     }
-    return { x: (w - fw) / 2, y: (h - fh) / 2 - h * 0.03, w: fw, h: fh }
+    return { x: (w - fw) / 2, y: topo + (maxH - fh) / 2, w: fw, h: fh }
   })()
 
   async function alternarLanterna() {
@@ -208,15 +210,9 @@ export default function CameraNota({
             </div>
             <p
               className="absolute left-0 right-0 text-center text-sm font-semibold px-6 drop-shadow"
-              style={{ top: Math.max(12, moldura.y - 44) }}
+              style={{ top: Math.max(8, moldura.y - 34) }}
             >
               Encaixe a nota inteira dentro da moldura
-            </p>
-            <p
-              className="absolute left-0 right-0 text-center text-xs text-white/80 px-6 drop-shadow"
-              style={{ top: moldura.y + moldura.h + 12 }}
-            >
-              Nota apoiada numa mesa, com luz, sem sombra e sem reflexo
             </p>
           </>
         )}
@@ -253,6 +249,9 @@ export default function CameraNota({
           </div>
         ) : (
           <>
+            {!falha && (
+              <p className="text-center text-[11px] text-white/70 mb-2">Nota apoiada numa mesa, com luz, sem sombra e sem reflexo</p>
+            )}
             {!falha && (
               <div className="flex justify-center gap-2 mb-3">
                 {(['nota', 'cupom'] as const).map((f) => (
