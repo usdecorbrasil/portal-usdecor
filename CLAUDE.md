@@ -470,6 +470,17 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   (entrada | consumo | ajuste) e a view `suprimento_saldos`.
 - **Item de nota com suprimento vira entrada no estoque** (gatilho
   `despesa_item_entrada_suprimento`, com o custo). Excluir a nota lança o ajuste inverso.
+- **Custos pelas compras** (08/10/2026): Financeiro → Custos mostra a média
+  ponderada das entradas de suprimento com custo (notas) nos últimos 30/60/90 dias
+  (`src/lib/custos/sugestao.ts`, puro; leitura em `src/lib/custos/compras.ts`).
+  Papel = suprimento de categoria "papel" em **metros**: R$/m comprado × `consumo_por_metro`
+  do papel (m de papel por m estampado; sem cadastro, 1). Tinta = categoria "tinta" em
+  **L ou mL**: R$/L médio; o coeficiente (mL/m) é a **soma** do `consumo_por_metro` de
+  cada tinta (uma por cor), e sem cadastro fica o valor atual. Calandra nunca muda.
+  "Usar estes valores" só preenche o formulário. O modo automático
+  (`configuracoes.custos_automaticos` = `{ativo, janelaDias}`, desligado por padrão) faz
+  `salvarDespesa` chamar `atualizar_custos_producao` quando a nota tem item ligado a
+  suprimento. Custo continua congelado por pedido no romaneio: apuração passada não muda.
 - **Consumo automático**: `pedidos_sincronizar_consumo_suprimentos`, espelho do consumo
   de tecido — para cada suprimento com `consumo_por_metro`, mantém o consumo do pedido
   igual a `metragem_impressa × fator`; roda no mesmo UPDATE do romaneio e do ajuste de

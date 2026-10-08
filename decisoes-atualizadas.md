@@ -288,3 +288,15 @@ próxima renovação automática (poucas horas) ou ao clicar em reconectar.
 A baixa automática roda por GitHub Actions (`.github/workflows/baixa-pagamentos.yml`,
 de hora em hora), chamando `/api/cron/pagamentos` com `CRON_SECRET`. O plano
 Hobby da Vercel não aceita cron horário.
+
+## Custos pelas compras (08/10/2026)
+
+- A aba Custos sugere papel e tinta pela média ponderada das notas de compra do período
+  (30, 60 ou 90 dias). Papel precisa estar cadastrado em metros; tinta em L ou mL.
+- Papel por metro impresso = custo médio do metro comprado × consumo de papel por metro
+  estampado (cadastro do suprimento; padrão 1).
+- Coeficiente de tinta (mL por metro) = soma do "consumo por metro" de cada tinta
+  cadastrada. Sem coeficiente, mantém o valor atual.
+- Calandra não é afetada.
+- Atualização automática a cada nota é opcional e começa desligada. Mudanças passam pela
+  mesma função `atualizar_custos_producao` e só valem para romaneios futuros.
