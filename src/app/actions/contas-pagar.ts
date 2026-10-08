@@ -41,6 +41,8 @@ export type ContaPagar = {
   canceladaEm: string | null
   canceladaMotivo: string | null
   observacao: string | null
+  /** Nota lançada sem foto/PDF, ou conta avulsa antiga. */
+  semComprovante: boolean
 }
 
 export type FiltroContas = {
@@ -67,6 +69,7 @@ type LinhaBanco = {
   cancelada_motivo: string | null
   observacao: string | null
   categorias_despesa: { nome: string } | null
+  despesas: { arquivo_path: string | null } | null
 }
 
 const paraConta = (c: LinhaBanco): ContaPagar => ({
@@ -86,10 +89,11 @@ const paraConta = (c: LinhaBanco): ContaPagar => ({
   canceladaEm: c.cancelada_em,
   canceladaMotivo: c.cancelada_motivo,
   observacao: c.observacao,
+  semComprovante: !c.despesas?.arquivo_path,
 })
 
 const CAMPOS =
-  'id, despesa_id, descricao, fornecedor_nome, forma, parcela, parcelas, valor, vencimento, pago_em, valor_pago, baixa_obs, cancelada_em, cancelada_motivo, observacao, categorias_despesa(nome)'
+  'id, despesa_id, descricao, fornecedor_nome, forma, parcela, parcelas, valor, vencimento, pago_em, valor_pago, baixa_obs, cancelada_em, cancelada_motivo, observacao, categorias_despesa(nome), despesas(arquivo_path)'
 
 export type ResumoContas = {
   vencidas: { qtd: number; valor: number }

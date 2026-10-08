@@ -39,7 +39,8 @@ function revalidar() {
 /* ------------------------------- leitura ------------------------------- */
 
 export type Rascunho = {
-  arquivoPath: string
+  /** Nulo quando a nota é lançada sem foto/PDF (permitido, com lembrete na tela). */
+  arquivoPath: string | null
   origem: 'camera' | 'upload'
   modo: 'manual' | 'ia'
   /** Modelo que fez a leitura (rapido | preciso), quando houve. */
@@ -147,7 +148,7 @@ const schemaItem = z.object({
 })
 
 const schemaDespesa = z.object({
-  arquivoPath: z.string({ message: 'Anexe a foto ou o PDF da nota ou do recibo' }).min(1, 'Anexe a foto ou o PDF da nota ou do recibo'),
+  arquivoPath: z.string().min(1).nullable(),
   origem: z.enum(['camera', 'upload']),
   modo: z.enum(['manual', 'ia']),
   modeloIa: z.enum(['rapido', 'preciso']).nullable().optional(),
@@ -281,6 +282,7 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     campos: [
       { campo: 'Fornecedor', de: null, para: d.fornecedorNome ?? null },
       { campo: 'Total', de: null, para: String(d.total) },
+      { campo: 'Comprovante', de: null, para: d.arquivoPath ? 'foto/PDF anexado' : 'sem arquivo' },
       {
         campo: 'Pagamento',
         de: null,

@@ -3,10 +3,11 @@ import { listarContasPagar, type FiltroContas } from '@/app/actions/contas-pagar
 import ListaContas from './lista-contas'
 
 /**
- * Contas a pagar. Só nascem das notas e recibos lançados (com foto ou PDF) em
- * Estoque → Despesas — decisão do dono em 08/10/2026: não existe conta sem
- * comprovante. A forma de pagamento da nota define se a conta entra já paga
- * ou com vencimentos.
+ * Contas a pagar. Só nascem das notas e recibos lançados em Estoque →
+ * Despesas (decisão do dono em 08/10/2026: não existe conta avulsa). A nota
+ * pode ir sem foto/PDF, com confirmação; a conta fica "sem comprovante".
+ * A forma de pagamento da nota define se a conta entra já paga ou com
+ * vencimentos.
  */
 
 const SITUACOES: { chave: FiltroContas['situacao']; rotulo: string }[] = [
@@ -50,8 +51,9 @@ export default async function APagarPage({
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
         <p className="text-sm text-[#6E6E68] leading-relaxed flex-1">
-          Toda conta a pagar nasce de uma nota ou recibo, com foto ou PDF, lançado com a forma de
-          pagamento. Nota paga na hora (dinheiro, Pix, débito) entra já quitada.
+          Toda conta a pagar nasce de uma nota ou recibo lançado com a forma de pagamento. Nota
+          paga na hora (dinheiro, Pix, débito) entra já quitada; lançada sem foto ou PDF, aparece
+          como sem comprovante.
         </p>
         <Link
           href="/admin/estoque/despesas/nova"

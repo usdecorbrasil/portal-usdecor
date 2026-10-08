@@ -171,6 +171,10 @@ export default function Captura({
   const inputCamera = useRef<HTMLInputElement>(null)
   const [cameraAberta, setCameraAberta] = useState(false)
   const inputArquivo = useRef<HTMLInputElement>(null)
+  /** Anexar o arquivo já na conferência, sem refazer o formulário. */
+  const inputAnexo = useRef<HTMLInputElement>(null)
+  const [anexando, setAnexando] = useState(false)
+  const [confirmarSemArquivo, setConfirmarSemArquivo] = useState(false)
 
   async function escolher(f: File | undefined, de: 'camera' | 'upload') {
     if (!f) return
@@ -262,6 +266,38 @@ export default function Captura({
       return
     }
     aplicarRascunho(r.rascunho)
+  }
+
+  /** Nota sem foto/PDF: abre a conferência em branco (a tela lembra de anexar). */
+  function semArquivo() {
+    setErro('')
+    setArquivo(null)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(null)
+    aplicarRascunho({ arquivoPath: null, origem: 'upload', modo: 'manual', modelo: null, documento: null, erroLeitura: null })
+  }
+
+  /** Guarda o arquivo para uma nota que já está sendo conferida, sem mexer nos campos. */
+  async function anexarAgora(f: File | undefined) {
+    if (!f) return
+    setErro('')
+    setAnexando(true)
+    const comprimido = await comprimir(f)
+    const fd = new FormData()
+    fd.set('arquivo', comprimido)
+    fd.set('origem', 'upload')
+    fd.set('ia', 'nao')
+    const r = await lerDespesa(fd)
+    setAnexando(false)
+    if (!r.ok) {
+      setErro(r.erro)
+      return
+    }
+    setArquivo(comprimido)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(comprimido.type.startsWith('image/') ? URL.createObjectURL(comprimido) : null)
+    setRascunho((atual) => (atual ? { ...atual, arquivoPath: r.rascunho.arquivoPath } : r.rascunho))
+    setConfirmarSemArquivo(false)
   }
 
   async function relerPreciso() {
@@ -373,13 +409,8 @@ export default function Captura({
     })
   }
 
-  function salvar() {
+  function salvar(semArquivoConfirmado = false) {
     setErro('')
-    // Conta a pagar só com comprovante: sem arquivo guardado não há nota
-    if (!rascunho?.arquivoPath) {
-      setErro('Anexe a foto ou o PDF da nota ou do recibo antes de salvar.')
-      return
-    }
     if (!form.condicao) {
       setErro('Escolha como a nota foi paga (seção Pagamento).')
       return
@@ -388,8 +419,14 @@ export default function Captura({
       setErro(erroParcelas)
       return
     }
+    // Sem comprovante é permitido, mas pede confirmação e lembra de anexar
+    if (!rascunho?.arquivoPath && !semArquivoConfirmado) {
+      setConfirmarSemArquivo(true)
+      return
+    }
+    setConfirmarSemArquivo(false)
     const dados: DadosDespesa = {
-      arquivoPath: rascunho.arquivoPath,
+      arquivoPath: rascunho?.arquivoPath ?? null,
       origem: rascunho?.origem ?? origem,
       modo: rascunho?.modo ?? 'manual',
       modeloIa: rascunho?.modelo ?? null,
@@ -496,6 +533,12 @@ export default function Captura({
           </div>
         )}
 
+        {!arquivo && (
+          <button onClick={semArquivo} className="mt-3 text-xs text-[#6E6E68] underline hover:text-[#131A2E]">
+            Não tenho a nota agora — lançar sem arquivo
+          </button>
+        )}
+
         {erro && <p className="text-sm text-[#B00063] bg-white border border-[#B00063] rounded-sm p-3 mt-4">{erro}</p>}
       </div>
     )
@@ -522,6 +565,15 @@ export default function Captura({
             <span className="flex-1 min-w-0">Preenchimento à mão. Se quiser, a IA pode tentar ler este arquivo.</span>
             <button onClick={relerPreciso} disabled={lendo} className="shrink-0 border border-[#131A2E] rounded-sm px-2.5 py-1 text-[11px] font-semibold tracking-wide disabled:opacity-50">
               {lendo ? 'LENDO…' : 'LER COM O MODELO PRECISO'}
+            </button>
+          </div>
+        )}
+        <input ref={inputAnexo} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => anexarAgora(e.target.files?.[0])} />
+        {!rascunho?.arquivoPath && (
+          <div className="text-xs text-[#6B5320] bg-[#FFFBEE] border border-[#C79600] rounded-sm px-3 py-2 mb-3 flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-0">Nota sem foto ou PDF. Dá para salvar assim, mas a conta a pagar fica sem comprovante.</span>
+            <button onClick={() => inputAnexo.current?.click()} disabled={anexando} className="shrink-0 border border-[#C79600] bg-white rounded-sm px-2.5 py-1 text-[11px] font-semibold tracking-wide disabled:opacity-50">
+              {anexando ? 'ANEXANDO…' : '📎 ANEXAR AGORA'}
             </button>
           </div>
         )}
@@ -781,7 +833,7 @@ export default function Captura({
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 mt-4">
-          <button onClick={salvar} disabled={pendente || totalInformado <= 0} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
+          <button onClick={() => salvar()} disabled={pendente || totalInformado <= 0} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
             {pendente ? 'SALVANDO…' : 'SALVAR DESPESA'}
           </button>
           <button onClick={() => { setEtapa('captura'); setErro('') }} disabled={pendente} className={botao + ' border border-[#131A2E] bg-white'}>
@@ -795,9 +847,33 @@ export default function Captura({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt="Nota" className="w-full rounded-sm border border-[#DDDCD5]" />
         ) : (
-          <div className="border border-dashed border-[#DDDCD5] rounded-sm p-6 text-center text-xs text-[#6E6E68]">{arquivo?.name ?? 'sem prévia'}</div>
+          <div className="border border-dashed border-[#DDDCD5] rounded-sm p-6 text-center text-xs text-[#6E6E68]">
+            {arquivo?.name ?? (rascunho?.arquivoPath ? 'sem prévia' : 'sem arquivo anexado')}
+          </div>
         )}
       </aside>
+
+      {confirmarSemArquivo && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Salvar sem comprovante">
+          <div className="bg-white rounded-sm w-full max-w-md p-5 shadow-xl">
+            <p className="font-semibold tracking-tight text-[#131A2E]">Salvar a nota sem foto ou PDF?</p>
+            <p className="text-sm text-[#6E6E68] mt-2 leading-relaxed">
+              A nota e a conta a pagar vão ficar <strong>sem comprovante</strong>. Se você tem a nota ou o recibo, anexe agora — depois fica mais difícil de encontrar.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 mt-5">
+              <button onClick={() => inputAnexo.current?.click()} disabled={anexando || pendente} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
+                {anexando ? 'ANEXANDO…' : '📎 ANEXAR O ARQUIVO'}
+              </button>
+              <button onClick={() => salvar(true)} disabled={anexando || pendente} className={botao + ' flex-1 border border-[#131A2E] bg-white'}>
+                {pendente ? 'SALVANDO…' : 'SALVAR SEM ARQUIVO'}
+              </button>
+            </div>
+            <button onClick={() => setConfirmarSemArquivo(false)} className="w-full text-xs text-[#6E6E68] underline mt-3">
+              voltar para a nota
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

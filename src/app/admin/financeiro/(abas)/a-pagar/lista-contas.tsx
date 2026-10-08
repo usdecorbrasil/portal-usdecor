@@ -52,7 +52,7 @@ export default function ListaContas({
 
   function exportar() {
     const linhas = [
-      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Valor', 'Situação', 'Pago em', 'Valor pago'],
+      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante'],
       ...contas.map((c) => [
         dataBr(c.vencimento),
         c.descricao,
@@ -64,6 +64,7 @@ export default function ListaContas({
         c.canceladaEm ? 'Cancelada' : c.pagoEm ? 'Paga' : c.vencimento < hoje ? 'Vencida' : 'Em aberto',
         c.pagoEm ? dataBr(c.pagoEm) : '',
         c.valorPago != null ? numCsv(c.valorPago) : '',
+        c.semComprovante ? 'sem arquivo' : 'anexado',
       ]),
     ]
     baixarCsv(`contas-a-pagar-${situacao}-${hoje}.csv`, paraCsv(linhas))
@@ -130,7 +131,7 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
           <span className="flex-1 min-w-0">
             <span className={NOME + ' block'}>{c.descricao}</span>
             <span className="block text-[11px] text-[#6E6E68] truncate">
-              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.despesaId ? 'da nota' : 'sem nota (antiga)']
+              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.despesaId ? 'da nota' : 'avulsa (antiga)']
                 .filter(Boolean)
                 .join(' · ')}
             </span>
@@ -142,6 +143,7 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
             <span className={ETIQUETA + ' bg-[#F2F1ED] text-[#6E6E68]'}>{ROTULO_CURTO[c.forma]}</span>
           </span>
           {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' sm:hidden'}>{etiqueta.t}</span>}
+          {c.semComprovante && <span className={ETIQUETA + ' bg-[#FFFBEE] text-[#8A6100]'}>sem comprovante</span>}
           <span className={NUM + ' ml-auto sm:ml-0 sm:w-24 text-right font-semibold'}>R$ {brl(c.valorPago ?? c.valor)}</span>
         </span>
         {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' hidden sm:inline'}>{etiqueta.t}</span>}

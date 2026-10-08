@@ -308,8 +308,9 @@ Hobby da Vercel não aceita cron horário.
 - Já pago e débito entram em contas a pagar quitados na data da nota. Crédito, boleto e a
   pagar geram uma conta por parcela, com vencimento e valor; a soma das parcelas tem de
   bater com o total da nota.
-- Conta a pagar só existe com comprovante: nota fiscal ou recibo, com foto ou PDF, lançado em
-  Estoque → Despesas com a forma de pagamento. Não há lançamento de conta avulsa (decidido em
-  08/10/2026). Aluguel, energia e afins entram pelo boleto ou recibo fotografado.
+- Conta a pagar só nasce de nota fiscal ou recibo lançado em Estoque → Despesas, com a forma de
+  pagamento. Não há lançamento de conta avulsa (decidido em 08/10/2026). A nota pode ser salva
+  sem foto ou PDF, depois de um pop-up de confirmação que lembra de anexar; a conta fica marcada
+  como "sem comprovante".
 - Pagar, mudar vencimento/valor, estornar e cancelar ficam registrados; os três últimos
   exigem motivo. Excluir a nota cancela as parcelas ainda não pagas.

@@ -525,10 +525,13 @@ Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admi
   **antes dos itens** de propósito: se falharem, a nota é apagada sem ter gerado entrada de
   estoque. Pago e débito entram já quitados na emissão; os demais, uma linha por parcela,
   com soma igual ao total (tolerância de 1 centavo).
-- **Conta a pagar só nasce de nota ou recibo com arquivo** (decisão do dono, 08/10/2026,
-  migration `20261008200000`): `admin_criar_conta_pagar` (conta avulsa) foi removida e
-  `admin_gerar_contas_despesa` recusa nota sem `arquivo_path`; `salvarDespesa` também
-  exige o arquivo. O atalho do dashboard e o botão da aba A pagar levam a Nova nota.
+- **Conta a pagar só nasce de nota ou recibo** (decisão do dono, 08/10/2026, migration
+  `20261008200000`): `admin_criar_conta_pagar` (conta avulsa) foi removida. A nota **pode**
+  ir sem foto/PDF ("Não tenho a nota agora — lançar sem arquivo"), mas a conferência mostra
+  o aviso com "Anexar agora" (guarda o arquivo sem mexer nos campos) e salvar abre o
+  pop-up "Salvar a nota sem foto ou PDF?". A conta aparece com a etiqueta
+  "sem comprovante" em A pagar (e no CSV). O atalho do dashboard e o botão da aba A pagar
+  levam a Nova nota.
 - Tabela `contas_pagar` (uma linha por parcela; `despesa_id` nulo só nas avulsas criadas
   antes da regra). Escrita só por RPC: `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
   `admin_estornar_conta_pagar`, `admin_cancelar_conta_pagar`, `admin_alterar_conta_pagar`
