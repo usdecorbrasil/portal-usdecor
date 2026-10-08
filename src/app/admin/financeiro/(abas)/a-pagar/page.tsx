@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import { listarContasPagar, type FiltroContas } from '@/app/actions/contas-pagar'
-import { createClient } from '@/lib/supabase/server'
 import ListaContas from './lista-contas'
-import NovaConta from './nova-conta'
 
 /**
- * Contas a pagar. Nascem das notas lançadas em Estoque → Despesas (a forma de
- * pagamento da nota define se já entram pagas ou com vencimentos) ou são
- * lançadas aqui, à mão, para o que não tem nota (aluguel, energia).
+ * Contas a pagar. Só nascem das notas e recibos lançados em Estoque →
+ * Despesas (decisão do dono em 08/10/2026: não existe conta avulsa). A nota
+ * pode ir sem foto/PDF, com confirmação; a conta fica "sem comprovante".
+ * A forma de pagamento da nota define se a conta entra já paga ou com
+ * vencimentos.
  */
 
 const SITUACOES: { chave: FiltroContas['situacao']; rotulo: string }[] = [
@@ -23,17 +23,18 @@ const dataValida = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : und
 export default async function APagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ situacao?: string; de?: string; ate?: string }>
+  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; comprovante?: string }>
 }) {
   const sp = await searchParams
   const situacao = (SITUACOES.find((s) => s.chave === sp.situacao)?.chave ?? 'abertas') as FiltroContas['situacao']
-  const filtro: FiltroContas = { situacao, de: dataValida(sp.de), ate: dataValida(sp.ate) }
+  const filtro: FiltroContas = {
+    situacao,
+    de: dataValida(sp.de),
+    ate: dataValida(sp.ate),
+    semComprovante: sp.comprovante === 'pendente',
+  }
 
-  const supabase = await createClient()
-  const [r, { data: categorias }] = await Promise.all([
-    listarContasPagar(filtro),
-    supabase.from('categorias_despesa').select('id, nome').eq('ativo', true).order('nome'),
-  ])
+  const r = await listarContasPagar(filtro)
   if (!r) return null
   const { contas, resumo, hoje } = r
 
@@ -48,15 +49,25 @@ export default async function APagarPage({
     const q = new URLSearchParams({ situacao: s })
     if (filtro.de) q.set('de', filtro.de)
     if (filtro.ate) q.set('ate', filtro.ate)
+    if (filtro.semComprovante) q.set('comprovante', 'pendente')
     return `?${q.toString()}`
   }
 
   return (
     <div>
-      <p className="text-sm text-[#6E6E68] mb-4 leading-relaxed">
-        Contas geradas pelas notas lançadas em Estoque → Despesas e as lançadas aqui. Nota paga na
-        hora (dinheiro, Pix, débito) entra já quitada.
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <p className="text-sm text-[#6E6E68] leading-relaxed flex-1">
+          Toda conta a pagar nasce de uma nota ou recibo lançado com a forma de pagamento. Nota
+          paga na hora (dinheiro, Pix, débito) entra já quitada; lançada sem foto ou PDF, aparece
+          como sem comprovante.
+        </p>
+        <Link
+          href="/admin/estoque/despesas/nova"
+          className="shrink-0 inline-flex items-center justify-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+        >
+          📷 LANÇAR NOTA DE COMPRA
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
         {quadros.map((q) => (
@@ -89,6 +100,7 @@ export default async function APagarPage({
         </div>
         <form className="flex flex-wrap items-end gap-2" action="">
           <input type="hidden" name="situacao" value={situacao} />
+          {filtro.semComprovante && <input type="hidden" name="comprovante" value="pendente" />}
           <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
             {situacao === 'pagas' ? 'PAGAS DE' : 'VENCE DE'}
             <input type="date" name="de" defaultValue={filtro.de} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white" />
@@ -106,7 +118,14 @@ export default async function APagarPage({
         </form>
       </div>
 
-      <NovaConta categorias={(categorias ?? []).map((c) => ({ id: c.id as string, nome: c.nome as string }))} hoje={hoje} />
+      {filtro.semComprovante && (
+        <div className="flex flex-wrap items-center gap-2 text-xs bg-[#FBEAF0] border border-[#B00063] text-[#B00063] rounded-sm px-3 py-2 mb-3">
+          <span className="flex-1 min-w-0">
+            Mostrando só contas de notas sem foto ou PDF. Abra a conta e use &ldquo;anexar comprovante&rdquo;.
+          </span>
+          <Link href={`?situacao=${situacao}`} className="underline font-semibold">ver todas</Link>
+        </div>
+      )}
 
       <ListaContas contas={contas} situacao={situacao} hoje={hoje} />
     </div>

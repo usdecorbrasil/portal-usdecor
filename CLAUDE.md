@@ -525,9 +525,35 @@ Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admi
   **antes dos itens** de propósito: se falharem, a nota é apagada sem ter gerado entrada de
   estoque. Pago e débito entram já quitados na emissão; os demais, uma linha por parcela,
   com soma igual ao total (tolerância de 1 centavo).
-- Tabela `contas_pagar` (uma linha por parcela, `despesa_id` opcional — conta sem nota
-  pelo botão "Lançar conta sem nota"). Escrita só por RPC: `admin_criar_conta_pagar`,
-  `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
+- **Conta a pagar só nasce de nota ou recibo** (decisão do dono, 08/10/2026, migration
+  `20261008200000`): `admin_criar_conta_pagar` (conta avulsa) foi removida. A nota **pode**
+  ir sem foto/PDF ("Não tenho a nota agora — lançar sem arquivo"), mas a conferência mostra
+  o aviso com "Anexar agora" (guarda o arquivo sem mexer nos campos) e salvar abre o
+  pop-up "Salvar a nota sem foto ou PDF?". A conta aparece com a etiqueta
+  "sem comprovante" em A pagar (e no CSV). O atalho do dashboard e o botão da aba A pagar
+  levam a Nova nota.
+- **Comprovante depois**: na conta a pagar, "📎 Anexar comprovante" (`anexarComprovanteDespesa`
+  → RPC `admin_anexar_arquivo_despesa`, que só preenche nota **sem** arquivo e não
+  excluída; se a RPC recusa, o arquivo sai do bucket). Nota sem arquivo há mais de
+  `PRAZO_COMPROVANTE_DIAS` (2) desde o lançamento gera **aviso vermelho no dashboard**
+  (admin/financeiro) com quantidade e valor, que abre A pagar filtrada em
+  `?comprovante=pendente`. Só conta notas com `condicao_pagamento` (as anteriores ao
+  contas a pagar ficam de fora). Compressão da foto em `src/lib/despesas/comprimir.ts`.
+- **Avisos do dashboard padronizados** (08/10/2026): `src/app/admin/dashboard/avisos.tsx`
+  recebe uma lista `{nivel: urgente|atencao|info, titulo, detalhe, href}` e mostra todos
+  no mesmo formato — linha compacta, tarja lateral na cor do nível, duas colunas no
+  computador, ordenados por urgência. Urgente: pedido travado por atraso, nota sem
+  comprovante, conta a pagar vencida, solicitação de cancelamento. Atenção: bloqueado por
+  crédito. Info: aguardando confirmação. Aviso novo = mais um `avisos.push` na página. O
+  atalho "Lançar nota" fica na linha do título.
+- **E-mail diário de pendências** (migration `20261008210000`): `/api/cron/avisos-diarios`,
+  chamada às 07:47 (Brasília) por `.github/workflows/avisos-diarios.yml` com os mesmos
+  secrets da baixa de pagamentos. Manda, só quando há pendência, um resumo (notas sem
+  comprovante há mais de 2 dias + contas vencidas) para o tipo `contas_pagar_pendencias`
+  de Configurações → Notificações, que a migration semeia com a lista de `pedido_novo`.
+  Um envio por dia: a data fica em `configuracoes.avisos_diarios` (`?forcar=1` ignora).
+- Tabela `contas_pagar` (uma linha por parcela; `despesa_id` nulo só nas avulsas criadas
+  antes da regra). Escrita só por RPC: `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
   `admin_estornar_conta_pagar`, `admin_cancelar_conta_pagar`, `admin_alterar_conta_pagar`
   (vencimento/valor); as três últimas exigem motivo ≥ 10 e anotam em `observacao`. Tudo
   também vai para `auditoria` (entidade `conta_pagar`).

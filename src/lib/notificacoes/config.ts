@@ -16,6 +16,7 @@ export const TIPOS = [
   'pedido_cancelado',
   'cancelamento_solicitado',
   'tecido_enviado',
+  'contas_pagar_pendencias',
 ] as const
 
 export type TipoNotificacao = (typeof TIPOS)[number]
@@ -44,6 +45,11 @@ export const ROTULOS: Record<TipoNotificacao, { titulo: string; descricao: strin
     descricao:
       'Quando um cliente avisa que mandou tecido. O saldo só entra depois da conferência na aba Estoque.',
   },
+  contas_pagar_pendencias: {
+    titulo: 'Pendências de contas a pagar (resumo diário)',
+    descricao:
+      'Uma vez por dia, de manhã, quando há nota de compra sem comprovante há mais de 2 dias ou conta a pagar vencida. Não sai nada nos dias sem pendência.',
+  },
 }
 
 export type ConfigNotificacoes = Record<TipoNotificacao, string[]>
@@ -54,6 +60,7 @@ export const PADRAO: ConfigNotificacoes = {
   pedido_cancelado: [],
   cancelamento_solicitado: [],
   tecido_enviado: [],
+  contas_pagar_pendencias: [],
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

@@ -308,6 +308,20 @@ Hobby da Vercel não aceita cron horário.
 - Já pago e débito entram em contas a pagar quitados na data da nota. Crédito, boleto e a
   pagar geram uma conta por parcela, com vencimento e valor; a soma das parcelas tem de
   bater com o total da nota.
-- Contas sem nota (aluguel, energia) são lançadas direto em Financeiro → A pagar.
+- Conta a pagar só nasce de nota fiscal ou recibo lançado em Estoque → Despesas, com a forma de
+  pagamento. Não há lançamento de conta avulsa (decidido em 08/10/2026). A nota pode ser salva
+  sem foto ou PDF, depois de um pop-up de confirmação que lembra de anexar; a conta fica marcada
+  como "sem comprovante".
+- Nota sem foto ou PDF há mais de 2 dias do lançamento aparece num aviso vermelho no dashboard
+  (dono e financeiro), até alguém anexar o comprovante pela própria conta a pagar.
 - Pagar, mudar vencimento/valor, estornar e cancelar ficam registrados; os três últimos
   exigem motivo. Excluir a nota cancela as parcelas ainda não pagas.
+
+## Avisos do dashboard e e-mail diário (08/10/2026)
+
+- Todos os avisos do dashboard seguem o mesmo formato: uma linha compacta por assunto, com a cor
+  indicando a urgência (vermelho urgente, amarelo atenção, azul informação), em duas colunas no
+  computador.
+- Todo dia de manhã, se houver nota sem comprovante há mais de 2 dias ou conta a pagar vencida,
+  sai um e-mail de resumo para quem estiver em Configurações → Notificações → "Pendências de
+  contas a pagar". Sem pendência, não sai nada.

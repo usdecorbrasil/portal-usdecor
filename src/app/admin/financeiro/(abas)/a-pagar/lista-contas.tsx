@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, TITULO_GRUPO, VAZIO } from '@/components/estilo-lista'
 import { baixarCsv, paraCsv, numCsv } from '@/components/baixar-csv'
 import { ROTULO_CURTO } from '@/lib/contas-pagar/condicoes'
+import { comprimir } from '@/lib/despesas/comprimir'
+import { anexarComprovanteDespesa } from '@/app/actions/despesas'
 import {
   alterarContaPagar,
   baixarContaPagar,
@@ -52,7 +54,7 @@ export default function ListaContas({
 
   function exportar() {
     const linhas = [
-      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Valor', 'Situação', 'Pago em', 'Valor pago'],
+      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante'],
       ...contas.map((c) => [
         dataBr(c.vencimento),
         c.descricao,
@@ -64,6 +66,7 @@ export default function ListaContas({
         c.canceladaEm ? 'Cancelada' : c.pagoEm ? 'Paga' : c.vencimento < hoje ? 'Vencida' : 'Em aberto',
         c.pagoEm ? dataBr(c.pagoEm) : '',
         c.valorPago != null ? numCsv(c.valorPago) : '',
+        c.semComprovante ? 'sem arquivo' : 'anexado',
       ]),
     ]
     baixarCsv(`contas-a-pagar-${situacao}-${hoje}.csv`, paraCsv(linhas))
@@ -130,7 +133,7 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
           <span className="flex-1 min-w-0">
             <span className={NOME + ' block'}>{c.descricao}</span>
             <span className="block text-[11px] text-[#6E6E68] truncate">
-              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.despesaId ? 'da nota' : 'lançada à mão']
+              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.despesaId ? 'da nota' : 'avulsa (antiga)']
                 .filter(Boolean)
                 .join(' · ')}
             </span>
@@ -142,6 +145,7 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
             <span className={ETIQUETA + ' bg-[#F2F1ED] text-[#6E6E68]'}>{ROTULO_CURTO[c.forma]}</span>
           </span>
           {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' sm:hidden'}>{etiqueta.t}</span>}
+          {c.semComprovante && <span className={ETIQUETA + ' bg-[#FFFBEE] text-[#8A6100]'}>sem comprovante</span>}
           <span className={NUM + ' ml-auto sm:ml-0 sm:w-24 text-right font-semibold'}>R$ {brl(c.valorPago ?? c.valor)}</span>
         </span>
         {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' hidden sm:inline'}>{etiqueta.t}</span>}
@@ -162,6 +166,17 @@ function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
   const [texto, setTexto] = useState('')
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
+  const inputAnexo = useRef<HTMLInputElement>(null)
+
+  async function anexar(f: File | undefined) {
+    if (!f || !c.despesaId) return
+    const despesaId = c.despesaId
+    setErro('')
+    const comprimido = await comprimir(f)
+    const fd = new FormData()
+    fd.set('arquivo', comprimido)
+    executar(() => anexarComprovanteDespesa(despesaId, fd))
+  }
 
   const campo = 'border border-[#DDDCD5] rounded-sm px-2 py-1.5 text-sm bg-white w-full outline-none focus:border-[#131A2E]'
   const rotulo = 'block text-[10px] font-mono tracking-wider text-[#6E6E68]'
@@ -193,6 +208,16 @@ function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
         <p className="text-xs text-[#6E6E68] mb-2">
           Valor da conta R$ {brl(c.valor)} · pago R$ {brl(c.valorPago)}
         </p>
+      )}
+
+      {c.semComprovante && c.despesaId && (
+        <div className="flex flex-wrap items-center gap-2 text-xs bg-[#FFFBEE] border border-[#C79600] text-[#6B5320] rounded-sm px-2.5 py-2 mb-2">
+          <input ref={inputAnexo} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => anexar(e.target.files?.[0])} />
+          <span className="flex-1 min-w-0">Nota sem foto ou PDF. Anexe a nota fiscal ou o recibo.</span>
+          <button onClick={() => inputAnexo.current?.click()} disabled={pendente} className="shrink-0 border border-[#C79600] bg-white rounded-sm px-2.5 py-1 font-semibold disabled:opacity-50">
+            {pendente ? 'ENVIANDO…' : '📎 ANEXAR COMPROVANTE'}
+          </button>
+        </div>
       )}
 
       <div className="flex flex-wrap gap-3 text-xs mb-2">
