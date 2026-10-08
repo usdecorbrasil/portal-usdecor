@@ -9,7 +9,7 @@ const ROTULOS_STATUS: Record<string, string> = {
   impressao: 'Impressão',
   estampando: 'Estampando',
   corte_costura: 'Em corte / costura',
-  pronto: 'Pedido pronto',
+  pronto: 'Estampa pronta',
   nf_emitida: 'Nota fiscal emitida',
   expedido: 'Expedido',
   entregue: 'Entregue',

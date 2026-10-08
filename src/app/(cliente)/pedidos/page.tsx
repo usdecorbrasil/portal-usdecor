@@ -12,18 +12,18 @@ const ETAPAS: Record<string, { label: string; cor: string }> = {
   recebido:      { label: 'Pedido recebido',   cor: 'bg-[#E6EDEE] text-[#0090D8]' },
   impressao:     { label: 'Impressão',         cor: 'bg-[#FBF0D9] text-[#C79600]' },
   estampando:    { label: 'Estampando',        cor: 'bg-[#FBF0D9] text-[#C79600]' },
-  corte_costura: { label: 'Em corte / costura',cor: 'bg-[#FBF0D9] text-[#C79600]' },
-  pronto:        { label: 'Pedido pronto',     cor: 'bg-[#FBF0D9] text-[#C79600]' },
+  pronto:        { label: 'Estampa pronta',    cor: 'bg-[#FBF0D9] text-[#C79600]' },
   faturado:      { label: 'Faturado',          cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
   nf_emitida:    { label: 'Nota fiscal emitida', cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
+  corte_costura: { label: 'Em corte / costura',cor: 'bg-[#FBF0D9] text-[#C79600]' },
   expedido:      { label: 'Expedido',          cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
   entregue:      { label: 'Entregue',          cor: 'bg-[#E3F0E8] text-[#2E7D4F]' },
   fechado:       { label: 'Pedido fechado',    cor: 'bg-[#EAE9E3] text-[#6E6E68]' },
 }
 
 const ORDEM = [
-  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado',
+  'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
+  'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue', 'fechado',
 ]
 
 export default async function PedidosPage() {

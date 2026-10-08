@@ -272,7 +272,7 @@ export async function cancelarPedido(
 }
 
 /** Etapas em que quantidade e preço não mudam mais: o valor já foi ao Bling. */
-const VALOR_FECHADO = ['pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue', 'fechado']
+const VALOR_FECHADO = ['pronto', 'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue', 'fechado']
 
 async function valorFechado(pedidoId: string): Promise<boolean> {
   const supabase = await createClient()

@@ -8,35 +8,41 @@ export const ROTULOS: Record<string, string> = {
   recebido: 'Pedido confirmado',
   impressao: 'Impressão',
   estampando: 'Estampando',
-  corte_costura: 'Em corte / costura',
-  pronto: 'Pedido pronto',
+  pronto: 'Estampa pronta',
   faturado: 'Faturado',
   nf_emitida: 'Nota fiscal emitida',
+  corte_costura: 'Em corte / costura',
   expedido: 'Expedido',
   entregue: 'Entregue',
 }
 
+/**
+ * Ordem das etapas. Corte/costura vem DEPOIS do faturamento (decidido pelo
+ * dono em 08/10/2026): o que se fatura é impressão e estampa; a costura é
+ * terceirizada e não gera receita. "Estampa pronta" é o ponto de faturar.
+ */
 export const ATIVOS = [
-  'aguardando', 'recebido', 'impressao', 'estampando', 'corte_costura',
-  'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue',
+  'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
+  'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue',
 ]
 
+/** Etapas em que a estamparia está trabalhando no pedido (conta "parado há"). */
 export const EM_PRODUCAO = [
-  'recebido', 'impressao', 'estampando', 'corte_costura', 'pronto',
+  'recebido', 'impressao', 'estampando', 'pronto', 'corte_costura',
 ]
 
-/** Etapas que o painel lança à mão — as demais chegam do Bling. */
-export const MANUAIS = ['impressao', 'estampando', 'corte_costura', 'pronto']
+/** Etapas que o painel lança à mão — as demais chegam do Bling ou do Faturar. */
+export const MANUAIS = ['impressao', 'estampando', 'pronto', 'corte_costura']
 
 /**
  * Para onde um pedido em `origem` pode ser arrastado. Espelha a regra do
- * painel do pedido: uma etapa por vez, exceto saindo de Estampando, onde a
- * costura pode ser pulada. "Faturado" é lançado pelo botão Faturar, não
- * por arraste.
+ * painel do pedido: uma etapa por vez. "Faturado" é lançado pelo botão
+ * Faturar, não por arraste; a costura só entra depois dele (com ou sem nota)
+ * e é opcional — pedido sem costura segue para a expedição pelo Bling.
  */
 export function destinosPermitidos(origem: string): string[] {
   if (origem === 'aguardando') return []
-  if (origem === 'estampando') return ['corte_costura', 'pronto']
+  if (origem === 'faturado' || origem === 'nf_emitida') return ['corte_costura']
   const proxima = ATIVOS[ATIVOS.indexOf(origem) + 1]
   return proxima && MANUAIS.includes(proxima) ? [proxima] : []
 }
@@ -46,7 +52,7 @@ export function sinal(status: string, dias: number) {
     return { cl: 'novo', tx: 'Aguardando sua confirmação' }
   }
   if (status === 'faturado') {
-    return { cl: 'bling', tx: 'Faturado — aguardando nota e expedição' }
+    return { cl: 'bling', tx: 'Faturado — segue para corte/costura ou expedição' }
   }
   if (!EM_PRODUCAO.includes(status)) {
     return { cl: 'bling', tx: 'Nota e expedição no Bling — pode ser fechado no pedido' }
@@ -78,10 +84,13 @@ export function motivoSemDestino(status: string): string | null {
     return 'Este pedido ainda aguarda confirmação. Confirme-o na tela do pedido — depois ele pode ser arrastado.'
   }
   if (status === 'pronto') {
-    return 'Pedido pronto é faturado pelo botão Faturar na tela do pedido — ou agrupado com outros do mesmo cliente antes disso.'
+    return 'Estampa pronta é faturada pelo botão Faturar na tela do pedido — ou agrupada com outros do mesmo cliente antes disso.'
+  }
+  if (status === 'corte_costura') {
+    return 'Depois da costura, expedição e entrega são lançadas pelo Bling; não dá para mover à mão.'
   }
   if (destinosPermitidos(status).length === 0) {
-    return 'A partir do faturamento as etapas são lançadas pelo Bling (nota fiscal, expedição, entrega); não dá para mover à mão.'
+    return 'Expedição e entrega são lançadas pelo Bling; não dá para mover à mão.'
   }
   return null
 }
