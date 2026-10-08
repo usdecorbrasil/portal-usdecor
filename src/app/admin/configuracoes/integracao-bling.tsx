@@ -86,7 +86,21 @@ export default function IntegracaoBling({ estado }: { estado: EstadoBling }) {
                 {dataHora(estado.expiraEm)}
               </span>
             </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-[#6E6E68]">Formato do token</span>
+              <span className={`font-mono ${estado.jwt ? 'text-[#2E7D4F]' : 'text-[#C79600]'}`}>
+                {estado.jwt ? 'JWT (novo padrão)' : 'opaco (antigo)'}
+              </span>
+            </div>
           </div>
+
+          {!estado.jwt && (
+            <p className="text-xs text-[#8A6A00] bg-[#FFFBEE] border border-[#E8D9A8] rounded-sm px-3 py-2 mt-2 leading-relaxed">
+              O Bling vai desligar o token antigo em 15/10/2026. O portal já pede
+              o formato novo: ele troca sozinho na próxima renovação (em poucas
+              horas) ou agora, se você clicar em &ldquo;Reconectar&rdquo;.
+            </p>
+          )}
 
           {estado.expirado && (
             <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
