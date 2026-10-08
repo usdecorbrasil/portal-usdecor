@@ -11,7 +11,8 @@ import { salvarDocumento, baixarArquivo } from '@/lib/storage/documentos'
 import { enviarEmail } from '@/lib/resend/enviar'
 import { templateNfEmitida } from '@/lib/resend/templates/nf-emitida'
 import { templateCobranca, type CobrancaEmail } from '@/lib/resend/templates/cobranca'
-import { MAX_PARCELAS, taxaDoPedido } from '@/lib/pagamento/config'
+import { MAX_PARCELAS, taxaDoPedido, valorCobranca } from '@/lib/pagamento/config'
+import { FORMAS_FATURA, ROTULOS_FATURA } from '@/lib/pagamento/faturar'
 import { urlDoSite } from '@/lib/site'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito'
@@ -33,13 +34,7 @@ import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito
 
 type Resultado = { ok: true; detalhe: string } | { ok: false; erro: string }
 
-const ROTULOS_PAGAMENTO: Record<string, string> = {
-  boleto_avista: 'Boleto à vista',
-  boleto_parcelado: 'Boleto parcelado',
-  pix: 'Pix',
-  cartao_credito: 'Cartão de crédito',
-  cartao_debito: 'Cartão de débito',
-}
+const ROTULOS_PAGAMENTO: Record<string, string> = ROTULOS_FATURA
 
 async function exigirAdmin() {
   const supabase = await createClient()
@@ -67,6 +62,7 @@ type Pedido = {
   bling_nf_id: number | string | null
   nf_numero: string | null
   cobranca_gerada_em: string | null
+  bloqueio_liberado_em: string | null
   agrupado_em: string | null
   link_pagamento: string | null
   vencimento_avista: string | null
@@ -87,7 +83,7 @@ async function carregar(pedidoId: string): Promise<Pedido | null> {
     .from('pedidos')
     .select(
       'id, numero, cliente_id, forma_pagamento, total, taxa_pagamento_percentual, taxa_pagamento_fixa, ' +
-        'emitir_nf, bling_pedido_id, bling_sync_status, bling_nf_id, nf_numero, cobranca_gerada_em, agrupado_em, link_pagamento, vencimento_avista, ' +
+        'emitir_nf, bling_pedido_id, bling_sync_status, bling_nf_id, nf_numero, cobranca_gerada_em, agrupado_em, link_pagamento, vencimento_avista, bloqueio_liberado_em, ' +
         'clientes(email, razao_social, bling_contato_id), ' +
         'pedido_parcelas(id, numero, valor, vencimento, link_boleto, link_pix)'
     )
@@ -98,7 +94,6 @@ async function carregar(pedidoId: string): Promise<Pedido | null> {
 
 /* --------------------------------- faturar --------------------------------- */
 
-const FORMAS = ['boleto_avista', 'boleto_parcelado', 'pix', 'cartao_credito', 'cartao_debito'] as const
 
 export type OpcoesFatura = {
   /** Forma escolhida no Faturar. Obrigatória quando o pedido ainda não tem forma. */
@@ -115,10 +110,20 @@ export type OpcoesFatura = {
 
 const schemaFatura = z.object({
   pedidoId: z.string().uuid(),
-  forma: z.enum(FORMAS).optional(),
-  parcelas: z.number().int().min(1).max(MAX_PARCELAS).optional(),
-  primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida').optional(),
-  motivoLiberacao: z.string().trim().min(10, 'Descreva o motivo da liberação com pelo menos 10 caracteres').max(500).optional(),
+  forma: z.enum(FORMAS_FATURA).optional(),
+  parcelas: z
+    .number({ message: 'Quantidade de parcelas inválida.' })
+    .int('Quantidade de parcelas inválida.')
+    .min(1, 'Quantidade de parcelas inválida.')
+    .max(MAX_PARCELAS, `No máximo ${MAX_PARCELAS} parcelas.`)
+    .optional(),
+  primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data do primeiro vencimento inválida.').optional(),
+  motivoLiberacao: z
+    .string()
+    .trim()
+    .min(10, 'Descreva o motivo da liberação com pelo menos 10 caracteres.')
+    .max(500, 'O motivo da liberação pode ter no máximo 500 caracteres.')
+    .optional(),
   linkPagamento: z.string().trim().url().startsWith('https://').max(500).optional(),
 })
 
@@ -175,25 +180,28 @@ export async function faturarPedido(
   const feito: string[] = []
 
   // 0. Forma de pagamento — decisão de quem fatura, com o valor real em mãos.
-  //    Só em "pronto": depois de faturado a forma já foi ao Bling
-  if (statusAtual === 'pronto') {
+  //    Só em "pronto" e só enquanto nada foi ao Bling: depois que o pedido de
+  //    venda ou a cobrança existem lá, a forma está congelada (refazer as
+  //    parcelas apagaria os boletos emitidos). Clicar de novo só continua.
+  const jaNoBling = !!p.bling_pedido_id || !!p.cobranca_gerada_em
+  if (statusAtual === 'pronto' && jaNoBling && d.forma && d.forma !== p.forma_pagamento) {
+    return {
+      ok: false,
+      erro: 'A forma de pagamento já foi ao Bling com este pedido e não pode mais mudar. Para trocar, cancele o pedido de venda no Bling e refature.',
+    }
+  }
+  if (statusAtual === 'pronto' && !jaNoBling) {
     const forma = d.forma ?? p.forma_pagamento
     if (!forma) return { ok: false, erro: 'Escolha a forma de pagamento antes de faturar.' }
 
-    if (d.motivoLiberacao) {
-      const { error } = await supabase.rpc('admin_liberar_bloqueio_credito', {
-        p_pedido_id: p.id,
-        p_motivo: d.motivoLiberacao,
-      })
-      if (error) return { ok: false, erro: error.message }
-      feito.push('limite de crédito liberado')
-    }
-
+    // A liberação de crédito vai junto, na mesma transação: só fica gravada
+    // se a forma passou por todas as regras
     const { error } = await supabase.rpc('admin_definir_forma_pagamento_faturamento', {
       p_pedido_id: p.id,
       p_forma: forma,
       p_parcelas: d.parcelas ?? null,
       p_primeiro_vencimento: d.primeiroVencimento ?? null,
+      p_motivo_liberacao: d.motivoLiberacao ?? null,
     })
     if (error) {
       // Limite estourado: fica marcado para o dashboard e a equipe é avisada.
@@ -205,6 +213,7 @@ export async function faturarPedido(
     }
 
     p = (await carregar(p.id)) ?? p
+    if (d.motivoLiberacao && p.bloqueio_liberado_em) feito.push('limite de crédito liberado')
     revalidatePath(`/admin/pedidos/${p.id}`)
   }
 
@@ -301,6 +310,19 @@ async function marcarBloqueioCredito(p: Pedido, forma: string, parcelas: number 
     const rotulo =
       (ROTULOS_PAGAMENTO[forma] ?? forma) + (parcelas && parcelas > 1 ? ` (${parcelas}x)` : '')
 
+    // `credito_em_uso` já conta este pedido quando ele estava em boleto
+    // (pedido antigo); a RPC tira antes de comparar — o e-mail mostra o mesmo
+    const proprio = p.forma_pagamento?.startsWith('boleto')
+      ? valorCobranca(
+          total,
+          Number(p.taxa_pagamento_percentual ?? 0),
+          Number(p.taxa_pagamento_fixa ?? 0),
+          p.forma_pagamento,
+          (p.pedido_parcelas ?? []).length || 1
+        )
+      : 0
+    const emUsoSemEste = Math.max(0, Number(emUso ?? 0) - proprio)
+
     await notificarEquipe('pedido_bloqueado_credito', {
       pedidoId: p.id,
       assunto: `Pedido #${p.numero} bloqueado por limite de crédito — ${p.clientes?.razao_social ?? 'cliente'}`,
@@ -309,7 +331,7 @@ async function marcarBloqueioCredito(p: Pedido, forma: string, parcelas: number 
         cliente: p.clientes?.razao_social ?? '—',
         forma: rotulo,
         valorPedido: total,
-        emUso: Number(emUso ?? 0),
+        emUso: emUsoSemEste,
         limite: Number(cliente?.limite_credito ?? 0),
         urlPedido: `${urlDoSite()}/admin/pedidos/${p.id}`,
       }),
