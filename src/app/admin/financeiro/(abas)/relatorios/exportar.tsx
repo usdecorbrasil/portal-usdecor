@@ -69,6 +69,52 @@ export default function Exportar({
     )
   }
 
+  /**
+   * Uma linha por arte de cada pedido: o prestador confere o que imprimiu
+   * item a item. A metragem do pedido (impressa, com ajustes) vai repetida
+   * em cada linha e em uma linha de total por pedido, porque a soma das
+   * artes é a metragem calculada, não a conferida na estamparia.
+   */
+  function estampaItensCsv() {
+    if (!estampa) return
+    const linhas: (string | number)[][] = [
+      ['Saída de Estampando', 'Pedido', 'Cliente', 'Tecido', 'SKU', 'Arte', 'Peças', 'Metros/peça', 'Metros da arte', 'Metros impressos do pedido', 'Cancelado'],
+    ]
+    for (const l of estampa.linhas) {
+      for (const i of l.itens) {
+        linhas.push([
+          dataBr(l.prontoEm + 'T12:00:00'),
+          l.numero,
+          l.cliente,
+          l.tecido ?? '',
+          i.sku,
+          i.nome,
+          i.unidades,
+          i.metrosPorUnidade != null ? num(i.metrosPorUnidade) : '',
+          i.metros != null ? num(i.metros) : '',
+          '',
+          l.cancelado ? 'sim' : '',
+        ])
+      }
+      linhas.push([
+        dataBr(l.prontoEm + 'T12:00:00'),
+        l.numero,
+        l.cliente,
+        l.tecido ?? '',
+        'TOTAL',
+        `${l.itens.length} arte${l.itens.length === 1 ? '' : 's'}`,
+        l.itens.reduce((s, i) => s + i.unidades, 0),
+        '',
+        num(l.itens.reduce((s, i) => s + (i.metros ?? 0), 0)),
+        num(l.metros),
+        l.cancelado ? 'sim' : '',
+      ])
+    }
+    linhas.push([])
+    linhas.push(['Total do período', '', '', '', '', '', '', '', '', num(estampa.resumo.metros), ''])
+    baixar(`estampa-itens-${periodo}.csv`, paraCsv(linhas))
+  }
+
   function estampaPorDiaCsv() {
     if (!estampa) return
     baixar(
@@ -170,6 +216,9 @@ export default function Exportar({
         <>
           <button onClick={estampaCsv} className={botao}>
             CSV · PEDIDO A PEDIDO
+          </button>
+          <button onClick={estampaItensCsv} className={botao}>
+            CSV · PEDIDO COM ARTES
           </button>
           <button onClick={estampaPorDiaCsv} className={botao}>
             CSV · POR DIA
