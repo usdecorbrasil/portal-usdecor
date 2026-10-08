@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { criarSuprimento, editarSuprimento, movimentarSuprimento, UNIDADES } from '@/app/actions/suprimentos'
+import { criarSuprimento, editarSuprimento, movimentarSuprimento } from '@/app/actions/suprimentos'
+import { UNIDADES } from '@/lib/suprimentos/unidades'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
 
 export type SuprimentoLinha = {

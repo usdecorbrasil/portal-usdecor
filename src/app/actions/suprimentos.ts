@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { registrar } from '@/lib/auditoria'
+import { UNIDADES } from '@/lib/suprimentos/unidades'
 
 /**
  * Estoque de suprimentos da estamparia (tinta, papel, embalagem…).
@@ -15,7 +16,6 @@ import { registrar } from '@/lib/auditoria'
 
 type Resultado<T = object> = ({ ok: true } & T) | { ok: false; erro: string }
 
-export const UNIDADES = ['un', 'L', 'mL', 'kg', 'g', 'm', 'rolo', 'cx', 'pct'] as const
 
 async function exigirDono() {
   const perfil = await lerPerfil()
