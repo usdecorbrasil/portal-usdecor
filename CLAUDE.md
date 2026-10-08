@@ -282,7 +282,7 @@ ali a imagem é o conteúdo.
   produção, mexendo no histórico por causa de falha de integração. No cadastro e na
   edição de cliente, aparece como aviso no próprio formulário.
 - Já verificado nesta conta: os SKUs do portal **são** os códigos de produto do Bling
-  (`D10409` etc.), e o token já vem em **JWT** (a nota de migração abaixo está vencida).
+  (`D10409` etc.).
 
 **Validação contra o ERP, em ordem de custo de reverter:**
 
@@ -342,9 +342,12 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 - **Bling usa dois hosts** — `www.bling.com.br` só para OAuth (authorize/token) e
   `api.bling.com.br` para as chamadas de recurso. Chamar recurso em `www` devolve
   403 FORBIDDEN. Separado em `src/lib/bling/cliente.ts` (`BASE_OAUTH` / `BASE_API`).
-- **Migração JWT do Bling (a fazer)**: o portal recebe hoje token opaco, modelo que o
-  Bling está descontinuando. Para migrar, enviar o cabeçalho `enable-jwt: 1` no POST
-  para `/oauth/token` (tanto no callback quanto no refresh).
+- ~~Migração JWT do Bling~~ — **feito em 08/10/2026** (aviso do Bling: tokens opacos
+  desligados em 15/10/2026). `CABECALHO_JWT` (`enable-jwt: 1`) vai no POST
+  `/oauth/token` no callback e no refresh (`src/lib/bling/cliente.ts`). Configurações
+  mostra "Formato do token: JWT / opaco"; o opaco vira JWT na próxima renovação ou ao
+  reconectar. Nas chamadas de recurso o cabeçalho não é enviado: token JWT funciona
+  sem ele, e token opaco com ele devolve 401.
 - Abrir Bling Conta / habilitar boletos.
 - Definir prazo padrão de vencimento do boleto.
 - Criar produto genérico de estampa no Bling.

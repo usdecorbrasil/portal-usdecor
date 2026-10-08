@@ -223,6 +223,13 @@ que já está na estamparia** pela aba Estoque, senão a produção trava.
   **apague a branch** ("Delete branch"), senão o dependente é juntado nela e
   não na `main` (aconteceu com #23 e #24, corrigido pelo #26).
 
+### Bling: token JWT (migração obrigatória, 15/10/2026)
+
+O Bling desliga os tokens opacos em 15/10/2026. O portal envia `enable-jwt: 1`
+no POST `/oauth/token`, tanto ao conectar quanto a cada renovação; Configurações →
+Integração Bling mostra o formato do token atual. Token opaco em uso vira JWT na
+próxima renovação automática (poucas horas) ou ao clicar em reconectar.
+
 ### Cron sem Vercel Pro
 
 A baixa automática roda por GitHub Actions (`.github/workflows/baixa-pagamentos.yml`,

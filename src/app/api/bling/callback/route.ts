@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { CABECALHO_JWT } from '@/lib/bling/cliente'
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -33,6 +34,8 @@ export async function GET(request: NextRequest) {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Authorization: `Basic ${basicAuth}`,
+      // Token em JWT (migração obrigatória do Bling); ver CABECALHO_JWT
+      ...CABECALHO_JWT,
     },
     body: new URLSearchParams({
       grant_type: 'authorization_code',

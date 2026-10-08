@@ -12,11 +12,25 @@ const BASE_API = 'https://api.bling.com.br/Api/v3'
 /** Renova alguns minutos antes de expirar, para não estourar no meio de uma chamada */
 const MARGEM_MS = 5 * 60 * 1000
 
+/**
+ * O Bling está desligando os tokens opacos (aviso no painel: 15/10/2026).
+ * Com este cabeçalho o POST /oauth/token devolve JWT — na troca do código e
+ * em toda renovação, senão a renovação volta a gerar token opaco.
+ */
+export const CABECALHO_JWT = { 'enable-jwt': '1' } as const
+
+/** JWT tem três partes separadas por ponto; o token opaco antigo não tem. */
+export function tokenEhJwt(token: string | null | undefined): boolean {
+  return !!token && token.split('.').length === 3
+}
+
 export type EstadoBling = {
   conectado: boolean
   expiraEm: string | null
   atualizadoEm: string | null
   expirado: boolean
+  /** Token atual já no formato JWT exigido pelo Bling. */
+  jwt: boolean
 }
 
 export async function lerEstadoBling(): Promise<EstadoBling> {
@@ -33,6 +47,7 @@ export async function lerEstadoBling(): Promise<EstadoBling> {
       expiraEm: null,
       atualizadoEm: null,
       expirado: false,
+      jwt: false,
     }
   }
 
@@ -41,6 +56,7 @@ export async function lerEstadoBling(): Promise<EstadoBling> {
     expiraEm: data.expires_at,
     atualizadoEm: data.updated_at,
     expirado: new Date(data.expires_at).getTime() < Date.now(),
+    jwt: tokenEhJwt(data.access_token),
   }
 }
 
@@ -75,6 +91,7 @@ async function tokenValido(): Promise<string | null> {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Authorization: `Basic ${basicAuth}`,
+      ...CABECALHO_JWT,
     },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
