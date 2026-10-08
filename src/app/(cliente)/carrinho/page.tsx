@@ -24,18 +24,25 @@ export default function CarrinhoPage() {
 
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
-  const [sucesso, setSucesso] = useState<{ numero: number } | null>(null)
+  const [sucesso, setSucesso] = useState<{ numero: number; travado: boolean } | null>(null)
   const [removendo, setRemovendo] = useState<string | null>(null)
   const [vencidos, setVencidos] = useState<BoletoVencido[]>([])
+  const [bloqueado, setBloqueado] = useState(false)
+  const [prazo, setPrazo] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    situacaoAtraso().then((s) => setVencidos(s.vencidos))
+    situacaoAtraso().then((s) => {
+      setVencidos(s.vencidos)
+      setBloqueado(s.bloqueado)
+      setPrazo(s.prazo)
+    })
   }, [])
 
-  // Boleto vencido trava o envio. O banco recusa de qualquer jeito; aqui o
-  // botão já nasce desligado e a saída fica à mão
-  const travadoPorAtraso = vencidos.length > 0
+  // Boleto vencido há mais de 5 dias úteis não impede o envio: o pedido
+  // entra, mas não é atendido até a regularização. O aviso fica aqui, antes
+  // do botão, com a saída à mão
+  const travadoPorAtraso = bloqueado
   const primeiroVencido = vencidos[0]
   const linkCartaoAtraso = vencidos.find((v) => v.linkCartao)?.linkCartao ?? null
 
@@ -58,7 +65,7 @@ export default function CarrinhoPage() {
     }
 
     limpar()
-    setSucesso({ numero: r.numero })
+    setSucesso({ numero: r.numero, travado: r.travadoPorAtraso })
     setEnviando(false)
     router.refresh()
   }
@@ -81,6 +88,19 @@ export default function CarrinhoPage() {
           A equipe confere as artes e confirma o pedido. Valor e forma de
           pagamento são definidos ao fim da estampa.
         </p>
+        {sucesso.travado && (
+          <div className="mt-4 max-w-md mx-auto bg-[#FBEAF0] border-l-4 border-[#B00063] rounded-r-sm p-4 text-left">
+            <p className="text-sm font-semibold text-[#B00063]">
+              Este pedido não será atendido até a regularização dos boletos em atraso.
+            </p>
+            <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
+              Assim que o pagamento for identificado, o pedido segue normalmente.
+            </p>
+            <Link href="/pedidos/boletos" className="inline-block text-xs text-[#0090D8] hover:underline mt-2">
+              ver boletos
+            </Link>
+          </div>
+        )}
         <Link
           href="/pedidos"
           className="inline-block mt-6 bg-[#131A2E] text-white rounded-sm px-6 py-3 text-sm font-semibold tracking-wide"
@@ -254,14 +274,23 @@ export default function CarrinhoPage() {
         </p>
       )}
 
-      {travadoPorAtraso && (
-        <div className="mt-5 bg-[#FBEAF0] border-l-4 border-[#B00063] rounded-r-sm p-4">
-          <p className="text-sm font-semibold text-[#B00063]">
-            Há boleto em atraso. Regularize para enviar novos pedidos.
+      {vencidos.length > 0 && (
+        <div
+          className={`mt-5 rounded-r-sm p-4 border-l-4 ${
+            travadoPorAtraso ? 'bg-[#FBEAF0] border-[#B00063]' : 'bg-[#FFFBEE] border-[#C79600]'
+          }`}
+        >
+          <p className={`text-sm font-semibold ${travadoPorAtraso ? 'text-[#B00063]' : 'text-[#6B5320]'}`}>
+            {travadoPorAtraso
+              ? 'Há boleto em atraso. Você pode enviar o pedido, mas ele não será atendido até a regularização.'
+              : 'Há boleto em atraso.'}
           </p>
           <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
-            Assim que o pagamento for identificado, o envio é liberado
-            automaticamente.
+            {travadoPorAtraso
+              ? 'Assim que o pagamento for identificado, o pedido segue normalmente.'
+              : prazo
+              ? `Regularize até ${new Date(prazo + 'T00:00:00').toLocaleDateString('pt-BR')}: depois de 5 dias úteis do vencimento, os pedidos deixam de ser atendidos até o pagamento.`
+              : 'Depois de 5 dias úteis do vencimento, os pedidos deixam de ser atendidos até o pagamento.'}
           </p>
           <div className="flex gap-2 flex-wrap mt-3">
             <a
@@ -296,7 +325,7 @@ export default function CarrinhoPage() {
 
       <button
         onClick={enviar}
-        disabled={enviando || travadoPorAtraso}
+        disabled={enviando}
         className="w-full mt-5 mb-4 bg-[#D8007A] text-white rounded-sm py-4 text-sm font-bold tracking-wider disabled:opacity-50"
       >
         {enviando ? 'ENVIANDO...' : 'ENVIAR PEDIDO'}

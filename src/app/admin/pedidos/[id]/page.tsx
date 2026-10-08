@@ -20,6 +20,7 @@ import { urlDocumento } from '@/lib/storage/documentos'
 import { taxaDoPedido } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
 import InstrucoesInternas from './instrucoes-internas'
+import LiberarAtraso from '@/app/admin/clientes/[id]/liberar-atraso'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -118,7 +119,7 @@ export default async function PedidoAdminPage({
       emitir_nf, emitir_nf_motivo,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
       ${camposFinanceiros}
-      clientes(razao_social, cnpj, preco_metro, limite_credito, formas_pagamento),
+      clientes(razao_social, cnpj, preco_metro, limite_credito, formas_pagamento, atraso_liberado_em, atraso_liberado_motivo),
       pedido_itens(${camposItens}),
       pedido_status_historico(
         status, origem, created_at, observacao,
@@ -170,7 +171,17 @@ export default async function PedidoAdminPage({
     preco_metro: number
     limite_credito: number | null
     formas_pagamento: string[] | null
+    atraso_liberado_em: string | null
+    atraso_liberado_motivo: string | null
   }
+
+  // Boleto vencido há mais de 5 dias úteis trava todo lançamento de etapa
+  // deste cliente (gatilho no banco). A tela mostra o motivo e deixa o dono
+  // liberar daqui mesmo, sem ir à tela do cliente
+  const { data: boletosTravando } = await supabase.rpc('cliente_boletos_vencidos', {
+    p_cliente_id: p.cliente_id,
+  })
+  const travadoPorAtraso = Number(boletosTravando ?? 0) > 0
 
   const histInicial = (p.pedido_status_historico ?? []) as { status: string; created_at: string }[]
   const statusInicial =
@@ -678,6 +689,39 @@ export default async function PedidoAdminPage({
           </>
         )}
       </div>
+
+      {!cancelado && !agrupador && travadoPorAtraso && (
+        <div className="bg-[#FBEAF0] border-l-4 border-[#B00063] rounded-r-sm p-4 mb-4">
+          <p className="text-sm font-semibold text-[#B00063]">
+            Pedido travado: {cliente.razao_social} tem{' '}
+            {Number(boletosTravando) === 1 ? 'boleto vencido' : `${Number(boletosTravando)} boletos vencidos`}{' '}
+            há mais de 5 dias úteis
+          </p>
+          <p className="text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            Nenhuma etapa deste pedido pode ser lançada (confirmar, produção,
+            faturar) até o pagamento ser identificado ou o dono liberar com
+            motivo. O cliente vê o aviso em todas as telas dele.
+          </p>
+          {dono ? (
+            <LiberarAtraso
+              clienteId={p.cliente_id}
+              vencidos={Number(boletosTravando)}
+              liberadoEm={cliente.atraso_liberado_em}
+              liberadoMotivo={cliente.atraso_liberado_motivo}
+            />
+          ) : (
+            <p className="text-xs text-[#6E6E68] mt-2">
+              A liberação é feita pelo dono ou pelo financeiro.
+            </p>
+          )}
+          <Link
+            href={`/admin/clientes/${p.cliente_id}`}
+            className="inline-block text-xs text-[#0090D8] hover:underline mt-2"
+          >
+            ver cliente e boletos
+          </Link>
+        </div>
+      )}
 
       {!cancelado && !agrupador && (
         <PainelAcoes
