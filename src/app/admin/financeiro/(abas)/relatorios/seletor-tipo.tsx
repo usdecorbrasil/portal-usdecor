@@ -5,9 +5,9 @@ import Link from 'next/link'
 export const TIPOS = [
   { id: 'pedidos', label: 'Pedidos' },
   { id: 'financeiro', label: 'Financeiro' },
+  { id: 'estampa', label: 'Estampa (prestador)' },
   { id: 'clientes', label: 'Clientes' },
   { id: 'sku', label: 'Artes / SKU' },
-  { id: 'estampa', label: 'Estampa (prestador)' },
 ] as const
 
 export type TipoRelatorio = (typeof TIPOS)[number]['id']
