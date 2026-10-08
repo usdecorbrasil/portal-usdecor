@@ -414,6 +414,17 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
   o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
   etapas para o banco e ajustar essas três pontas juntas.
 
+## Painel de crédito (08/10/2026)
+
+Financeiro → **Crédito** (`src/app/admin/financeiro/credito`): por cliente, limite,
+crédito em uso (`credito_em_uso`), histórico de boletos (parcelas + boleto à vista de
+`pedidos`), **score 0–100** e sugestão de limite, com CSV. A regra é pura em
+`src/lib/credito/score.ts` (pontualidade 50 + volume 30 + frequência 20 − 10 por vencido
+aberto); os pesos estão em `decisoes-atualizadas.md`. A sugestão nunca grava sozinha: o
+botão "Aplicar sugestão" só pré-preenche o ajuste, que segue pela
+`atualizarLimiteCredito` com motivo. Mudanças de limite são lidas de `auditoria`
+(campo "Limite de crédito"). Sem migration.
+
 ## Ajuste de metragem (13/09/2026, `docs/sql/016`)
 
 Em **Estampando** e **Corte/costura** o botão "Ajustar quantidades" dá lugar a

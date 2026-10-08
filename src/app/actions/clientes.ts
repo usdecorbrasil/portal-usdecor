@@ -443,6 +443,8 @@ export async function atualizarLimiteCredito(
 
   revalidatePath('/admin/clientes')
   revalidatePath(`/admin/clientes/${clienteId}`)
+  revalidatePath('/admin/financeiro/credito')
+  revalidatePath(`/admin/financeiro/credito/${clienteId}`)
   return { ok: true }
 }
 
