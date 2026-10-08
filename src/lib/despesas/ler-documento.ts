@@ -69,33 +69,78 @@ export type EntradaLeitura = {
   categorias: string[]
   /** Nomes dos suprimentos cadastrados (com unidade), para casar itens. */
   suprimentos: string[]
+  /**
+   * rapido = Haiku (padrão, ~R$ 0,01 por página); preciso = Opus (~R$ 0,40),
+   * para reler uma nota que o rápido não entendeu.
+   */
+  modelo?: ModeloLeitura
+}
+
+export type ModeloLeitura = 'rapido' | 'preciso'
+
+export const MODELOS: Record<ModeloLeitura, { id: string; rotulo: string }> = {
+  rapido: { id: 'claude-haiku-5-5', rotulo: 'rápido (Haiku)' },
+  preciso: { id: 'claude-opus-5-5', rotulo: 'preciso (Opus)' },
 }
 
 export type ResultadoLeitura =
-  | { ok: true; documento: DocumentoLido; modelo: string }
+  | { ok: true; documento: DocumentoLido; modelo: ModeloLeitura }
   | { ok: false; erro: string }
 
-const MODELO = 'claude-opus-5-5'
-
+/**
+ * Instrução fixa. Vai em cache: só a imagem muda de uma leitura para outra.
+ * Escrita para documentos brasileiros de uma estamparia por sublimação, com
+ * as armadilhas que mais confundem leitura automática (vírgula decimal,
+ * valor por item × total, desconto na última linha, nº do cupom × COO,
+ * CNPJ do emitente × do destinatário).
+ */
 function instrucoes(categorias: string[], suprimentos: string[]) {
-  return [
-    'Você lê documentos de compra e despesa de uma estamparia por sublimação no Brasil:',
-    'nota fiscal eletrônica (NF-e / DANFE), cupom fiscal (NFC-e), nota de serviço (NFS-e),',
-    'cupom não fiscal, recibo, boleto. Extraia os dados exatamente como estão no documento,',
-    'em reais, com ponto decimal. Datas em AAAA-MM-DD. CNPJ/CPF só com dígitos.',
-    'Chave de acesso só se houver 44 dígitos legíveis. Não invente: campo que não está no',
-    'documento volta null. Se houver vários itens, liste todos, um por linha; se o documento',
-    'não tem itens (recibo de serviço, boleto), crie um item só com a descrição e o total.',
-    'Some os itens e confira com o total; se não bater, mantenha o total impresso e reduza a',
-    'confiança de "itens". Confiança: 1 = legível e inequívoco; abaixo de 0,7 = precisa conferir.',
-    '',
-    'Categorias de gasto disponíveis (use o nome exato ou null): ' + categorias.join('; ') + '.',
-    suprimentos.length
-      ? 'Suprimentos em estoque (use o nome exato quando o item for claramente o mesmo produto, senão null): ' +
-        suprimentos.join('; ') + '.'
-      : 'Não há suprimentos cadastrados: devolva null em "suprimento".',
-    'Tinta sublimática, papel sublimático, tecido para estampa e embalagem são suprimentos típicos.',
-  ].join('\n')
+  return `Você é o leitor de documentos de compra e despesa de uma estamparia por sublimação no Brasil (impressão de tecidos). Receberá a foto ou o PDF de UM documento e devolverá os dados dele, só os dados: nada de comentários.
+
+TIPOS DE DOCUMENTO
+- nfe: DANFE de NF-e (modelo 55). Tem "DANFE", chave de acesso de 44 dígitos, emitente e destinatário, tabela de produtos com NCM/CFOP, quadro de impostos.
+- nfce: cupom fiscal eletrônico (NFC-e, modelo 65). Tem "NFC-e" ou "Documento Auxiliar", QR code, chave de 44 dígitos, itens em linhas.
+- nfse: nota fiscal de serviço (prefeitura). Tem "NFS-e", código de verificação, ISS, descrição do serviço; normalmente sem itens.
+- cupom: comprovante não fiscal (pedido, orçamento, maquininha, comanda).
+- recibo: recibo manual ou impresso de pagamento.
+- boleto: boleto bancário usado como comprovante de despesa (aluguel, energia, água, internet).
+- outro: qualquer outro.
+
+QUEM É O FORNECEDOR
+- O fornecedor é o EMITENTE (quem vendeu/prestou), nunca o destinatário/tomador. Em DANFE o emitente está no cabeçalho; "DESTINATÁRIO/REMETENTE" é o comprador — ignore.
+- A estamparia (compradora) pode aparecer como destinatário; não a devolva como fornecedor.
+- fornecedor_doc: CNPJ (14 dígitos) ou CPF (11 dígitos), SÓ DÍGITOS. Se houver dois CNPJs, o do emitente. Se não estiver legível por inteiro, devolva null — nunca complete dígitos.
+
+NÚMEROS E DATAS
+- Documentos brasileiros usam vírgula decimal e ponto de milhar: "1.234,56" = 1234.56. Devolva números com ponto decimal e sem separador de milhar.
+- Datas em AAAA-MM-DD. "08/10/2026" = 2026-10-08 (dia/mês/ano, sempre). Use a data de EMISSÃO; se só houver data de vencimento (boleto), use-a e diga em observacoes.
+- Chave de acesso: exatamente 44 dígitos, geralmente em grupos de 4. Devolva só se ler os 44 com segurança; senão null.
+- numero: o número do documento (NF nº, "Nº" do cupom, número da NFS-e). Em NFC-e, "Nº" é o número; "Série" é a série; não use COO nem "Extrato nº".
+
+ITENS
+- Um item por linha de produto/serviço, na ordem do documento. Copie a descrição como está (pode abreviar só se cortada).
+- quantidade, unidade (UN, PC, KG, L, ML, M, M2, RL, CX, PCT…), valor_unitario e valor_total do item. Se só houver o total da linha, valor_unitario = null.
+- Em cupom de supermercado/papelaria a linha costuma ser "descrição  qtd x unitário  total"; a quantidade pode vir na linha de cima ou de baixo.
+- Desconto que aparece numa linha própria ("DESCONTO", "DESC.") NÃO é item: vai em desconto. Mesmo para "FRETE" (vai em frete) e "ACRÉSCIMO/JUROS" (some em impostos e diga em observacoes).
+- Se o documento não tem itens (NFS-e, recibo, boleto), crie UM item com a descrição do serviço/despesa e o total.
+- categoria: escolha UMA da lista abaixo pelo que o item é, não pelo fornecedor. Tinta de impressora/sublimática → Tinta; papel sublimático/transfer/bobina → Papel sublimático; tecido, malha, poliéster, oxford → Tecido; plástico, saco, caixa, fita → Embalagem; conta de luz → Energia; mão de obra, serviço, costura terceirizada → Serviços de terceiros. Se nenhuma couber, null.
+- suprimento: se o item for claramente o MESMO produto de um dos suprimentos cadastrados (mesmo tipo e, quando houver, mesma cor/modelo), devolva o nome exato do suprimento; na dúvida, null. Nunca marque suprimento em serviço, energia ou aluguel.
+
+TOTAIS
+- subtotal = soma dos itens antes de desconto/frete; total = valor final a pagar impresso no documento ("VALOR TOTAL", "TOTAL A PAGAR", "VALOR LÍQUIDO"). Nunca calcule o total: copie o impresso.
+- impostos = soma dos impostos DESTACADOS que se somam ao preço (IPI, ST, juros). ICMS "incluso" e PIS/COFINS "aproximados" NÃO entram.
+- Confira: soma dos itens − desconto + frete + impostos deve dar o total. Se não bater, mantenha os valores lidos e baixe confianca.itens para 0.5 ou menos.
+
+CONFIANÇA (0 a 1), por campo e por item
+- 1.0: legível, sem ambiguidade. 0.8: legível com pequena dúvida (dígito parecido, parte cortada). 0.5: parcialmente ilegível ou inferido. 0.2: chute. Campo null por ausência no documento não baixa a confiança.
+- Foto borrada, inclinada, com reflexo ou cortada: baixe a confiança dos campos afetados. Não invente nada para "completar" o documento.
+
+Categorias de gasto disponíveis (nome exato ou null): ${categorias.join('; ')}.
+${
+  suprimentos.length
+    ? `Suprimentos cadastrados (nome exato ou null): ${suprimentos.join('; ')}.`
+    : 'Não há suprimentos cadastrados: devolva null em "suprimento" em todos os itens.'
+}`
 }
 
 export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLeitura> {
@@ -103,6 +148,7 @@ export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLe
     return { ok: false, erro: 'Leitura por IA não configurada: falta ANTHROPIC_API_KEY na Vercel.' }
   }
 
+  const modelo = entrada.modelo ?? 'rapido'
   const client = new Anthropic()
   const base64 = entrada.conteudo.toString('base64')
 
@@ -113,9 +159,10 @@ export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLe
 
   try {
     const resposta = await client.messages.parse({
-      model: MODELO,
+      model: MODELOS[modelo].id,
       max_tokens: 16000,
-      output_config: { effort: 'medium', format: zodOutputFormat(DocumentoLido) },
+      // Rápido: esforço baixo (custo por página na casa do centavo). Preciso: alto.
+      output_config: { effort: modelo === 'preciso' ? 'high' : 'low', format: zodOutputFormat(DocumentoLido) },
       system: [{ type: 'text', text: instrucoes(entrada.categorias, entrada.suprimentos), cache_control: { type: 'ephemeral' } }],
       messages: [
         {
@@ -129,9 +176,9 @@ export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLe
       return { ok: false, erro: 'A leitura foi recusada pelo modelo. Preencha à mão.' }
     }
     if (!resposta.parsed_output) {
-      return { ok: false, erro: 'Não foi possível entender o documento. Tente uma foto mais nítida ou preencha à mão.' }
+      return { ok: false, erro: 'Não foi possível entender o documento. Tente uma foto mais nítida, reler com o modelo preciso, ou preencher à mão.' }
     }
-    return { ok: true, documento: resposta.parsed_output, modelo: resposta.model }
+    return { ok: true, documento: resposta.parsed_output, modelo }
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) {
       return { ok: false, erro: 'Chave da IA inválida (ANTHROPIC_API_KEY).' }

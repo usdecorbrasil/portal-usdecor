@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { lerDespesa, salvarDespesa, type Rascunho, type DadosDespesa } from '@/app/actions/despesas'
+import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespesa } from '@/app/actions/despesas'
 import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
 
 /**
@@ -11,6 +11,8 @@ import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
  *     mesmo (lado maior 1600 px, JPEG 82%) antes de subir — original não sobe;
  *  2. formulário com todos os campos editáveis, pré-preenchido pela IA ou em
  *     branco. Campo com confiança abaixo de 0,7 fica amarelo.
+ * A leitura usa o modelo rápido (centavo por página); "reler com o modelo
+ * preciso" roda o Opus sobre o mesmo arquivo, sem fotografar de novo.
  */
 
 type Categoria = { id: string; nome: string }
@@ -120,22 +122,9 @@ export default function Captura({ categorias, suprimentos }: { categorias: Categ
     setPreview(comprimido.type.startsWith('image/') ? URL.createObjectURL(comprimido) : null)
   }
 
-  async function enviar(usarIa: boolean) {
-    if (!arquivo) return
-    setErro('')
-    setLendo(true)
-    const fd = new FormData()
-    fd.set('arquivo', arquivo)
-    fd.set('origem', origem)
-    fd.set('ia', usarIa ? 'sim' : 'nao')
-    const r = await lerDespesa(fd)
-    setLendo(false)
-    if (!r.ok) {
-      setErro(r.erro)
-      return
-    }
-    setRascunho(r.rascunho)
-    const d = r.rascunho.documento
+  function aplicarRascunho(rascunhoNovo: Rascunho) {
+    setRascunho(rascunhoNovo)
+    const d = rascunhoNovo.documento
     if (d) {
       const porNome = (nome: string | null, lista: { id: string; nome: string }[]) =>
         nome ? lista.find((x) => x.nome.toLowerCase() === nome.toLowerCase().replace(/\s*\(.*\)$/, ''))?.id ?? '' : ''
@@ -172,9 +161,40 @@ export default function Captura({ categorias, suprimentos }: { categorias: Categ
     } else {
       setForm(formVazio())
       setConfianca({})
-      if (r.rascunho.erroLeitura) setErro(r.rascunho.erroLeitura + ' O arquivo foi guardado; preencha abaixo.')
+      if (rascunhoNovo.erroLeitura) setErro(rascunhoNovo.erroLeitura + ' O arquivo foi guardado; preencha abaixo ou tente reler com o modelo preciso.')
     }
     setEtapa('conferencia')
+  }
+
+  async function enviar(usarIa: boolean) {
+    if (!arquivo) return
+    setErro('')
+    setLendo(true)
+    const fd = new FormData()
+    fd.set('arquivo', arquivo)
+    fd.set('origem', origem)
+    fd.set('ia', usarIa ? 'sim' : 'nao')
+    fd.set('modelo', 'rapido')
+    const r = await lerDespesa(fd)
+    setLendo(false)
+    if (!r.ok) {
+      setErro(r.erro)
+      return
+    }
+    aplicarRascunho(r.rascunho)
+  }
+
+  async function relerPreciso() {
+    if (!rascunho?.arquivoPath) return
+    setErro('')
+    setLendo(true)
+    const r = await relerDespesa(rascunho.arquivoPath, 'preciso')
+    setLendo(false)
+    if (!r.ok) {
+      setErro(r.erro)
+      return
+    }
+    aplicarRascunho(r.rascunho)
   }
 
   const somaItens = form.itens.reduce((s, i) => s + num(i.valorTotal), 0)
@@ -201,6 +221,7 @@ export default function Captura({ categorias, suprimentos }: { categorias: Categ
       arquivoPath: rascunho?.arquivoPath ?? null,
       origem: rascunho?.origem ?? origem,
       modo: rascunho?.modo ?? 'manual',
+      modeloIa: rascunho?.modelo ?? null,
       tipo: form.tipo,
       fornecedorNome: form.fornecedorNome || null,
       fornecedorDoc: form.fornecedorDoc || null,
@@ -294,9 +315,24 @@ export default function Captura({ categorias, suprimentos }: { categorias: Categ
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
       <div>
         {rascunho?.modo === 'ia' && (
-          <p className="text-xs text-[#0090D8] bg-[#E6EDEE] rounded-sm px-3 py-2 mb-3">
-            Lida por IA. Campos em amarelo tiveram leitura incerta: confira com a imagem ao lado.
-          </p>
+          <div className="text-xs text-[#0090D8] bg-[#E6EDEE] rounded-sm px-3 py-2 mb-3 flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-0">
+              Lida pelo modelo {rascunho.modelo === 'preciso' ? 'preciso' : 'rápido'}. Campos em amarelo tiveram leitura incerta: confira com a imagem ao lado.
+            </span>
+            {rascunho.modelo !== 'preciso' && (
+              <button onClick={relerPreciso} disabled={lendo} className="shrink-0 border border-[#0090D8] rounded-sm px-2.5 py-1 text-[11px] font-semibold tracking-wide disabled:opacity-50">
+                {lendo ? 'RELENDO…' : 'RELER COM O MODELO PRECISO'}
+              </button>
+            )}
+          </div>
+        )}
+        {rascunho?.modo === 'manual' && rascunho.arquivoPath && (
+          <div className="text-xs text-[#6E6E68] bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-3 py-2 mb-3 flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-0">Preenchimento à mão. Se quiser, a IA pode tentar ler este arquivo.</span>
+            <button onClick={relerPreciso} disabled={lendo} className="shrink-0 border border-[#131A2E] rounded-sm px-2.5 py-1 text-[11px] font-semibold tracking-wide disabled:opacity-50">
+              {lendo ? 'LENDO…' : 'LER COM O MODELO PRECISO'}
+            </button>
+          </div>
         )}
         {erro && <p className="text-sm text-[#B00063] bg-white border border-[#B00063] rounded-sm p-3 mb-3">{erro}</p>}
 

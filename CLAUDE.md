@@ -440,10 +440,18 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
 - **Onde**: Estoque ganhou divisões — Tecido dos clientes (o que existia), **Suprimentos**
   (`/admin/estoque/suprimentos`, equipe inteira; custo só para quem vê valores) e
   **Despesas e notas** (`/admin/estoque/despesas`, só admin/financeiro).
-- **Leitura por IA** em `src/lib/despesas/ler-documento.ts`: Claude (`claude-opus-5-5`,
-  `messages.parse` com saída estruturada por zod) recebe a imagem/PDF e devolve
-  cabeçalho, itens e confiança por campo. Exige `ANTHROPIC_API_KEY`; sem ela a tela só
-  aceita à mão. **A IA nunca grava**: `lerDespesa` guarda o arquivo no bucket
+- **Leitura por IA** em `src/lib/despesas/ler-documento.ts` (`messages.parse` com saída
+  estruturada por zod): dois modelos — **rápido** = `claude-haiku-5-5`, padrão, esforço
+  baixo, ~R$ 0,01 por página (o dono pediu a opção mais barata em 08/10/2026; as
+  alternativas de outros fornecedores ficam na mesma fração de centavo); **preciso** =
+  `claude-opus-5-5`, esforço alto, ~R$ 0,40, acionado pelo botão "Reler com o modelo
+  preciso" sobre o mesmo arquivo já guardado (`relerDespesa`). O modelo usado fica em
+  `despesas.modelo_ia` para comparar a taxa de acerto. A instrução fixa (em cache) é
+  longa de propósito: emitente × destinatário, vírgula decimal, desconto/frete em linha
+  própria, nº × COO, impostos inclusos × destacados, regras de categoria para
+  suprimentos de sublimação. Exige `ANTHROPIC_API_KEY`; sem ela a tela só aceita à mão.
+  `src/lib/despesas/validar.ts` confere dígito verificador de CNPJ/CPF e da chave de
+  acesso antes de gravar. **A IA nunca grava**: `lerDespesa` guarda o arquivo no bucket
   `despesas` e devolve um rascunho; a tela de conferência (`despesas/nova/captura.tsx`)
   é a mesma com ou sem IA, campo com confiança < 0,7 fica amarelo, e `salvarDespesa`
   grava documento + itens.

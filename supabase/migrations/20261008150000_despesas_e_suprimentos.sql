@@ -96,6 +96,7 @@ create table if not exists public.despesas (
   arquivo_path      text,                                   -- bucket despesas
   origem            text not null default 'upload' check (origem in ('camera', 'upload')),
   modo              text not null default 'manual' check (modo in ('manual', 'ia')),
+  modelo_ia         text,                                   -- modelo que fez a leitura (rapido | preciso), p/ comparar acerto
   confianca         jsonb,                                  -- campo → 0..1, quando veio da IA
   observacoes       text,
   criado_por        uuid,

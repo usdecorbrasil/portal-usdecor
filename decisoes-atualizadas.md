@@ -247,6 +247,8 @@ que já está na estamparia** pela aba Estoque, senão a produção trava.
 | Regra | Situação |
 |---|---|
 | Estoque → **Despesas e notas** (admin/financeiro): foto pela câmera ou arquivo (JPG/PNG/WebP/PDF até 10 MB); a foto é reduzida no aparelho antes de subir (1600 px, JPEG 82%) e o original não sobe | ✅ |
+| Dois modelos: **rápido** (Haiku, padrão, ~R$ 0,01/página — a opção mais barata, pedida pelo dono) e **preciso** (Opus, ~R$ 0,40), acionado por botão sobre o mesmo arquivo quando o rápido não entende. O modelo usado fica gravado na nota (`modelo_ia`) | ✅ |
+| CNPJ/CPF do fornecedor e chave de acesso passam por dígito verificador antes de gravar | ✅ |
 | **Leitura por IA** (Claude, saída estruturada) pré-preenche tipo, fornecedor, CNPJ, nº, chave, emissão, pagamento, totais e itens, com confiança por campo; abaixo de 0,7 o campo fica amarelo. **Nunca grava sozinha**: a tela de conferência é a mesma com ou sem IA | ✅ |
 | Cada item tem **categoria de gasto** (tabela `categorias_despesa`, semeada e editável) e, opcionalmente, um **suprimento** — aí entra no estoque com o custo | ✅ |
 | Chave de acesso de 44 dígitos é única: a mesma NF não entra duas vezes. Exclusão é lógica, com motivo, e desfaz as entradas de estoque | ✅ |

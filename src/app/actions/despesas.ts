@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { registrar } from '@/lib/auditoria'
-import { lerDocumento, TIPOS_DOCUMENTO, type DocumentoLido } from '@/lib/despesas/ler-documento'
+import { lerDocumento, TIPOS_DOCUMENTO, type DocumentoLido, type ModeloLeitura } from '@/lib/despesas/ler-documento'
+import { cnpjCpfValido, chaveAcessoValida } from '@/lib/despesas/validar'
 
 /**
  * Despesas por documento (nota, cupom, recibo) — só admin/financeiro.
@@ -39,8 +40,25 @@ export type Rascunho = {
   arquivoPath: string
   origem: 'camera' | 'upload'
   modo: 'manual' | 'ia'
+  /** Modelo que fez a leitura (rapido | preciso), quando houve. */
+  modelo: ModeloLeitura | null
   documento: DocumentoLido | null
   erroLeitura: string | null
+}
+
+async function lerComIa(conteudo: Buffer, mediaType: (typeof TIPOS_ARQUIVO)[number], modelo: ModeloLeitura) {
+  const supabase = await createClient()
+  const [{ data: categorias }, { data: suprimentos }] = await Promise.all([
+    supabase.from('categorias_despesa').select('nome').eq('ativo', true).order('nome'),
+    supabase.from('suprimentos').select('nome, unidade').eq('ativo', true).order('nome'),
+  ])
+  return lerDocumento({
+    conteudo,
+    mediaType,
+    modelo,
+    categorias: (categorias ?? []).map((c) => c.nome as string),
+    suprimentos: (suprimentos ?? []).map((s) => `${s.nome} (${s.unidade})`),
+  })
 }
 
 /**
@@ -54,6 +72,7 @@ export async function lerDespesa(form: FormData): Promise<Resultado<{ rascunho: 
   const arquivo = form.get('arquivo')
   const origem = form.get('origem') === 'camera' ? 'camera' : 'upload'
   const usarIa = form.get('ia') !== 'nao'
+  const modelo: ModeloLeitura = form.get('modelo') === 'preciso' ? 'preciso' : 'rapido'
   if (!(arquivo instanceof File)) return { ok: false, erro: 'Escolha a foto ou o arquivo da nota.' }
   if (arquivo.size === 0) return { ok: false, erro: 'Arquivo vazio.' }
   if (arquivo.size > TAMANHO_MAXIMO) return { ok: false, erro: 'Arquivo acima de 10 MB. Tire a foto de novo ou reduza o PDF.' }
@@ -69,21 +88,10 @@ export async function lerDespesa(form: FormData): Promise<Resultado<{ rascunho: 
   if (erroUpload) return { ok: false, erro: `Não deu para guardar o arquivo: ${erroUpload.message}` }
 
   if (!usarIa) {
-    return { ok: true, rascunho: { arquivoPath: caminho, origem, modo: 'manual', documento: null, erroLeitura: null } }
+    return { ok: true, rascunho: { arquivoPath: caminho, origem, modo: 'manual', modelo: null, documento: null, erroLeitura: null } }
   }
 
-  const supabase = await createClient()
-  const [{ data: categorias }, { data: suprimentos }] = await Promise.all([
-    supabase.from('categorias_despesa').select('nome').eq('ativo', true).order('nome'),
-    supabase.from('suprimentos').select('nome, unidade').eq('ativo', true).order('nome'),
-  ])
-
-  const leitura = await lerDocumento({
-    conteudo,
-    mediaType,
-    categorias: (categorias ?? []).map((c) => c.nome as string),
-    suprimentos: (suprimentos ?? []).map((s) => `${s.nome} (${s.unidade})`),
-  })
+  const leitura = await lerComIa(conteudo, mediaType, modelo)
 
   return {
     ok: true,
@@ -91,9 +99,34 @@ export async function lerDespesa(form: FormData): Promise<Resultado<{ rascunho: 
       arquivoPath: caminho,
       origem,
       modo: leitura.ok ? 'ia' : 'manual',
+      modelo: leitura.ok ? leitura.modelo : null,
       documento: leitura.ok ? leitura.documento : null,
       erroLeitura: leitura.ok ? null : leitura.erro,
     },
+  }
+}
+
+/**
+ * Relê um arquivo já guardado com outro modelo (normalmente o preciso,
+ * quando o rápido não entendeu). Não sobe nada de novo.
+ */
+export async function relerDespesa(arquivoPath: string, modelo: ModeloLeitura): Promise<Resultado<{ rascunho: Rascunho }>> {
+  const perfil = await exigirAdmin()
+  if (!perfil) return { ok: false, erro: 'Acesso negado.' }
+  if (!/^\d{4}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp|pdf)$/.test(arquivoPath)) return { ok: false, erro: 'Arquivo inválido.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.storage.from(BUCKET).download(arquivoPath)
+  if (error || !data) return { ok: false, erro: 'Arquivo não encontrado. Envie a nota de novo.' }
+
+  const extensao = arquivoPath.slice(arquivoPath.lastIndexOf('.') + 1)
+  const mediaType = (extensao === 'pdf' ? 'application/pdf' : extensao === 'png' ? 'image/png' : extensao === 'webp' ? 'image/webp' : 'image/jpeg') as (typeof TIPOS_ARQUIVO)[number]
+  const leitura = await lerComIa(Buffer.from(await data.arrayBuffer()), mediaType, modelo)
+  if (!leitura.ok) return { ok: false, erro: leitura.erro }
+
+  return {
+    ok: true,
+    rascunho: { arquivoPath, origem: 'upload', modo: 'ia', modelo: leitura.modelo, documento: leitura.documento, erroLeitura: null },
   }
 }
 
@@ -115,6 +148,7 @@ const schemaDespesa = z.object({
   arquivoPath: z.string().min(1).nullable(),
   origem: z.enum(['camera', 'upload']),
   modo: z.enum(['manual', 'ia']),
+  modeloIa: z.enum(['rapido', 'preciso']).nullable().optional(),
   tipo: z.enum(TIPOS_DOCUMENTO),
   fornecedorNome: z.string().trim().max(200).nullable().optional(),
   fornecedorDoc: z.string().trim().max(20).nullable().optional(),
@@ -149,7 +183,9 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
   const d = parsed.data
 
   const chave = soDigitos(d.chaveAcesso)
-  if (chave && chave.length !== 44) return { ok: false, erro: 'A chave de acesso tem 44 dígitos.' }
+  if (chave && !chaveAcessoValida(chave)) return { ok: false, erro: 'Chave de acesso inválida: confira os 44 dígitos com o documento.' }
+  const docFornecedor = soDigitos(d.fornecedorDoc)
+  if (docFornecedor && !cnpjCpfValido(docFornecedor)) return { ok: false, erro: 'CNPJ/CPF do fornecedor inválido: confira os dígitos com o documento.' }
 
   const supabase = await createClient()
   const { data: despesa, error } = await supabase
@@ -157,7 +193,7 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     .insert({
       tipo: d.tipo,
       fornecedor_nome: d.fornecedorNome || null,
-      fornecedor_doc: soDigitos(d.fornecedorDoc),
+      fornecedor_doc: docFornecedor,
       numero: d.numero || null,
       serie: d.serie || null,
       chave_acesso: chave,
@@ -171,6 +207,7 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
       arquivo_path: d.arquivoPath,
       origem: d.origem,
       modo: d.modo,
+      modelo_ia: d.modo === 'ia' ? d.modeloIa ?? null : null,
       confianca: d.confianca ?? null,
       observacoes: d.observacoes || null,
       criado_por: perfil.id,
@@ -211,7 +248,7 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     campos: [
       { campo: 'Fornecedor', de: null, para: d.fornecedorNome ?? null },
       { campo: 'Total', de: null, para: String(d.total) },
-      { campo: 'Modo', de: null, para: d.modo === 'ia' ? 'lida por IA e conferida' : 'digitada' },
+      { campo: 'Modo', de: null, para: d.modo === 'ia' ? `lida por IA (${d.modeloIa ?? 'rapido'}) e conferida` : 'digitada' },
     ],
   })
 
