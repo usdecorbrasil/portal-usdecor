@@ -109,8 +109,9 @@ export default function Exportar({
         num(l.metros),
         l.cancelado ? 'sim' : '',
       ])
+      // Linha em branco entre um pedido e o outro, para não misturar na planilha
+      linhas.push([])
     }
-    linhas.push([])
     linhas.push(['Total do período', '', '', '', '', '', '', '', '', num(estampa.resumo.metros), ''])
     baixar(`estampa-itens-${periodo}.csv`, paraCsv(linhas))
   }
