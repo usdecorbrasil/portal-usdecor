@@ -23,7 +23,7 @@ const ETAPAS: Record<string, { label: string; cor: string }> = {
 
 const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
-  'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue', 'fechado',
+  'faturado', 'nf_emitida', 'expedido', 'entregue', 'corte_costura', 'fechado',
 ]
 
 export default async function PedidosPage() {

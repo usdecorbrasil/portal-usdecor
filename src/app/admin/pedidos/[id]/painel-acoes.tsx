@@ -42,8 +42,8 @@ import {
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// Corte/costura vem depois do faturamento (08/10/2026): o que se fatura é a
-// estampa; a costura é terceirizada e não gera receita
+// Corte/costura é a última etapa antes de fechar (08/10/2026): o que se
+// fatura é a estampa; a costura é terceirizada e não gera receita
 const MANUAIS = [
   { chave: 'impressao', rotulo: 'Impressão', email: true },
   { chave: 'estampando', rotulo: 'Estampando', email: false },
@@ -53,7 +53,7 @@ const MANUAIS = [
 
 const ORDEM = [
   'aguardando', 'recebido', 'impressao', 'estampando', 'pronto',
-  'faturado', 'nf_emitida', 'corte_costura', 'expedido', 'entregue', 'fechado',
+  'faturado', 'nf_emitida', 'expedido', 'entregue', 'corte_costura', 'fechado',
 ]
 
 /** Etapas a partir das quais a equipe pode fechar o pedido (depois de faturado). */
@@ -271,10 +271,11 @@ export default function PainelAcoes({
     }
   }
 
-  // Costura é opcional e entra depois do faturamento, com ou sem nota
+  // Costura é opcional e fica depois da entrega; como expedição e entrega
+  // ainda não chegam do Bling, pode ser lançada de qualquer etapa pós-Faturado
   const disponiveis = aguardando
     ? []
-    : statusAtual === 'faturado' || statusAtual === 'nf_emitida'
+    : ['faturado', 'nf_emitida', 'expedido', 'entregue'].includes(statusAtual)
     ? MANUAIS.filter((m) => m.chave === 'corte_costura')
     : MANUAIS.filter((m) => ORDEM.indexOf(m.chave) === idx + 1)
 
