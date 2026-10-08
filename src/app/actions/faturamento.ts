@@ -16,6 +16,7 @@ import { FORMAS_FATURA, ROTULOS_FATURA } from '@/lib/pagamento/faturar'
 import { urlDoSite } from '@/lib/site'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito'
+import { registrar } from '@/lib/auditoria'
 
 /**
  * Faturamento a partir de "Pedido pronto".
@@ -728,4 +729,42 @@ async function gerarCobrancaInterno(p: Pedido): Promise<Resultado> {
       ? `${n} cobrança(s) lançada(s), mas nem todas com link ainda. Clique de novo em instantes para completar.`
       : `${n} cobrança(s) gerada(s) e enviada(s) ao cliente.`,
   }
+}
+
+/* ------------------------------ desfazer ------------------------------ */
+
+/**
+ * Desfaz o faturamento de um pedido que ainda está em Estampa pronta mas já
+ * foi ao Bling pelo fluxo antigo (pedido de venda e/ou cobrança gerados em
+ * "Pedido pronto"). Serve para o pedido voltar a ser agrupável ou refaturado
+ * com outra forma. Primeiro cancela no Bling (contas a receber e pedido de
+ * venda); depois a RPC limpa o portal e registra no andamento. Exige motivo.
+ */
+export async function desfazerFaturamento(pedidoId: string, motivo: string): Promise<{ ok: true; avisos: string[] } | { ok: false; erro: string }> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+  const parsed = z.object({ pedidoId: z.string().uuid(), motivo: z.string().trim().min(10, 'Descreva o motivo (mín. 10 caracteres).') }).safeParse({ pedidoId, motivo })
+  if (!parsed.success) return { ok: false, erro: parsed.error.issues[0].message }
+
+  const { desfazerNoBling } = await import('@/lib/bling/desfazer')
+  const avisos = await desfazerNoBling(parsed.data.pedidoId)
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('admin_desfazer_faturamento', {
+    p_pedido_id: parsed.data.pedidoId,
+    p_motivo: parsed.data.motivo,
+    p_aviso: avisos.length ? 'Faturamento desfeito no portal. Pendências no Bling: ' + avisos.join(' · ') : null,
+  })
+  if (error) return { ok: false, erro: error.message }
+
+  await registrar({
+    entidade: 'pedido',
+    entidadeId: parsed.data.pedidoId,
+    acao: 'editou',
+    campos: [{ campo: 'Faturamento', de: 'no Bling, com cobrança', para: 'desfeito (Estampa pronta)' }],
+    motivo: parsed.data.motivo,
+  })
+
+  revalidatePath(`/admin/pedidos/${parsed.data.pedidoId}`)
+  revalidatePath('/admin/pedidos')
+  return { ok: true, avisos }
 }

@@ -85,7 +85,7 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | Os originais ficam em `faturado`, com o rastreio (número do agrupador) nas observações | ✅ |
 | Desagrupar exige motivo; se o agrupador já estava no Bling, o cancelamento lá é manual | ✅ |
 | Itens do agrupador entram **somados por arte** (`pedido_itens` tem chave única pedido + arte; antes a mesma arte em dois pedidos quebrava com "duplicate key"). A recusa diz qual pedido trava e por quê (migration `20261008160000`) | ✅ |
-| Pedido que já teve cobrança gerada ou já foi ao Bling no fluxo antigo não entra em grupo: fatura sozinho pelo botão Faturar, que retoma o que falta | ✅ |
+| Pedido que já teve cobrança gerada ou já foi ao Bling no fluxo antigo não entra em grupo. Na tela dele, o bloco **"Já foi ao Bling pelo fluxo antigo"** tem o botão **Desfazer faturamento** (motivo obrigatório): apaga as contas a receber e cancela o pedido de venda no Bling, limpa a cobrança no portal (`admin_desfazer_faturamento`, migration `20261008170000`) e registra no andamento; o pedido volta a ser um "pronto" limpo, agrupável. Recusa se houver NF ou pagamento. O que não conseguir cancelar no Bling fica em `bling_erro` para a equipe terminar lá | ✅ |
 
 ### Cartão: dois momentos
 

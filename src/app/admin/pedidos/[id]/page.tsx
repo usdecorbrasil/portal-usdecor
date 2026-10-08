@@ -14,6 +14,7 @@ import {
 } from '@/app/actions/configuracoes'
 import PainelAcoes from './painel-acoes'
 import ReenviarBling from './reenviar-bling'
+import DesfazerFaturamento from './desfazer-faturamento'
 import Faturamento, { type CobrancaLinha } from './faturamento'
 import Desagrupar from './desagrupar'
 import { urlDocumento } from '@/lib/storage/documentos'
@@ -501,6 +502,16 @@ export default async function PedidoAdminPage({
         <p className="text-[11px] font-mono text-[#6E6E68] mt-2">
           Bling: pedido {p.bling_numero ? '#' + p.bling_numero : p.bling_pedido_id}
         </p>
+      )}
+
+      {/* Pedido antigo: foi ao Bling em "Pedido pronto", antes de o Faturar
+          existir. Enquanto estiver assim não agrupa nem troca de forma */}
+      {dono && !cancelado && !agrupador && atual === 'pronto' && !p.nf_numero && (p.bling_pedido_id || p.cobranca_gerada_em) && (
+        <DesfazerFaturamento
+          pedidoId={p.id}
+          blingNumero={p.bling_numero ? String(p.bling_numero) : null}
+          cobrancaGeradaEm={(p.cobranca_gerada_em as string | null) ?? null}
+        />
       )}
 
       {mostrarFaturamento && (
