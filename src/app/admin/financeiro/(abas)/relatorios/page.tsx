@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { gerarRelatorio } from '@/app/actions/relatorios'
+import { gerarRelatorio, relatorioEstampa } from '@/app/actions/relatorios'
 import FiltrosRelatorio from './filtros'
 import Exportar from './exportar'
 import SeletorTipo, { type TipoRelatorio } from './seletor-tipo'
@@ -35,12 +35,14 @@ export default async function RelatoriosPage({
 
   const supabase = await createClient()
 
-  const [relatorio, { data: clientes }] = await Promise.all([
+  const [relatorio, { data: clientes }, estampa] = await Promise.all([
     gerarRelatorio({ de: dataDe, ate: dataAte, status, clienteId: cliente }),
     supabase
       .from('clientes')
       .select('id, razao_social')
       .order('razao_social'),
+    // Só a divisão de estampa usa; nas outras não vale a consulta
+    aba === 'estampa' ? relatorioEstampa({ de: dataDe, ate: dataAte, clienteId: cliente }) : Promise.resolve(null),
   ])
 
   const r = relatorio.resumo
@@ -49,7 +51,9 @@ export default async function RelatoriosPage({
   return (
     <div>
       <p className="text-sm text-[#6E6E68] mb-4 leading-relaxed">
-        Pedidos criados no período. Cancelados não entram no faturamento.
+        {aba === 'estampa'
+          ? 'Metros que passaram pela estamparia no período: pedidos cuja etapa Estampando foi lançada entre as datas, com a metragem impressa final. Para conferir a fatura do prestador.'
+          : 'Pedidos criados no período. Cancelados não entram no faturamento.'}
       </p>
 
       <FiltrosRelatorio
@@ -58,6 +62,7 @@ export default async function RelatoriosPage({
         ate={dataAte}
         status={status}
         clienteId={cliente}
+        tipo={aba}
       />
 
       <div className="mt-5">
@@ -68,8 +73,109 @@ export default async function RelatoriosPage({
       </div>
 
       <div className="mt-4">
-        <Exportar relatorio={relatorio} periodo={periodo} tipo={aba} />
+        <Exportar relatorio={relatorio} periodo={periodo} tipo={aba} estampa={estampa} />
       </div>
+
+      {aba === 'estampa' && estampa && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+            <Cartao rotulo="METROS ESTAMPADOS" valor={`${brl(estampa.resumo.metros)} m`} />
+            <Cartao rotulo="PEDIDOS" valor={String(estampa.resumo.pedidos)} />
+            <Cartao rotulo="CLIENTES" valor={String(estampa.porCliente.length)} />
+            <Cartao
+              rotulo="SEM METRAGEM"
+              valor={String(estampa.resumo.semMetragem)}
+              alerta={estampa.resumo.semMetragem > 0}
+            />
+          </div>
+          {estampa.resumo.semMetragem > 0 && (
+            <p className="text-xs text-[#8A6A00] bg-[#FFFBEE] border border-[#E8D9A8] rounded-sm px-3 py-2 mt-3 leading-relaxed">
+              {estampa.resumo.semMetragem} pedido{estampa.resumo.semMetragem > 1 ? 's' : ''} em Estampando sem
+              metragem registrada: o romaneio não foi confirmado. Entram na lista com 0 m.
+            </p>
+          )}
+
+          {estampa.linhas.length === 0 ? (
+            <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center mt-6">
+              <p className="text-sm text-[#6E6E68]">Nenhum pedido entrou em Estampando neste período.</p>
+            </div>
+          ) : (
+            <>
+              <Titulo>POR TECIDO</Titulo>
+              <div className="space-y-1.5">
+                {estampa.porTecido.map((t) => (
+                  <div key={t.tecido} className="flex items-center justify-between gap-3 bg-white border border-[#DDDCD5] rounded-sm px-3 py-2.5">
+                    <span className="text-sm truncate flex-1 min-w-0">{t.tecido}</span>
+                    <span className="flex items-baseline gap-3 shrink-0 font-mono text-xs text-[#6E6E68]">
+                      <span>{t.pedidos} ped.</span>
+                      <span className="text-sm font-bold text-[#131A2E]">{brl(t.metros)} m</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <Titulo>POR CLIENTE</Titulo>
+              <div className="space-y-1.5">
+                {estampa.porCliente.map((c) => (
+                  <div key={c.clienteId} className="flex items-center justify-between gap-3 bg-white border border-[#DDDCD5] rounded-sm px-3 py-2.5">
+                    <span className="text-sm truncate flex-1 min-w-0">{c.cliente}</span>
+                    <span className="flex items-baseline gap-3 shrink-0 font-mono text-xs text-[#6E6E68]">
+                      <span>{c.pedidos} ped.</span>
+                      <span className="text-sm font-bold text-[#131A2E]">{brl(c.metros)} m</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <Titulo>POR DIA — PEDIDO A PEDIDO ({estampa.linhas.length})</Titulo>
+              <div className="space-y-3">
+                {estampa.porDia.map((d) => (
+                  <div key={d.dia}>
+                    <div className="flex items-baseline justify-between gap-3 px-1 mb-1">
+                      <span className="text-xs font-semibold text-[#131A2E]">
+                        {new Date(d.dia + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                      </span>
+                      <span className="font-mono text-xs text-[#6E6E68]">
+                        {d.pedidos} ped. · <span className="font-bold text-[#131A2E]">{brl(d.metros)} m</span>
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {estampa.linhas
+                        .filter((l) => l.estampadoEm === d.dia)
+                        .map((l) => (
+                          <Link
+                            key={l.pedidoId}
+                            href={`/admin/pedidos/${l.pedidoId}`}
+                            className="flex items-center gap-3 bg-white border border-[#DDDCD5] rounded-sm px-3 py-2.5 hover:border-[#131A2E]"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="font-mono text-xs text-[#6E6E68] shrink-0">{l.numero} ·</span>
+                                <span className="text-sm font-semibold truncate">{l.cliente}</span>
+                              </div>
+                              <span className={`text-xs ${l.cancelado ? 'text-[#B00063]' : 'text-[#6E6E68]'}`}>
+                                {l.tecido ?? 'tecido não informado'}
+                                {l.prontoEm && ` · pronta em ${new Date(l.prontoEm + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                                {l.lancamentos > 1 && ` · ${l.lancamentos} lançamentos`}
+                                {l.cancelado && ' · cancelado'}
+                              </span>
+                            </div>
+                            <div className="text-right shrink-0 font-mono">
+                              <div className={`font-bold text-sm ${l.metros === 0 ? 'text-[#B00063]' : 'text-[#131A2E]'}`}>
+                                {brl(l.metros)} m
+                              </div>
+                            </div>
+                            <span className="text-[#DDDCD5] shrink-0">›</span>
+                          </Link>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       {aba === 'financeiro' && (
         <>
@@ -152,7 +258,7 @@ export default async function RelatoriosPage({
         </>
       )}
 
-      {aba !== 'financeiro' && (
+      {aba !== 'financeiro' && aba !== 'estampa' && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
           <Cartao rotulo="PEDIDOS" valor={String(r.pedidos)} />
           <Cartao rotulo="FATURAMENTO" valor={`R$ ${brl(r.faturamento)}`} />
@@ -177,7 +283,7 @@ export default async function RelatoriosPage({
         </div>
       )}
 
-      {aba !== 'financeiro' && relatorio.pedidos.length === 0 ? (
+      {aba === 'estampa' ? null : aba !== 'financeiro' && relatorio.pedidos.length === 0 ? (
         <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center mt-6">
           <p className="text-sm text-[#6E6E68]">
             Nenhum pedido no período com esses filtros.

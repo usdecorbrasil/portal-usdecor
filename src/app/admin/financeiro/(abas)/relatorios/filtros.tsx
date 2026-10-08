@@ -23,12 +23,15 @@ export default function FiltrosRelatorio({
   ate,
   status,
   clienteId,
+  tipo,
 }: {
   clientes: Cliente[]
   de: string
   ate: string
   status?: string
   clienteId?: string
+  /** Divisão aberta (pedidos, financeiro, estampa…): mudar o período não pode trocá-la */
+  tipo?: string
 }) {
   const router = useRouter()
   const [carregando, setCarregando] = useState(false)
@@ -42,6 +45,7 @@ export default function FiltrosRelatorio({
     const c = novo.cliente !== undefined ? novo.cliente : clienteId
     if (s) p.set('status', s)
     if (c) p.set('cliente', c)
+    if (tipo) p.set('tipo', tipo)
 
     setCarregando(true)
     router.push(`/admin/financeiro/relatorios?${p.toString()}`)

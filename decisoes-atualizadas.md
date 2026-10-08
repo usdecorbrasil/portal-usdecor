@@ -161,6 +161,15 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | Quem fecha é admin/financeiro, pelo bloco "Fechar pedido" do painel, de Faturado em diante (`admin_fechar_pedido`) | ✅ |
 | Pedido fechado vai para Arquivados | ✅ |
 
+### Relatório de estampa (prestador de serviço)
+
+| Regra | Situação |
+|---|---|
+| Financeiro → Relatórios → **Estampa (prestador)**: metros que passaram pela estamparia no período, para conferir a fatura do prestador, que cobra por metro | ✅ |
+| O corte é pela **data do lançamento da etapa Estampando** (`pedido_status_historico`), não pela data do pedido; a metragem é a `metragem_impressa` final (já com ajustes de quebra) | ✅ |
+| Cancelados entram, marcados: o serviço foi feito. Pedido sem romaneio confirmado aparece com 0 m e aviso | ✅ |
+| Totais por tecido, por cliente e por dia; CSV pedido a pedido e por dia. `relatorioEstampa` em `src/app/actions/relatorios.ts` | ✅ |
+
 ### Painel de crédito (Financeiro → card Crédito, separado das abas)
 
 Decidido em 08/10/2026. Uma tela para acompanhar e gerenciar o financeiro de
