@@ -15,7 +15,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * (`auth.uid()` não existe nessa conexão): é lido da sessão aqui.
  */
 
-export type Entidade = 'cliente' | 'equipe' | 'configuracao' | 'despesa' | 'suprimento' | 'pedido'
+export type Entidade = 'cliente' | 'equipe' | 'configuracao' | 'despesa' | 'suprimento' | 'pedido' | 'conta_pagar'
 
 export type Acao =
   | 'criou'
@@ -26,6 +26,9 @@ export type Acao =
   | 'restaurou'
   | 'senha'
   | 'excluiu'
+  | 'pagou'
+  | 'estornou'
+  | 'cancelou'
 
 export type CampoAlterado = { campo: string; de: string | null; para: string | null }
 

@@ -41,6 +41,17 @@ const DocumentoLido = z.object({
   /** AAAA-MM-DD */
   emissao: z.string().nullable(),
   forma_pagamento: z.string().nullable(),
+  /** Como a compra foi paga, quando o documento diz. */
+  condicao_pagamento: z.enum(['pago', 'debito', 'credito', 'boleto', 'a_pagar']).nullable(),
+  /** Parcelas impressas no documento (quadro "Fatura/Duplicatas" da DANFE, vencimentos do boleto). */
+  duplicatas: z.array(
+    z.object({
+      numero: z.string().nullable(),
+      /** AAAA-MM-DD */
+      vencimento: z.string(),
+      valor: z.number(),
+    })
+  ),
   subtotal: z.number().nullable(),
   desconto: z.number().nullable(),
   frete: z.number().nullable(),
@@ -130,6 +141,17 @@ TOTAIS
 - subtotal = soma dos itens antes de desconto/frete; total = valor final a pagar impresso no documento ("VALOR TOTAL", "TOTAL A PAGAR", "VALOR LÍQUIDO"). Nunca calcule o total: copie o impresso.
 - impostos = soma dos impostos DESTACADOS que se somam ao preço (IPI, ST, juros). ICMS "incluso" e PIS/COFINS "aproximados" NÃO entram.
 - Confira: soma dos itens − desconto + frete + impostos deve dar o total. Se não bater, mantenha os valores lidos e baixe confianca.itens para 0.5 ou menos.
+
+PAGAMENTO
+- forma_pagamento: o texto do documento sobre pagamento, como está ("Cartão de Crédito", "PIX", "28/56 DDL", "Boleto"); null se não houver.
+- condicao_pagamento, uma destas ou null se o documento não disser:
+  - pago: pago na hora em dinheiro, Pix, transferência ou depósito ("Dinheiro", "PIX", "Troco", recibo de pagamento quitado).
+  - debito: cartão de débito.
+  - credito: cartão de crédito (inclusive parcelado na maquininha, "Crédito 3x").
+  - boleto: boleto bancário ou duplicatas com vencimento (quadro "FATURA/DUPLICATAS" na DANFE).
+  - a_pagar: venda a prazo sem boleto nem cartão ("a prazo", "fiado", "faturado" sem duplicatas).
+  Em NFC-e o meio vem em "FORMA DE PAGAMENTO" no rodapé. Em NF-e, "Pagamento à vista" com meio "Dinheiro"/"PIX" é pago; "a prazo" com duplicatas é boleto.
+- duplicatas: cada parcela impressa (número, vencimento AAAA-MM-DD, valor), na ordem. Na DANFE fica no quadro "FATURA / DUPLICATAS" ("001 15/11/2026 1.234,56"). Num boleto avulso, uma duplicata com o vencimento e o valor do documento. Sem parcelas impressas, lista vazia — nunca invente vencimentos.
 
 CONFIANÇA (0 a 1), por campo e por item
 - 1.0: legível, sem ambiguidade. 0.8: legível com pequena dúvida (dígito parecido, parte cortada). 0.5: parcialmente ilegível ou inferido. 0.2: chute. Campo null por ausência no documento não baixa a confiança.

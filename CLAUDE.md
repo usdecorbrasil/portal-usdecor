@@ -507,6 +507,32 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
 - Não existe XML/SEFAZ nem QR code de NFC-e ainda (está na especificação do dono como
   caminho preferencial); hoje é só imagem/PDF + IA ou digitação.
 
+## Contas a pagar (08/10/2026, migration `20261008190000`)
+
+Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admin/financeiro.
+
+- **Toda nota exige a condição de pagamento** na conferência (`despesas.condicao_pagamento`):
+  `pago` (dinheiro/Pix/transferência), `debito`, `credito`, `boleto`, `a_pagar`. Regras puras
+  em `src/lib/contas-pagar/condicoes.ts` (`gerarParcelas` divide o total mês a mês com os
+  centavos na 1ª; `validarParcelas` espelha `contas_pagar_validar_parcelas` no banco).
+- A IA lê `condicao_pagamento` e as **duplicatas** da DANFE ("Fatura/Duplicatas"), que
+  viram as parcelas já preenchidas. Sem duplicatas, 1 parcela com vencimento padrão
+  (crédito: +1 mês; demais: +30 dias).
+- `salvarDespesa`: grava a nota → `admin_gerar_contas_despesa` → itens. As contas vêm
+  **antes dos itens** de propósito: se falharem, a nota é apagada sem ter gerado entrada de
+  estoque. Pago e débito entram já quitados na emissão; os demais, uma linha por parcela,
+  com soma igual ao total (tolerância de 1 centavo).
+- Tabela `contas_pagar` (uma linha por parcela, `despesa_id` opcional — conta sem nota
+  pelo botão "Lançar conta sem nota"). Escrita só por RPC: `admin_criar_conta_pagar`,
+  `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
+  `admin_estornar_conta_pagar`, `admin_cancelar_conta_pagar`, `admin_alterar_conta_pagar`
+  (vencimento/valor); as três últimas exigem motivo ≥ 10 e anotam em `observacao`. Tudo
+  também vai para `auditoria` (entidade `conta_pagar`).
+- Excluir a nota (`admin_excluir_despesa`) cancela as parcelas em aberto pelo gatilho
+  `trg_despesas_cancelar_contas`; as pagas ficam.
+- A tela: quadros (vencidas, próximos 7 dias, até o fim do mês, pago no mês), filtro por
+  situação e período, grupos Vencidas / 7 dias / Depois e CSV.
+
 ## Ajuste de metragem (13/09/2026, `docs/sql/016`)
 
 Em **Estampando** e **Corte/costura** o botão "Ajustar quantidades" dá lugar a

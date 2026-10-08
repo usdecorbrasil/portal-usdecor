@@ -22,6 +22,10 @@ const ROTULO_ACAO: Record<string, string> = {
   arquivou: 'Arquivado',
   restaurou: 'Restaurado',
   senha: 'Senha redefinida',
+  excluiu: 'Excluído',
+  pagou: 'Pagamento registrado',
+  estornou: 'Pagamento estornado',
+  cancelou: 'Cancelado',
 }
 
 type Linha = {

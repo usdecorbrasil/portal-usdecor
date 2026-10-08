@@ -9,14 +9,15 @@ import { registrar } from '@/lib/auditoria'
 import { lerDocumento, TIPOS_DOCUMENTO, type DocumentoLido, type ModeloLeitura } from '@/lib/despesas/ler-documento'
 import { cnpjCpfValido, chaveAcessoValida } from '@/lib/despesas/validar'
 import { aplicarCustosAutomaticos } from '@/lib/custos/compras'
+import { CONDICOES, quitadaNaCompra, validarParcelas, ROTULO_CURTO } from '@/lib/contas-pagar/condicoes'
 
 /**
  * Despesas por documento (nota, cupom, recibo) — só admin/financeiro.
  *
  * Fluxo: `lerDespesa` recebe o arquivo já comprimido, guarda no bucket
  * `despesas` e pede a leitura à IA; a tela de conferência mostra tudo
- * editável; `salvarDespesa` grava documento + itens. Item com suprimento vira
- * entrada no estoque pelo gatilho do banco.
+ * editável; `salvarDespesa` grava documento, contas a pagar e itens. Item com
+ * suprimento vira entrada no estoque pelo gatilho do banco.
  */
 
 type Resultado<T = object> = ({ ok: true } & T) | { ok: false; erro: string }
@@ -158,6 +159,11 @@ const schemaDespesa = z.object({
   chaveAcesso: z.string().trim().max(44).nullable().optional(),
   emissao: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data de emissão'),
   formaPagamento: z.string().trim().max(60).nullable().optional(),
+  condicao: z.enum(CONDICOES, { message: 'Escolha como a nota foi paga' }),
+  parcelas: z
+    .array(z.object({ vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), valor: z.number().positive() }))
+    .max(36)
+    .default([]),
   subtotal: z.number().min(0).nullable().optional(),
   desconto: z.number().min(0).default(0),
   frete: z.number().min(0).default(0),
@@ -187,6 +193,11 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
   if (chave && !chaveAcessoValida(chave)) return { ok: false, erro: 'Chave de acesso inválida: confira os 44 dígitos com o documento.' }
   const docFornecedor = soDigitos(d.fornecedorDoc)
   if (docFornecedor && !cnpjCpfValido(docFornecedor)) return { ok: false, erro: 'CNPJ/CPF do fornecedor inválido: confira os dígitos com o documento.' }
+
+  if (!quitadaNaCompra(d.condicao)) {
+    const erroParcelas = validarParcelas(d.parcelas, d.total)
+    if (erroParcelas) return { ok: false, erro: erroParcelas }
+  }
 
   const supabase = await createClient()
   const { data: despesa, error } = await supabase
@@ -221,6 +232,22 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     return { ok: false, erro: error.message }
   }
 
+  // Contas a pagar antes dos itens: se falharem, a nota sai inteira sem ter
+  // mexido no estoque (os itens com suprimento geram entrada por gatilho).
+  // A categoria da conta é a do item de maior valor.
+  const categoriaConta =
+    [...d.itens].filter((i) => i.categoriaId).sort((a, b) => b.valorTotal - a.valorTotal)[0]?.categoriaId ?? null
+  const { error: erroContas } = await supabase.rpc('admin_gerar_contas_despesa', {
+    p_despesa_id: despesa.id,
+    p_condicao: d.condicao,
+    p_parcelas: quitadaNaCompra(d.condicao) ? null : d.parcelas,
+    p_categoria_id: categoriaConta,
+  })
+  if (erroContas) {
+    await createAdminClient().from('despesas').delete().eq('id', despesa.id)
+    return { ok: false, erro: erroContas.message }
+  }
+
   const { error: erroItens } = await supabase.from('despesa_itens').insert(
     d.itens.map((i, idx) => ({
       despesa_id: despesa.id,
@@ -237,7 +264,8 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     }))
   )
   if (erroItens) {
-    // Sem os itens a despesa não vale: tira o cabeçalho para não ficar pela metade
+    // Sem os itens a despesa não vale: tira o cabeçalho (e, em cascata, as
+    // contas a pagar) para não ficar pela metade
     await createAdminClient().from('despesas').delete().eq('id', despesa.id)
     return { ok: false, erro: erroItens.message }
   }
@@ -253,11 +281,17 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     campos: [
       { campo: 'Fornecedor', de: null, para: d.fornecedorNome ?? null },
       { campo: 'Total', de: null, para: String(d.total) },
+      {
+        campo: 'Pagamento',
+        de: null,
+        para: quitadaNaCompra(d.condicao) ? ROTULO_CURTO[d.condicao] : `${ROTULO_CURTO[d.condicao]} · ${d.parcelas.length}x`,
+      },
       { campo: 'Modo', de: null, para: d.modo === 'ia' ? `lida por IA (${d.modeloIa ?? 'rapido'}) e conferida` : 'digitada' },
     ],
   })
 
   revalidar()
+  revalidatePath('/admin/financeiro/a-pagar')
   if (avisoCustos) revalidatePath('/admin/financeiro/custos')
   return { ok: true, id: despesa.id, avisoCustos }
 }
@@ -268,6 +302,7 @@ export async function excluirDespesa(id: string, motivo: string): Promise<Result
   const { error } = await supabase.rpc('admin_excluir_despesa', { p_despesa_id: id, p_motivo: motivo })
   if (error) return { ok: false, erro: error.message }
   await registrar({ entidade: 'despesa', entidadeId: id, acao: 'excluiu', campos: [], motivo })
+  revalidatePath('/admin/financeiro/a-pagar')
   revalidar()
   return { ok: true }
 }
