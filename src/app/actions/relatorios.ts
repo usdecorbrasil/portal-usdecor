@@ -341,6 +341,18 @@ export type LinhaEstampa = {
   cancelado: boolean
   /** Quantas vezes saiu de Estampando no período (reimpressão repete o ciclo). */
   lancamentos: number
+  /** Artes impressas no pedido, para a conferência item a item com o prestador. */
+  itens: ItemEstampa[]
+}
+
+export type ItemEstampa = {
+  sku: string
+  nome: string
+  /** Peças faturadas (as que foram para a estampa). */
+  unidades: number
+  metrosPorUnidade: number | null
+  /** unidades × metros por unidade, como gravado no pedido. */
+  metros: number | null
 }
 
 export type RelatorioEstampa = {
@@ -374,7 +386,8 @@ export async function relatorioEstampa(filtros: {
       pedidos!inner(
         id, numero, cliente_id, cancelado_em, metragem_impressa,
         tecidos(nome), clientes(razao_social),
-        pedido_status_historico(status, created_at)
+        pedido_status_historico(status, created_at),
+        pedido_itens(sku, nome, quantidade_faturada, metros_por_unidade, metros_total)
       )
     `)
     .eq('status', 'pronto')
@@ -417,6 +430,15 @@ export async function relatorioEstampa(filtros: {
       metros: p.metragem_impressa != null ? Number(p.metragem_impressa) : 0,
       cancelado: !!p.cancelado_em,
       lancamentos: 1,
+      itens: ((p.pedido_itens ?? []) as any[])
+        .map((i) => ({
+          sku: String(i.sku ?? ''),
+          nome: String(i.nome ?? ''),
+          unidades: Number(i.quantidade_faturada ?? 0),
+          metrosPorUnidade: i.metros_por_unidade != null ? Number(i.metros_por_unidade) : null,
+          metros: i.metros_total != null ? Number(i.metros_total) : null,
+        }))
+        .sort((x, y) => x.sku.localeCompare(y.sku)),
     })
   }
 
