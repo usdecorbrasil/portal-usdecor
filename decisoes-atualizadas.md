@@ -116,9 +116,12 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 
 | Regra | Situação |
 |---|---|
-| Cliente com boleto vencido e não pago não envia pedido novo (gatilho em `pedidos`; a tela só antecipa a mensagem) | ✅ |
-| O dono libera à mão, com motivo; a liberação vale até o **próximo boleto vencer** depois dela | ✅ |
-| Só o cliente é travado; pedido criado pela equipe não passa pelo gatilho | ✅ |
+| ~~Cliente com boleto vencido não envia pedido novo~~ — substituída em 08/10/2026 pela regra dos 5 dias úteis abaixo (o gatilho em `pedidos` foi removido) | ✅ |
+| **Boleto vencido há mais de 5 dias úteis trava o andamento, não o envio** (migration `20261008130000`): o cliente envia o pedido, mas vê que ele não será atendido até a regularização; no painel, nenhum pedido do cliente recebe lançamento manual de etapa (confirmar, produção, Faturar, fechar). Gatilho `status_bloquear_por_atraso` em `pedido_status_historico`, só para origem `admin`; `sistema` e `bling` (criação, baixa de pagamento, NF) passam | ✅ |
+| Contagem em `cliente_boletos_atraso(cliente)`: parcelas e boleto à vista vencidos e não pagos, com `trava_em` = 6º dia útil após o vencimento (`proximo_dia_util`, com feriados). `cliente_boletos_vencidos` passou a contar só os que travam; `clientes_bloqueados_por_atraso()` lista os clientes travados para a lista de pedidos e o dashboard | ✅ |
+| Cliente: faixa amarela com o prazo enquanto o boleto venceu há menos de 5 dias úteis, vermelha ("pedidos não serão atendidos") depois. Painel: etiqueta `atraso` na lista, bloco vermelho na tela do pedido com o botão Liberar, alerta no dashboard | ✅ |
+| O dono libera à mão, com motivo (na tela do cliente ou na do pedido); a liberação vale até o **próximo boleto vencer** depois dela | ✅ |
+| Boleto pago com atraso ou vencido em aberto **desconta** no score de crédito (pontualidade de −50 a +50), em vez de só render menos | ✅ |
 | Aba **Boletos** na área do cliente: todos os boletos, com vencimento, situação e link | ✅ |
 | Baixa automática: GitHub Actions de hora em hora chama `/api/cron/pagamentos`, que lê as contas a receber no Bling e marca parcelas/pedidos pagos (`sincronizar_pagamento_*`, idempotentes) | ✅ |
 

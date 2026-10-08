@@ -110,7 +110,7 @@ export default async function DashboardPage({
   const supabase = await createClient()
 
   // A contagem de clientes não depende dos pedidos: busca junto
-  const [{ data: pedidos }, { count: clientesAtivos }] = await Promise.all([
+  const [{ data: pedidos }, { count: clientesAtivos }, { data: travados }] = await Promise.all([
     supabase
     .from('pedidos')
     .select(`
@@ -126,7 +126,10 @@ export default async function DashboardPage({
       .from('clientes')
       .select('*', { count: 'exact', head: true })
       .eq('ativo', true),
+    supabase.rpc('clientes_bloqueados_por_atraso'),
   ])
+
+  const clientesTravados = new Set<string>(((travados ?? []) as any[]).map(String))
 
   const lista = ((pedidos ?? []) as any[]).map((p) => {
     const hist = (p.pedido_status_historico ?? [])
@@ -146,6 +149,7 @@ export default async function DashboardPage({
       status: hist[0]?.status ?? 'aguardando',
       cancelado: !!p.cancelado_em,
       bloqueadoCredito: p.bloqueado_credito === true,
+      bloqueadoAtraso: clientesTravados.has(String(p.clientes?.id ?? '')),
       criado: new Date(p.created_at),
       temSolicitacao: (p.pedido_solicitacoes ?? []).some(
         (s: any) => s.status === 'aberta'
@@ -177,6 +181,10 @@ export default async function DashboardPage({
   // forma de pagamento é escolhida; pedidos anteriores a 07/10/2026 podiam
   // nascer bloqueados em "aguardando". A tela mostra os dois casos
   const bloqueados = validos.filter((p) => p.bloqueadoCredito)
+  // Cliente com boleto vencido há mais de 5 dias úteis: os pedidos dele
+  // (ainda não fechados) não andam até o pagamento ou a liberação
+  const travadosAtraso = validos.filter((p) => p.bloqueadoAtraso && p.status !== 'fechado')
+  const clientesAtraso = [...new Set(travadosAtraso.map((p) => p.clienteId))]
   const solicitacoes = validos.filter((p) => p.temSolicitacao)
   const valorAguardando = aguardando.reduce((a, p) => a + p.total, 0)
 
@@ -220,7 +228,7 @@ export default async function DashboardPage({
       <FiltroPeriodo de={dataDe} ate={dataAte} />
 
       {/* ---- pendências ---- */}
-      {(aguardando.length > 0 || solicitacoes.length > 0 || bloqueados.length > 0) && (
+      {(aguardando.length > 0 || solicitacoes.length > 0 || bloqueados.length > 0 || travadosAtraso.length > 0) && (
         <div className="mb-6">
           <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-2.5 flex items-center gap-2">
             PRECISA DA SUA DECISÃO
@@ -228,6 +236,32 @@ export default async function DashboardPage({
           </h2>
 
           <div className="space-y-1.5 sm:space-y-2">
+            {travadosAtraso.length > 0 && (
+              <Link
+                href={
+                  clientesAtraso.length === 1
+                    ? `/admin/clientes/${clientesAtraso[0]}`
+                    : '/admin/financeiro/boletos'
+                }
+                className="flex items-center gap-3 bg-[#FBEAF0] border-2 border-[#B00063] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#F7DCE7]"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold tracking-tight text-xs sm:text-sm text-[#B00063]">
+                    {travadosAtraso.length} pedido{travadosAtraso.length > 1 ? 's' : ''} travado
+                    {travadosAtraso.length > 1 ? 's' : ''} por boleto em atraso
+                  </div>
+                  <div className="text-[10px] sm:text-xs text-[#8A3A5C] mt-0.5">
+                    #{travadosAtraso.map((b) => b.numero).join(', #')} ·{' '}
+                    {clientesAtraso.length === 1
+                      ? travadosAtraso[0].cliente
+                      : `${clientesAtraso.length} clientes`}{' '}
+                    com boleto vencido há mais de 5 dias úteis · não anda até o pagamento ou a liberação
+                  </div>
+                </div>
+                <span className="text-[#B00063] shrink-0">›</span>
+              </Link>
+            )}
+
             {bloqueados.length > 0 && (
               <Link
                 href={bloqueados.length === 1 ? `/admin/pedidos/${bloqueados[0].id}` : '/admin/pedidos'}

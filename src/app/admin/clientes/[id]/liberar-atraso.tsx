@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import { liberarAtrasoBoleto } from '@/app/actions/clientes'
 
 /**
- * Trava por boleto vencido, vista pela equipe. Mostra quantos boletos travam
- * o cliente e deixa o dono liberar com motivo — a liberação vale até o
- * próximo boleto vencer.
+ * Trava por boleto vencido há mais de 5 dias úteis, vista pela equipe.
+ * Mostra quantos boletos travam o cliente e deixa o dono liberar com motivo —
+ * a liberação vale até o próximo boleto vencer. Usada na tela do cliente e
+ * na do pedido.
  */
 export default function LiberarAtraso({
   clienteId,
@@ -49,11 +50,12 @@ export default function LiberarAtraso({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[#B00063]">
-                {vencidos === 1 ? '1 boleto vencido' : `${vencidos} boletos vencidos`} — novos pedidos bloqueados
+                {vencidos === 1 ? '1 boleto vencido' : `${vencidos} boletos vencidos`} há mais de 5 dias úteis — pedidos travados
               </p>
               <p className="text-xs text-[#6E6E68] mt-0.5 leading-relaxed">
-                O cliente vê o aviso em todas as telas e não consegue enviar
-                pedido. A trava cai sozinha quando o pagamento é identificado.
+                O cliente ainda consegue enviar pedido, mas vê o aviso de que
+                não será atendido; aqui, nenhum pedido dele muda de etapa. A
+                trava cai sozinha quando o pagamento é identificado.
               </p>
             </div>
             {!abrindo && (

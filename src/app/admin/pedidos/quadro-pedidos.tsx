@@ -53,6 +53,8 @@ export type PedidoQuadro = {
   notas: string | null
   /** Boleto acima do limite de crédito (no Faturar, ou pedido antigo que nasceu assim). */
   bloqueadoCredito: boolean
+  /** Cliente com boleto vencido há mais de 5 dias úteis: o pedido não anda. */
+  bloqueadoAtraso: boolean
   entrada: string
   dias: number
   formaPagamento: string
@@ -260,8 +262,17 @@ export default function QuadroPedidos({
     abrirConfirmacao(atual.pedido, destino)
   }
 
+  /** Destinos do pedido — nenhum enquanto o cliente estiver travado por atraso. */
+  function destinosDe(pedido: PedidoQuadro) {
+    return pedido.bloqueadoAtraso ? [] : destinosPermitidos(pedido.status)
+  }
+
+  function motivoDe(pedido: PedidoQuadro) {
+    return motivoSemDestino(pedido.status, pedido.bloqueadoAtraso)
+  }
+
   function movivel(pedido: PedidoQuadro) {
-    return podeMover && !pendente && destinosPermitidos(pedido.status).length > 0
+    return podeMover && !pendente && destinosDe(pedido).length > 0
   }
 
   /**
@@ -275,8 +286,8 @@ export default function QuadroPedidos({
     if (!podeMover || pendente) return
     if ((e.target as HTMLElement).closest('button, input, label')) return
 
-    const destinos = destinosPermitidos(pedido.status)
-    const motivo = motivoSemDestino(pedido.status)
+    const destinos = destinosDe(pedido)
+    const motivo = motivoDe(pedido)
     const largura = (e.currentTarget as HTMLElement).offsetWidth
     const partida = { x: e.clientX, y: e.clientY }
 
@@ -361,8 +372,8 @@ export default function QuadroPedidos({
       const pedido = pedidosRef.current.find((p) => p.id === id)
       if (!pedido) return
 
-      const destinos = destinosPermitidos(pedido.status)
-      const motivo = motivoSemDestino(pedido.status)
+      const destinos = destinosDe(pedido)
+      const motivo = motivoDe(pedido)
 
       const t = e.touches[0]
       cancelarEspera()
@@ -1116,6 +1127,15 @@ function LinhaPedido({
             className="text-[9px] font-mono uppercase tracking-wider text-[#8A6A00] bg-[#FBF0D9] border border-[#C79600] rounded-sm px-1 shrink-0"
           >
             crédito
+          </span>
+        )}
+
+        {p.bloqueadoAtraso && (
+          <span
+            title="Cliente com boleto vencido há mais de 5 dias úteis — o pedido não anda até o pagamento ou a liberação na tela do cliente"
+            className="text-[9px] font-mono uppercase tracking-wider text-[#B00063] bg-[#FBEAF0] border border-[#B00063] rounded-sm px-1 shrink-0"
+          >
+            atraso
           </span>
         )}
 

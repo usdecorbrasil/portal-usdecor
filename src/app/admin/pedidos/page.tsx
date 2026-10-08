@@ -54,7 +54,7 @@ export default async function PedidosAdminPage({
   const dono = !!perfil?.veValores
 
   // Pedidos, lista de clientes e configuração não dependem um do outro
-  const [{ data: pedidos }, { data: clientes }, valorMinimoBoleto] = await Promise.all([
+  const [{ data: pedidos }, { data: clientes }, valorMinimoBoleto, { data: travados }] = await Promise.all([
     supabase
       .from('pedidos')
       .select(`
@@ -79,8 +79,12 @@ export default async function PedidosAdminPage({
           .order('razao_social')
       : Promise.resolve({ data: null }),
     buscarValorMinimoBoleto(),
+    // Clientes com boleto vencido há mais de 5 dias úteis: os pedidos deles
+    // ficam marcados e não se movem
+    supabase.rpc('clientes_bloqueados_por_atraso'),
   ])
 
+  const clientesTravados = new Set<string>(((travados ?? []) as any[]).map(String))
   const agora = Date.now()
 
   const listaCompleta: (PedidoQuadro & { clienteId: string })[] = (
@@ -124,6 +128,7 @@ export default async function PedidosAdminPage({
         ),
         notas: (p.notas as string | null)?.trim() || null,
         bloqueadoCredito: p.bloqueado_credito === true,
+        bloqueadoAtraso: clientesTravados.has(String(p.cliente_id)),
       }
     })
     .filter((p) => ATIVOS.includes(p.status))

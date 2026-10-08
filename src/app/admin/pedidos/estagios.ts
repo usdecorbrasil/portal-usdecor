@@ -73,10 +73,18 @@ export function sinalCurto(status: string, dias: number) {
 }
 
 /**
+ * Cliente com boleto vencido há mais de 5 dias úteis: nenhum pedido dele
+ * anda (o banco recusa o lançamento). Texto único para quadro e tela.
+ */
+export const MOTIVO_BLOQUEIO_ATRASO =
+  'O cliente tem boleto vencido há mais de 5 dias úteis. O pedido só anda depois do pagamento ou da liberação pelo dono, na tela do cliente.'
+
+/**
  * Por que um pedido nesta etapa não pode ser arrastado — ou null se pode.
  * Mostrado quando alguém tenta arrastar mesmo assim.
  */
-export function motivoSemDestino(status: string): string | null {
+export function motivoSemDestino(status: string, bloqueadoAtraso = false): string | null {
+  if (bloqueadoAtraso) return MOTIVO_BLOQUEIO_ATRASO
   if (status === 'aguardando') {
     return 'Este pedido ainda aguarda confirmação. Confirme-o na tela do pedido — depois ele pode ser arrastado.'
   }

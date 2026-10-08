@@ -632,7 +632,13 @@ Reescrita em `supabase/migrations/20261007120000_forma_pagamento_no_faturamento.
   `admin_definir_forma_pagamento_faturamento`, chamada pelo Faturar — onde há valor real.
 - **Não checa valor.** O `total` só existe depois da estampa.
 - Continua validando: cliente ativo com preço, itens do próprio catálogo e ativos,
-  anti-duplicidade de 30 s. O gatilho de boleto atrasado segue valendo.
+  anti-duplicidade de 30 s. **Boleto atrasado não barra mais a criação** (08/10/2026):
+  o cliente com boleto vencido há mais de 5 dias úteis envia o pedido, mas o gatilho
+  `status_bloquear_por_atraso` em `pedido_status_historico` recusa qualquer lançamento
+  de etapa com origem `admin` até o pagamento ou a liberação pelo dono
+  (`admin_liberar_atraso_boleto`). Origem `sistema`/`bling` passa. A conta dos dias
+  úteis é de `cliente_boletos_atraso` (`proximo_dia_util`, feriados incluídos); o app
+  não espelha a regra, só lê o resultado (`situacaoAtraso` em `actions/pedidos.ts`).
 - Roda com `search_path = ''`: tudo o que ela chama vem com `public.`. Foi esse contexto
   que expôs o gatilho `pedidos_congelar_taxa` sem qualificação (`docs/sql/012`).
 - Os gatilhos `pedidos_forma_permitida` e `trg_pedidos_congelar_taxa` só agem com forma
