@@ -41,7 +41,7 @@ export default function FormularioCustos({
 
   function usarSugestao() {
     if (!sugestao) return
-    if (sugestao.papel) setPapel(paraTexto(sugestao.papel.porMetroImpresso))
+    if (sugestao.papel) setPapel(paraTexto(sugestao.papel.custoMedioMetro))
     if (sugestao.tinta) {
       setTinta(paraTexto(sugestao.tinta.custoMedioLitro))
       if (sugestao.tinta.consumoMlPorMetro != null)
@@ -140,13 +140,11 @@ export default function FormularioCustos({
             <div className="flex justify-between items-baseline gap-2">
               <span className="font-semibold">Papel</span>
               <span className="font-mono">
-                R$ {brl(sugestao.papel.porMetroImpresso)}/m impresso
+                R$ {brl(sugestao.papel.custoMedioMetro)}/m
               </span>
             </div>
             <p className="text-xs text-[#6E6E68] mt-0.5">
-              R$ {paraTexto(sugestao.papel.custoMedioMetro, 4)} por metro
-              comprado × {paraTexto(sugestao.papel.consumoPorMetro, 2)} m por
-              metro estampado · {sugestao.papel.compras} compra
+              Custo médio do metro comprado · {sugestao.papel.compras} compra
               {sugestao.papel.compras > 1 ? 's' : ''},{' '}
               {sugestao.papel.metrosComprados.toLocaleString('pt-BR')} m
             </p>

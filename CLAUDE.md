@@ -473,8 +473,8 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
 - **Custos pelas compras** (08/10/2026): Financeiro → Custos mostra a média
   ponderada das entradas de suprimento com custo (notas) nos últimos 30/60/90 dias
   (`src/lib/custos/sugestao.ts`, puro; leitura em `src/lib/custos/compras.ts`).
-  Papel = suprimento de categoria "papel" em **metros**: R$/m comprado × `consumo_por_metro`
-  do papel (m de papel por m estampado; sem cadastro, 1). Tinta = categoria "tinta" em
+  Papel = suprimento de categoria "papel" em **metros**: só o custo médio do metro
+  comprado, sem fator de consumo (decisão do dono em 08/10/2026). Tinta = categoria "tinta" em
   **L ou mL**: R$/L médio; o coeficiente (mL/m) é a **soma** do `consumo_por_metro` de
   cada tinta (uma por cor), e sem cadastro fica o valor atual. Calandra nunca muda.
   "Usar estes valores" só preenche o formulário. O modo automático

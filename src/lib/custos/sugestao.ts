@@ -6,9 +6,9 @@
  * ponderado de papel e tinta no período, já convertido para o que a aba
  * Custos usa: R$ por metro de papel impresso e R$ por litro de tinta.
  *
- * - Papel: custo médio por metro de papel comprado × consumo por metro
- *   estampado (ex.: 1,05 m de papel por metro). Exige o papel cadastrado em
- *   metros (unidade "m").
+ * - Papel: custo médio do metro de papel comprado no período, usado direto
+ *   como custo por metro impresso. Exige o papel cadastrado em metros
+ *   (unidade "m").
  * - Tinta: custo médio por litro (unidade L ou mL). O coeficiente de consumo
  *   (mL por metro) vem do cadastro dos suprimentos de tinta, somado quando há
  *   várias cores; sem ele, a tela mantém o que já está em Custos.
@@ -28,10 +28,6 @@ export type EntradaCompra = {
 export type SugestaoPapel = {
   /** R$ por metro de papel comprado (média ponderada do período). */
   custoMedioMetro: number
-  /** Metros de papel por metro estampado (cadastro do suprimento). */
-  consumoPorMetro: number
-  /** R$ por metro impresso = custo médio × consumo. */
-  porMetroImpresso: number
   compras: number
   metrosComprados: number
   avisos: string[]
@@ -82,20 +78,12 @@ export function sugerirCustos(entradas: EntradaCompra[], janelaDias: number, de:
   if (papelMetros.length) {
     const metros = papelMetros.reduce((s, e) => s + e.quantidade, 0)
     const custo = papelMetros.reduce((s, e) => s + e.custoTotal, 0)
-    const custoMedioMetro = r4(custo / metros)
-    // Consumo: média ponderada pelos metros comprados; sem cadastro, 1 m por metro
-    const comConsumo = papelMetros.filter((e) => e.consumoPorMetro && e.consumoPorMetro > 0)
-    const consumoPorMetro = comConsumo.length
-      ? r4(comConsumo.reduce((s, e) => s + e.quantidade * (e.consumoPorMetro as number), 0) / comConsumo.reduce((s, e) => s + e.quantidade, 0))
-      : 1
+    const custoMedioMetro = r2(custo / metros)
     const avisos: string[] = []
-    if (!comConsumo.length) avisos.push('Nenhum papel tem "consumo por metro" cadastrado: considerei 1 m de papel por metro estampado.')
     const fora = papelTodos.length - papelMetros.length
     if (fora > 0) avisos.push(`${fora} compra${fora > 1 ? 's' : ''} de papel ficou fora da conta por não estar em metros (cadastre o papel na unidade "m").`)
     papel = {
       custoMedioMetro,
-      consumoPorMetro,
-      porMetroImpresso: r2(custoMedioMetro * consumoPorMetro),
       compras: papelMetros.length,
       metrosComprados: metros,
       avisos,

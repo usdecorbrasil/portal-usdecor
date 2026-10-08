@@ -293,8 +293,8 @@ Hobby da Vercel não aceita cron horário.
 
 - A aba Custos sugere papel e tinta pela média ponderada das notas de compra do período
   (30, 60 ou 90 dias). Papel precisa estar cadastrado em metros; tinta em L ou mL.
-- Papel por metro impresso = custo médio do metro comprado × consumo de papel por metro
-  estampado (cadastro do suprimento; padrão 1).
+- Papel por metro impresso = custo médio do metro comprado no período, sem fator de
+  consumo (o dono preferiu a conta simples).
 - Coeficiente de tinta (mL por metro) = soma do "consumo por metro" de cada tinta
   cadastrada. Sem coeficiente, mantém o valor atual.
 - Calandra não é afetada.

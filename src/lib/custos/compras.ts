@@ -82,7 +82,7 @@ export async function aplicarCustosAutomaticos(supabase: SupabaseClient): Promis
       .maybeSingle()
 
     const novo = {
-      p_papel_por_metro: s.papel ? s.papel.porMetroImpresso : Number(atual?.papel_por_metro ?? 0),
+      p_papel_por_metro: s.papel ? s.papel.custoMedioMetro : Number(atual?.papel_por_metro ?? 0),
       p_tinta_por_litro: s.tinta ? s.tinta.custoMedioLitro : Number(atual?.tinta_por_litro ?? 0),
       p_consumo_ml_por_metro: s.tinta?.consumoMlPorMetro ?? Number(atual?.consumo_ml_por_metro ?? 0),
       p_calandra_por_metro: Number(atual?.calandra_por_metro ?? 0),
