@@ -166,8 +166,8 @@ de limite, com exportação em CSV. Regra em `src/lib/credito/score.ts`, pura.
 
 | Regra | Situação |
 |---|---|
-| Score 0–100 = pontualidade (até 50) + volume (até 30) + frequência (até 20), menos 10 por boleto vencido em aberto (até 30) | ✅ |
-| Pontualidade: boleto pago em dia vale 1; até 7 dias de atraso 0,7; até 30 dias 0,4; mais de 30 dias 0,1; vencido sem pagar 0. Sem boleto vencido ainda: 25 pontos neutros | ✅ |
+| Score 0–100 = pontualidade (−50 a +50) + volume (até 30) + frequência (até 20), menos 10 por boleto vencido em aberto (até 30); o resultado é preso entre 0 e 100 | ✅ |
+| Pontualidade (08/10/2026: atraso desconta, não só rende menos): boleto pago em dia vale +1; pago com até 7 dias de atraso −0,3; até 30 dias −0,6; mais de 30 dias −1; vencido sem pagar −1. A média × 50 é a pontualidade. Sem boleto vencido ainda: 25 pontos neutros | ✅ |
 | Volume: faturamento do cliente no período comparado ao maior cliente (raiz quadrada, para o segundo lugar não ficar com quase nada) | ✅ |
 | Frequência: pedidos no período contra um alvo de 0,75 pedido por mês (mínimo 4) | ✅ |
 | Classes: Excelente ≥ 80 · Bom ≥ 60 · Atenção ≥ 40 · Risco abaixo · Sem histórico quando não há pedido nem boleto | ✅ |

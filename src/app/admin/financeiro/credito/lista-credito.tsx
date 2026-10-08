@@ -180,8 +180,9 @@ export default function ListaCredito({
       )}
 
       <p className="text-[11px] text-[#9B9A93] mt-3 leading-relaxed">
-        Score = pontualidade (até 50) + volume (até 30) + frequência (até 20), menos 10 por
-        boleto vencido em aberto. Excelente ≥ 80 · Bom ≥ 60 · Atenção ≥ 40 · Risco abaixo disso.
+        Score = pontualidade (−50 a +50: pago em dia soma, pago com atraso ou vencido desconta)
+        + volume (até 30) + frequência (até 20), menos 10 por boleto vencido em aberto.
+        Excelente ≥ 80 · Bom ≥ 60 · Atenção ≥ 40 · Risco abaixo disso.
       </p>
     </div>
   )

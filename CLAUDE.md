@@ -419,8 +419,9 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 Financeiro → **Crédito** (`src/app/admin/financeiro/credito`): por cliente, limite,
 crédito em uso (`credito_em_uso`), histórico de boletos (parcelas + boleto à vista de
 `pedidos`), **score 0–100** e sugestão de limite, com CSV. A regra é pura em
-`src/lib/credito/score.ts` (pontualidade 50 + volume 30 + frequência 20 − 10 por vencido
-aberto); os pesos estão em `decisoes-atualizadas.md`. A sugestão nunca grava sozinha: o
+`src/lib/credito/score.ts` (pontualidade de −50 a +50 — pago com atraso ou vencido
+**desconta**, decidido em 08/10/2026 — + volume 30 + frequência 20 − 10 por vencido
+aberto, score preso entre 0 e 100); os pesos estão em `decisoes-atualizadas.md`. A sugestão nunca grava sozinha: o
 botão "Aplicar sugestão" só pré-preenche o ajuste, que segue pela
 `atualizarLimiteCredito` com motivo. Mudanças de limite são lidas de `auditoria`
 (campo "Limite de crédito"). Sem migration.

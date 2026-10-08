@@ -3,10 +3,14 @@
  * servidor e no navegador e para ser lida de ponta a ponta.
  *
  * Três partes, somando no máximo 100:
- *   - Pontualidade (0–50): como o cliente pagou os boletos que já venceram.
+ *   - Pontualidade (−50 a +50): como o cliente pagou os boletos que já
+ *     venceram. Pago em dia soma; pago com atraso ou vencido em aberto
+ *     DESCONTA (decidido em 08/10/2026): o atraso tem de pesar contra, não
+ *     só render menos.
  *   - Volume (0–30): quanto faturou no período, comparado ao maior cliente.
  *   - Frequência (0–20): quantos pedidos fez no período.
- * Boleto vencido e ainda aberto desconta 10 pontos cada (até 30).
+ * Boleto vencido e ainda aberto desconta mais 10 pontos cada (até 30).
+ * O score final fica entre 0 e 100.
  *
  * A sugestão de limite sai do score e do uso do limite. É sugestão: quem
  * decide é o dono, e a mudança continua exigindo motivo.
@@ -55,7 +59,7 @@ export type ResultadoScore = {
   vencidosAbertos: number
   /** Maior atraso em dias entre os boletos vencidos abertos. */
   maiorAtrasoAberto: number
-  /** Boletos já vencidos (pagos ou não) considerados na pontualidade. */
+  /** Boletos já vencidos (pagos ou não) considerados na pontualidade. Pontualidade vai de −50 a +50. */
   boletosAvaliados: number
   pagosEmDia: number
   pagosComAtraso: number
@@ -93,17 +97,20 @@ function dias(de: string, ate: string): number {
   return Math.round((Date.parse(ate.slice(0, 10)) - Date.parse(de.slice(0, 10))) / DIA)
 }
 
-/** Nota de um boleto já vencido, de 0 a 1. */
+/**
+ * Nota de um boleto já vencido, de −1 a +1. Em dia vale +1; atrasado vale
+ * negativo, pior quanto maior o atraso; vencido sem pagar é o pior caso.
+ */
 function notaBoleto(b: BoletoHistorico, hoje: string): number | null {
   if (!b.pagoEm) {
     // Ainda não venceu: não conta
-    return dias(b.vencimento, hoje) > 0 ? 0 : null
+    return dias(b.vencimento, hoje) > 0 ? -1 : null
   }
   const atraso = dias(b.vencimento, b.pagoEm)
   if (atraso <= 0) return 1
-  if (atraso <= 7) return 0.7
-  if (atraso <= 30) return 0.4
-  return 0.1
+  if (atraso <= 7) return -0.3
+  if (atraso <= 30) return -0.6
+  return -1
 }
 
 /** Arredonda para cima em múltiplos de R$ 100. */

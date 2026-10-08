@@ -55,7 +55,7 @@ export default async function FichaCreditoPage({
 
       {/* ------------------------------ score aberto ------------------------------ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
-        <Parte rotulo="Pontualidade" valor={s.pontualidade} max={50}
+        <Parte rotulo="Pontualidade" valor={s.pontualidade} max={50} alerta={s.pontualidade < 0}
           detalhe={s.boletosAvaliados === 0 ? 'sem boleto vencido ainda' : `${s.pagosEmDia} em dia · ${s.pagosComAtraso} com atraso${s.atrasoMedio ? ` (média ${s.atrasoMedio} d)` : ''}`} />
         <Parte rotulo="Volume" valor={s.volume} max={30} detalhe={`R$ ${brl(f.faturamento)} em ${meses} meses`} />
         <Parte rotulo="Frequência" valor={s.frequencia} max={20} detalhe={`${f.pedidos} pedido${f.pedidos === 1 ? '' : 's'} em ${meses} meses`} />
