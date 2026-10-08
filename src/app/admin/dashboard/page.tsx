@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import FiltroPeriodo from './filtro-periodo'
+import Avisos, { type Aviso } from './avisos'
 import { PRAZO_COMPROVANTE_DIAS } from '@/lib/contas-pagar/condicoes'
 
 const brl = (v: number) =>
@@ -237,146 +238,77 @@ export default async function DashboardPage({
 
   const maiorValor = ranking[0]?.total ?? 1
 
+  const s = (n: number, um: string, varios: string) => (n === 1 ? um : varios)
+  const avisos: Aviso[] = []
+  if (travadosAtraso.length)
+    avisos.push({
+      nivel: 'urgente',
+      titulo: `${travadosAtraso.length} ${s(travadosAtraso.length, 'pedido travado', 'pedidos travados')} por boleto em atraso`,
+      detalhe: `#${travadosAtraso.map((b) => b.numero).join(', #')} · ${
+        clientesAtraso.length === 1 ? travadosAtraso[0].cliente : `${clientesAtraso.length} clientes`
+      } com boleto vencido há mais de 5 dias úteis`,
+      href: clientesAtraso.length === 1 ? `/admin/clientes/${clientesAtraso[0]}` : '/admin/financeiro/a-receber',
+    })
+  if (semComprovante.length)
+    avisos.push({
+      nivel: 'urgente',
+      titulo: `${semComprovante.length} ${s(semComprovante.length, 'nota', 'notas')} de compra sem comprovante há mais de ${PRAZO_COMPROVANTE_DIAS} dias`,
+      detalhe: `R$ ${brl(valorSemComprovante)} em contas a pagar sem nota fiscal ou recibo · toque para anexar`,
+      href: '/admin/financeiro/a-pagar?situacao=todas&comprovante=pendente',
+    })
+  if (vencidasPagar.length)
+    avisos.push({
+      nivel: 'urgente',
+      titulo: `${vencidasPagar.length} ${s(vencidasPagar.length, 'conta a pagar vencida', 'contas a pagar vencidas')}`,
+      detalhe: `R$ ${brl(valorVencidasPagar)} · registre o pagamento ou ajuste o vencimento`,
+      href: '/admin/financeiro/a-pagar',
+    })
+  if (solicitacoes.length)
+    avisos.push({
+      nivel: 'urgente',
+      titulo: `${solicitacoes.length} ${s(solicitacoes.length, 'solicitação', 'solicitações')} de cancelamento`,
+      detalhe: `${s(solicitacoes.length, 'Pedido', 'Pedidos')} #${solicitacoes.map((x) => x.numero).join(', #')} · o cliente aguarda resposta`,
+      href: '/admin/pedidos',
+    })
+  if (bloqueados.length)
+    avisos.push({
+      nivel: 'atencao',
+      titulo: `${bloqueados.length} ${s(bloqueados.length, 'pedido bloqueado', 'pedidos bloqueados')} por limite de crédito`,
+      detalhe: `#${bloqueados.map((b) => b.numero).join(', #')} · no Faturar: libere com motivo ou escolha outra forma`,
+      href: bloqueados.length === 1 ? `/admin/pedidos/${bloqueados[0].id}` : '/admin/pedidos',
+    })
+  if (aguardando.length)
+    avisos.push({
+      nivel: 'info',
+      titulo: `${aguardando.length} ${s(aguardando.length, 'pedido aguardando', 'pedidos aguardando')} confirmação`,
+      detalhe: `R$ ${brl(valorAguardando)} · o cliente ainda pode cancelar`,
+      href: '/admin/pedidos?etapa=aguardando',
+    })
+
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">
-        Dashboard
-      </h1>
-      <p className="text-sm text-[#6E6E68] mt-1 mb-4">
-        {tituloPeriodo}
-        {clientesAtivos ? ` · ${clientesAtivos} cliente${clientesAtivos > 1 ? 's' : ''} ativo${clientesAtivos > 1 ? 's' : ''}` : ''}
-      </p>
-
-      {/* ---- atalhos ---- */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      {/* Título e atalho na mesma linha: o botão não gasta uma faixa só para ele */}
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">Dashboard</h1>
+          <p className="text-sm text-[#6E6E68] mt-1">
+            {tituloPeriodo}
+            {clientesAtivos ? ` · ${clientesAtivos} cliente${clientesAtivos > 1 ? 's' : ''} ativo${clientesAtivos > 1 ? 's' : ''}` : ''}
+          </p>
+        </div>
         {/* Conta a pagar só nasce da nota: o atalho é o lançamento da nota */}
         <Link
           href="/admin/estoque/despesas/nova"
-          className="inline-flex items-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+          className="shrink-0 inline-flex items-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3 py-2 text-xs font-semibold tracking-wide"
+          title="Lançar nota de compra"
         >
-          📷 LANÇAR NOTA DE COMPRA
+          📷 <span className="hidden sm:inline">LANÇAR </span>NOTA
         </Link>
-        {vencidasPagar.length > 0 && (
-          <Link
-            href="/admin/financeiro/a-pagar"
-            className="inline-flex items-center gap-1.5 bg-[#FBEAF0] border border-[#B00063] text-[#B00063] rounded-sm px-3.5 py-2 text-xs font-semibold"
-          >
-            {vencidasPagar.length} conta{vencidasPagar.length > 1 ? 's' : ''} a pagar vencida{vencidasPagar.length > 1 ? 's' : ''} · R$ {brl(valorVencidasPagar)}
-          </Link>
-        )}
       </div>
 
-      {semComprovante.length > 0 && (
-        <Link
-          href="/admin/financeiro/a-pagar?situacao=todas&comprovante=pendente"
-          className="flex items-center gap-3 bg-[#FBEAF0] border-2 border-[#B00063] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#F7DCE7] mb-4"
-        >
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold tracking-tight text-xs sm:text-sm text-[#B00063]">
-              {semComprovante.length} nota{semComprovante.length > 1 ? 's' : ''} de compra sem comprovante há mais de {PRAZO_COMPROVANTE_DIAS} dias
-            </div>
-            <div className="text-[10px] sm:text-xs text-[#B00063]/80 mt-0.5">
-              R$ {brl(valorSemComprovante)} em contas a pagar sem nota fiscal ou recibo anexado · toque para anexar
-            </div>
-          </div>
-          <span className="text-[#B00063] shrink-0">›</span>
-        </Link>
-      )}
+      <Avisos avisos={avisos} />
 
       <FiltroPeriodo de={dataDe} ate={dataAte} />
-
-      {/* ---- pendências ---- */}
-      {(aguardando.length > 0 || solicitacoes.length > 0 || bloqueados.length > 0 || travadosAtraso.length > 0) && (
-        <div className="mb-6">
-          <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-2.5 flex items-center gap-2">
-            PRECISA DA SUA DECISÃO
-            <span className="flex-1 h-px bg-[#DDDCD5]" />
-          </h2>
-
-          <div className="space-y-1.5 sm:space-y-2">
-            {travadosAtraso.length > 0 && (
-              <Link
-                href={
-                  clientesAtraso.length === 1
-                    ? `/admin/clientes/${clientesAtraso[0]}`
-                    : '/admin/financeiro/a-receber'
-                }
-                className="flex items-center gap-3 bg-[#FBEAF0] border-2 border-[#B00063] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#F7DCE7]"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold tracking-tight text-xs sm:text-sm text-[#B00063]">
-                    {travadosAtraso.length} pedido{travadosAtraso.length > 1 ? 's' : ''} travado
-                    {travadosAtraso.length > 1 ? 's' : ''} por boleto em atraso
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-[#8A3A5C] mt-0.5">
-                    #{travadosAtraso.map((b) => b.numero).join(', #')} ·{' '}
-                    {clientesAtraso.length === 1
-                      ? travadosAtraso[0].cliente
-                      : `${clientesAtraso.length} clientes`}{' '}
-                    com boleto vencido há mais de 5 dias úteis · não anda até o pagamento ou a liberação
-                  </div>
-                </div>
-                <span className="text-[#B00063] shrink-0">›</span>
-              </Link>
-            )}
-
-            {bloqueados.length > 0 && (
-              <Link
-                href={bloqueados.length === 1 ? `/admin/pedidos/${bloqueados[0].id}` : '/admin/pedidos'}
-                className="flex items-center gap-3 bg-[#FFFBEE] border-2 border-[#C79600] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#FFF6D6]"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold tracking-tight text-xs sm:text-sm text-[#6B5320]">
-                    {bloqueados.length} pedido{bloqueados.length > 1 ? 's' : ''} bloqueado
-                    {bloqueados.length > 1 ? 's' : ''} por limite de crédito
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-[#8A6A00] mt-0.5">
-                    #{bloqueados.map((b) => b.numero).join(', #')} · no Faturar: libere com motivo ou escolha outra forma
-                  </div>
-                </div>
-                <span className="text-[#C79600] shrink-0">›</span>
-              </Link>
-            )}
-
-            {aguardando.length > 0 && (
-              <Link
-                href="/admin/pedidos?etapa=aguardando"
-                className="flex items-center gap-3 bg-white border-2 border-[#0090D8] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#F4FAFD]"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold tracking-tight text-xs sm:text-sm">
-                    {aguardando.length} pedido
-                    {aguardando.length > 1 ? 's' : ''} aguardando confirmação
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5 font-mono">
-                    R$ {brl(valorAguardando)} · o cliente ainda pode cancelar
-                  </div>
-                </div>
-                <span className="text-[#0090D8] shrink-0">›</span>
-              </Link>
-            )}
-
-            {solicitacoes.length > 0 && (
-              <Link
-                href="/admin/pedidos"
-                className="flex items-center gap-3 bg-white border-2 border-[#B00063] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#FFF6FA]"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold tracking-tight text-xs sm:text-sm">
-                    {solicitacoes.length} solicitação
-                    {solicitacoes.length > 1 ? 'ões' : ''} de cancelamento
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-0.5">
-                    Pedido{solicitacoes.length > 1 ? 's' : ''} #
-                    {solicitacoes.map((s) => s.numero).join(', #')}
-                  </div>
-                </div>
-                <span className="text-[#B00063] shrink-0">›</span>
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ---- indicadores do período ---- */}
       <div className="grid grid-cols-2 gap-2 sm:gap-3">

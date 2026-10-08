@@ -316,3 +316,12 @@ Hobby da Vercel não aceita cron horário.
   (dono e financeiro), até alguém anexar o comprovante pela própria conta a pagar.
 - Pagar, mudar vencimento/valor, estornar e cancelar ficam registrados; os três últimos
   exigem motivo. Excluir a nota cancela as parcelas ainda não pagas.
+
+## Avisos do dashboard e e-mail diário (08/10/2026)
+
+- Todos os avisos do dashboard seguem o mesmo formato: uma linha compacta por assunto, com a cor
+  indicando a urgência (vermelho urgente, amarelo atenção, azul informação), em duas colunas no
+  computador.
+- Todo dia de manhã, se houver nota sem comprovante há mais de 2 dias ou conta a pagar vencida,
+  sai um e-mail de resumo para quem estiver em Configurações → Notificações → "Pendências de
+  contas a pagar". Sem pendência, não sai nada.
