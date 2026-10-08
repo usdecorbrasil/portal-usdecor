@@ -122,7 +122,8 @@ Importante:
   em etapa do Bling) mostra o motivo (`motivoSemDestino()`) em vez de ignorar.
 - A listagem é densa, em linhas com cabeçalho de colunas por etapa. A coluna
   **"Parado há"** conta dias desde o **último lançamento de status**, não desde a
-  criação do pedido — a data de criação está na coluna "Entrou" (escondida no celular).
+  criação do pedido — a data de criação está na coluna "Entrou", visível também no
+  celular (pedido do dono em 08/10/2026).
 - Toda mudança por arraste **pede confirmação antes de gravar**, e quando a etapa exige
   dados eles são preenchidos no próprio pop-up: Estampando abre o acerto de metragem e
   quantidades (gera o romaneio), Impressão abre a conferência de quantidade para o dono.
