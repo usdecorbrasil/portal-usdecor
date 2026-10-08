@@ -426,7 +426,10 @@ crédito em uso (`credito_em_uso`), histórico de boletos (parcelas + boleto à 
 aberto, score preso entre 0 e 100); os pesos estão em `decisoes-atualizadas.md`. A sugestão nunca grava sozinha: o
 botão "Aplicar sugestão" só pré-preenche o ajuste, que segue pela
 `atualizarLimiteCredito` com motivo. Mudanças de limite são lidas de `auditoria`
-(campo "Limite de crédito"). Sem migration.
+(campo "Limite de crédito"). Sem migration. A ficha lista os boletos em três blocos —
+em aberto (vencidos primeiro), **a emitir** (pedidos em boleto sem parcela nem cobrança
+gerada, `carregarPrevistos`, espelho da 2ª metade de `credito_em_uso`) e pagos — para o
+"em boletos hoje" fechar com o que está listado.
 
 ## Ajuste de metragem (13/09/2026, `docs/sql/016`)
 
