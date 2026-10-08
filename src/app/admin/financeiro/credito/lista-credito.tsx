@@ -119,9 +119,9 @@ export default function ListaCredito({
             <span className="w-10 shrink-0 text-right">Score</span>
             <span className="flex-1 min-w-0">Cliente</span>
             <span className="w-24 shrink-0 text-right hidden sm:inline">Limite</span>
-            <span className="w-28 shrink-0 text-right">Uso</span>
+            <span className="w-28 shrink-0 text-right hidden sm:inline">Uso</span>
             <span className="w-24 shrink-0 text-right hidden md:inline">Faturado</span>
-            <span className="w-28 sm:w-36 shrink-0 text-right">Sugestão</span>
+            <span className="w-28 sm:w-36 shrink-0 text-right hidden sm:inline">Sugestão</span>
           </div>
           <div className={CORPO}>
             {linhas.map((l) => {
@@ -132,11 +132,13 @@ export default function ListaCredito({
                   key={l.clienteId}
                   href={`/admin/financeiro/credito/${l.clienteId}?meses=${painel.meses}`}
                   data-busca={l.cliente}
-                  className="flex items-center gap-2 px-2.5 py-1.5 bg-white hover:bg-[#FAFAF8]"
+                  // No celular a linha quebra em duas: nome em cima, uso e
+                  // sugestão embaixo (`sm:contents` desfaz o agrupamento no desktop)
+                  className="relative flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 pl-4 pr-2.5 py-2 sm:py-1.5 bg-white hover:bg-[#FAFAF8]"
                 >
                   <span
                     aria-hidden
-                    className={'w-1 self-stretch -my-1.5 shrink-0 ' + (s.vencidosAbertos > 0 ? 'bg-[#B00063]' : s.classe === 'excelente' ? 'bg-[#8CB399]' : s.classe === 'bom' ? 'bg-[#92A0C0]' : s.classe === 'atencao' ? 'bg-[#C4A868]' : 'bg-[#DDDCD5]')}
+                    className={'absolute left-2 top-0 bottom-0 w-1 ' + (s.vencidosAbertos > 0 ? 'bg-[#B00063]' : s.classe === 'excelente' ? 'bg-[#8CB399]' : s.classe === 'bom' ? 'bg-[#92A0C0]' : s.classe === 'atencao' ? 'bg-[#C4A868]' : 'bg-[#DDDCD5]')}
                   />
                   <span className={NUM + ' w-10 shrink-0 text-right text-sm font-bold'}>{s.score}</span>
                   <span className="flex-1 min-w-0">
@@ -151,10 +153,14 @@ export default function ListaCredito({
                       {!l.ativo && <span className={ETIQUETA + ' bg-[#EEEDE7] text-[#6E6E68]'}>inativo</span>}
                     </span>
                   </span>
+                  <span className="flex w-full sm:w-auto sm:contents items-center gap-2 pl-12 sm:pl-0">
                   <span className={NUM + ' w-24 shrink-0 text-right hidden sm:inline'}>
                     {l.limite > 0 ? `R$ ${brl(l.limite)}` : '—'}
                   </span>
-                  <span className="w-28 shrink-0 text-right">
+                  <span className="flex-1 sm:flex-none sm:w-28 shrink-0 text-left sm:text-right">
+                    <span className="text-[9px] font-mono uppercase tracking-[0.14em] text-[#9B9A93] sm:hidden">
+                      Uso{l.limite > 0 ? ` · limite R$ ${brl(l.limite)}` : ''}
+                    </span>
                     <span className={NUM + ' block'}>R$ {brl(l.emUso)}</span>
                     <span className="block h-1 bg-[#EEEDE7] rounded-full mt-1 overflow-hidden">
                       <span
@@ -167,10 +173,14 @@ export default function ListaCredito({
                     R$ {brl(l.faturamento)}
                   </span>
                   <span className={'w-28 sm:w-36 shrink-0 text-right ' + COR_ACAO[s.sugestao.acao]}>
+                    <span className="block text-[9px] font-mono uppercase tracking-[0.14em] text-[#9B9A93] sm:hidden">
+                      Sugestão
+                    </span>
                     <span className="block text-xs font-semibold">{ROTULO_ACAO[s.sugestao.acao]}</span>
                     {s.sugestao.acao !== 'manter' && (
                       <span className={NUM + ' block'}>R$ {brl(s.sugestao.limiteSugerido)}</span>
                     )}
+                  </span>
                   </span>
                 </Link>
               )
