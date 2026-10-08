@@ -10,7 +10,7 @@ export default function CreditoLayout({ children }: { children: React.ReactNode 
       <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-[#DDDCD5]">
         <h2 className="font-bold tracking-tight text-[#131A2E]">Crédito dos clientes</h2>
         <Link
-          href="/admin/financeiro/boletos"
+          href="/admin/financeiro/a-receber"
           className="text-xs text-[#0090D8] hover:underline whitespace-nowrap"
         >
           ← Financeiro

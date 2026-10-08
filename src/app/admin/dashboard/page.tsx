@@ -241,7 +241,7 @@ export default async function DashboardPage({
                 href={
                   clientesAtraso.length === 1
                     ? `/admin/clientes/${clientesAtraso[0]}`
-                    : '/admin/financeiro/boletos'
+                    : '/admin/financeiro/a-receber'
                 }
                 className="flex items-center gap-3 bg-[#FBEAF0] border-2 border-[#B00063] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#F7DCE7]"
               >

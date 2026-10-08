@@ -4,7 +4,7 @@ import FiltroStatus from './filtro-status'
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export default async function BoletosPage() {
+export default async function AReceberPage() {
   const parcelas = await buscarAguardandoRecebimento()
   const pendentes = parcelas.filter((p) => !p.pagoEm)
   const vencidas = parcelas.filter((p) => p.vencida)

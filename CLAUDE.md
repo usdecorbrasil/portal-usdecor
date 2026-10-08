@@ -421,9 +421,12 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 
 ## Painel de crédito (08/10/2026)
 
-Financeiro → **Crédito** (`src/app/admin/financeiro/credito`; **card próprio** abaixo da
-caixa de abas Boletos/Custos/Apuração/Relatórios, não uma aba — pedido do dono em
-08/10/2026; as abas vivem no grupo de rota `financeiro/(abas)`): por cliente, limite,
+Financeiro → **Crédito** (`src/app/admin/financeiro/credito`; **card próprio** abaixo dos
+cards de abas, não uma aba — pedido do dono em 08/10/2026; as abas vivem no grupo de rota
+`financeiro/(abas)`). Desde 08/10/2026 as abas ficam em dois cards (`financeiro/abas.tsx`):
+**Contas** — A receber (o antigo Boletos, rota `a-receber`; `/admin/financeiro/boletos`
+redireciona) e A pagar — e **Custos e resultados** — Custos, Apuração, Relatórios. O card
+da aba aberta mostra o conteúdo; o outro fica só com as abas. Painel de crédito: por cliente, limite,
 crédito em uso (`credito_em_uso`), histórico de boletos (parcelas + boleto à vista de
 `pedidos`), **score 0–100** e sugestão de limite, com CSV. A regra é pura em
 `src/lib/credito/score.ts` (pontualidade de −50 a +50 — pago com atraso ou vencido
