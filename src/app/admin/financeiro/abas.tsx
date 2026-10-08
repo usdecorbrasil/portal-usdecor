@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 
 const ABAS = [
   { href: '/admin/financeiro/boletos', label: 'Boletos' },
-  { href: '/admin/financeiro/credito', label: 'Crédito' },
   { href: '/admin/financeiro/custos', label: 'Custos' },
   { href: '/admin/financeiro/apuracao', label: 'Apuração' },
   { href: '/admin/financeiro/relatorios', label: 'Relatórios' },

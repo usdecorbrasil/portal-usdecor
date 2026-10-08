@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { lerPerfil } from '@/lib/auth/perfil'
-import Abas from './abas'
 import BuscaPagina from '@/components/busca-pagina'
 
 export default async function FinanceiroLayout({
@@ -27,7 +26,7 @@ export default async function FinanceiroLayout({
         />
       </div>
 
-      <Abas>{children}</Abas>
+      {children}
     </div>
   )
 }
