@@ -63,7 +63,7 @@ export default function Exportar({
           l.lancamentos,
           l.cancelado ? 'sim' : '',
         ]),
-        [],
+        ['', '', '', '', '', '', '', ''],
         ['Total', '', '', '', num(estampa.resumo.metros), '', '', ''],
       ])
     )
@@ -77,9 +77,8 @@ export default function Exportar({
    */
   function estampaItensCsv() {
     if (!estampa) return
-    const linhas: (string | number)[][] = [
-      ['Saída de Estampando', 'Pedido', 'Cliente', 'Tecido', 'SKU', 'Arte', 'Peças', 'Metros/peça', 'Metros da arte', 'Metros impressos do pedido', 'Cancelado'],
-    ]
+    const COLUNAS_ITENS = ['Saída de Estampando', 'Pedido', 'Cliente', 'Tecido', 'SKU', 'Arte', 'Peças', 'Metros/peça', 'Metros da arte', 'Metros impressos do pedido', 'Cancelado']
+    const linhas: (string | number)[][] = [COLUNAS_ITENS]
     for (const l of estampa.linhas) {
       for (const i of l.itens) {
         linhas.push([
@@ -109,8 +108,10 @@ export default function Exportar({
         num(l.metros),
         l.cancelado ? 'sim' : '',
       ])
-      // Linha em branco entre um pedido e o outro, para não misturar na planilha
-      linhas.push([])
+      // Linha em branco entre um pedido e o outro, para não misturar na planilha.
+      // Com as células vazias mas presentes ("";"";…), e não uma linha sem nada:
+      // Numbers e o Excel do celular descartam linhas totalmente vazias ao importar
+      linhas.push(COLUNAS_ITENS.map(() => ''))
     }
     linhas.push(['Total do período', '', '', '', '', '', '', '', '', num(estampa.resumo.metros), ''])
     baixar(`estampa-itens-${periodo}.csv`, paraCsv(linhas))
