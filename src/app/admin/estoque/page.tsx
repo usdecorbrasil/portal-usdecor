@@ -8,6 +8,7 @@ import Saldos, { type SaldoLinha, type MovimentoLinha } from './saldos'
 import FormEnvioTecido from '@/components/form-envio-tecido'
 import EnviosTecido from '@/components/envios-tecido'
 import { listarEnvios } from '@/lib/estoque/envios'
+import AbasEstoque from './abas-estoque'
 
 export default async function EstoquePage({
   searchParams,
@@ -82,10 +83,11 @@ export default async function EstoquePage({
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
         <h1 className="text-2xl font-bold tracking-tight text-[#131A2E] shrink-0">
-          Estoque de tecido
+          Estoque
         </h1>
         <BuscaPagina placeholder="Filtrar por cliente ou tecido..." rotulo="Filtrar esta página" />
       </div>
+      <AbasEstoque dono={dono} />
       <p className="text-sm text-[#6E6E68] mt-1 mb-6">
         Quanto de cada tecido cada cliente tem na estamparia. O saldo é a soma
         das movimentações — vale a metragem conferida pela equipe.

@@ -240,6 +240,24 @@ Com o consumo ligado, nenhum pedido passa para Estampando sem tecido em
 estoque. Antes dos próximos romaneios a equipe precisa **dar entrada no tecido
 que já está na estamparia** pela aba Estoque, senão a produção trava.
 
+## Despesas por nota e suprimentos
+
+### O que é (08/10/2026)
+
+| Regra | Situação |
+|---|---|
+| Estoque → **Despesas e notas** (admin/financeiro): foto pela câmera ou arquivo (JPG/PNG/WebP/PDF até 10 MB); a foto é reduzida no aparelho antes de subir (1600 px, JPEG 82%) e o original não sobe | ✅ |
+| Dois modelos: **rápido** (Haiku, padrão, ~R$ 0,01/página — a opção mais barata, pedida pelo dono) e **preciso** (Opus, ~R$ 0,40), acionado por botão sobre o mesmo arquivo quando o rápido não entende. O modelo usado fica gravado na nota (`modelo_ia`) | ✅ |
+| CNPJ/CPF do fornecedor e chave de acesso passam por dígito verificador antes de gravar | ✅ |
+| **Leitura por IA** (Claude, saída estruturada) pré-preenche tipo, fornecedor, CNPJ, nº, chave, emissão, pagamento, totais e itens, com confiança por campo; abaixo de 0,7 o campo fica amarelo. **Nunca grava sozinha**: a tela de conferência é a mesma com ou sem IA | ✅ |
+| Cada item tem **categoria de gasto** (tabela `categorias_despesa`, semeada e editável) e, opcionalmente, um **suprimento** — aí entra no estoque com o custo | ✅ |
+| Chave de acesso de 44 dígitos é única: a mesma NF não entra duas vezes. Exclusão é lógica, com motivo, e desfaz as entradas de estoque | ✅ |
+| Relatório: gasto no período, por categoria (com %), por fornecedor, documentos com itens; CSV item a item e por categoria | ✅ |
+| Estoque → **Suprimentos** (equipe inteira; custo só para quem vê valores): cadastro com unidade, mínimo (alerta) e **consumo por metro estampado**; saldo = soma dos movimentos; consumo e ajuste à mão; entrada só pela nota | ✅ |
+| **Consumo automático**: suprimento com consumo por metro é baixado pelo romaneio (e pelo ajuste de metragem), na mesma lógica do consumo de tecido | ✅ |
+| Configuração: `ANTHROPIC_API_KEY` na Vercel. Sem ela, só preenchimento à mão | ⚠️ |
+| XML da NF-e, QR code da NFC-e e consulta à SEFAZ (caminho preferencial da especificação do dono) | ❌ a fazer |
+
 ## Operação
 
 ### Migrations e a Action
