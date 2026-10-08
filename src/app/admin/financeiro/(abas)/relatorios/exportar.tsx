@@ -52,14 +52,14 @@ export default function Exportar({
     baixar(
       `estampa-${periodo}.csv`,
       paraCsv([
-        ['Estampado em', 'Pedido', 'Cliente', 'Tecido', 'Metros', 'Estampa pronta em', 'Lançamentos', 'Cancelado'],
+        ['Saída de Estampando', 'Pedido', 'Cliente', 'Tecido', 'Metros', 'Entrada em Estampando', 'Saídas', 'Cancelado'],
         ...estampa.linhas.map((l) => [
-          dataBr(l.estampadoEm + 'T12:00:00'),
+          dataBr(l.prontoEm + 'T12:00:00'),
           l.numero,
           l.cliente,
           l.tecido ?? '',
           num(l.metros),
-          l.prontoEm ? dataBr(l.prontoEm + 'T12:00:00') : '',
+          l.estampadoEm ? dataBr(l.estampadoEm + 'T12:00:00') : '',
           l.lancamentos,
           l.cancelado ? 'sim' : '',
         ]),
@@ -74,7 +74,7 @@ export default function Exportar({
     baixar(
       `estampa-por-dia-${periodo}.csv`,
       paraCsv([
-        ['Dia', 'Pedidos', 'Metros'],
+        ['Dia de saída', 'Pedidos', 'Metros'],
         ...estampa.porDia.map((d) => [dataBr(d.dia + 'T12:00:00'), d.pedidos, num(d.metros)]),
         ['Total', estampa.resumo.pedidos, num(estampa.resumo.metros)],
       ])

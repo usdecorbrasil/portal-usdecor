@@ -52,7 +52,7 @@ export default async function RelatoriosPage({
     <div>
       <p className="text-sm text-[#6E6E68] mb-4 leading-relaxed">
         {aba === 'estampa'
-          ? 'Metros que passaram pela estamparia no período: pedidos cuja etapa Estampando foi lançada entre as datas, com a metragem impressa final. Para conferir a fatura do prestador.'
+          ? 'Metros que saíram da estamparia no período: pedidos que passaram de Estampando para Estampa pronta entre as datas, com a metragem impressa final. Para conferir a fatura do prestador. O que ainda está em Estampando fica para o período seguinte.'
           : 'Pedidos criados no período. Cancelados não entram no faturamento.'}
       </p>
 
@@ -90,14 +90,14 @@ export default async function RelatoriosPage({
           </div>
           {estampa.resumo.semMetragem > 0 && (
             <p className="text-xs text-[#8A6A00] bg-[#FFFBEE] border border-[#E8D9A8] rounded-sm px-3 py-2 mt-3 leading-relaxed">
-              {estampa.resumo.semMetragem} pedido{estampa.resumo.semMetragem > 1 ? 's' : ''} em Estampando sem
-              metragem registrada: o romaneio não foi confirmado. Entram na lista com 0 m.
+              {estampa.resumo.semMetragem} pedido{estampa.resumo.semMetragem > 1 ? 's' : ''} sem metragem
+              registrada: o romaneio não foi confirmado. Entram na lista com 0 m.
             </p>
           )}
 
           {estampa.linhas.length === 0 ? (
             <div className="border border-dashed border-[#DDDCD5] rounded-sm py-16 text-center mt-6">
-              <p className="text-sm text-[#6E6E68]">Nenhum pedido entrou em Estampando neste período.</p>
+              <p className="text-sm text-[#6E6E68]">Nenhum pedido saiu de Estampando neste período.</p>
             </div>
           ) : (
             <>
@@ -127,7 +127,7 @@ export default async function RelatoriosPage({
                 ))}
               </div>
 
-              <Titulo>POR DIA — PEDIDO A PEDIDO ({estampa.linhas.length})</Titulo>
+              <Titulo>POR DIA DE SAÍDA — PEDIDO A PEDIDO ({estampa.linhas.length})</Titulo>
               <div className="space-y-3">
                 {estampa.porDia.map((d) => (
                   <div key={d.dia}>
@@ -141,7 +141,7 @@ export default async function RelatoriosPage({
                     </div>
                     <div className="space-y-1.5">
                       {estampa.linhas
-                        .filter((l) => l.estampadoEm === d.dia)
+                        .filter((l) => l.prontoEm === d.dia)
                         .map((l) => (
                           <Link
                             key={l.pedidoId}
@@ -155,8 +155,8 @@ export default async function RelatoriosPage({
                               </div>
                               <span className={`text-xs ${l.cancelado ? 'text-[#B00063]' : 'text-[#6E6E68]'}`}>
                                 {l.tecido ?? 'tecido não informado'}
-                                {l.prontoEm && ` · pronta em ${new Date(l.prontoEm + 'T12:00:00').toLocaleDateString('pt-BR')}`}
-                                {l.lancamentos > 1 && ` · ${l.lancamentos} lançamentos`}
+                                {l.estampadoEm && ` · entrou em ${new Date(l.estampadoEm + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                                {l.lancamentos > 1 && ` · ${l.lancamentos} saídas`}
                                 {l.cancelado && ' · cancelado'}
                               </span>
                             </div>

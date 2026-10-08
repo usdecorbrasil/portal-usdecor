@@ -332,14 +332,14 @@ export type LinhaEstampa = {
   cliente: string
   clienteId: string
   tecido: string | null
-  /** Dia em que a etapa Estampando foi lançada (AAAA-MM-DD). */
-  estampadoEm: string
-  /** Dia em que saiu de Estampando (Estampa pronta), se já saiu. */
-  prontoEm: string | null
+  /** Dia em que entrou em Estampando (AAAA-MM-DD), se registrado. */
+  estampadoEm: string | null
+  /** Dia em que saiu de Estampando — lançamento de Estampa pronta. É o corte do período. */
+  prontoEm: string
   /** Metragem impressa, já com ajustes de quebra. */
   metros: number
   cancelado: boolean
-  /** Quantas vezes a etapa foi lançada no período (reimpressão relança). */
+  /** Quantas vezes saiu de Estampando no período (reimpressão repete o ciclo). */
   lancamentos: number
 }
 
@@ -352,11 +352,13 @@ export type RelatorioEstampa = {
 }
 
 /**
- * Metros que passaram pela estamparia no período: pedidos cuja etapa
- * Estampando foi lançada entre `de` e `ate`, com a metragem impressa final.
- * Serve para conferir a fatura do prestador de serviço, que cobra por metro
- * estampado — por isso o corte é pela data do lançamento da etapa, não pela
- * data do pedido, e cancelados entram (marcados): o serviço foi feito.
+ * Metros que saíram da estamparia no período: pedidos cuja etapa Estampa
+ * pronta foi lançada entre `de` e `ate` (a saída de Estampando), com a
+ * metragem impressa final. Serve para conferir a fatura do prestador de
+ * serviço, que cobra por metro estampado — o corte é pela data de saída
+ * (decidido pelo dono em 08/10/2026), porque é quando o serviço está
+ * concluído; o que ainda está em Estampando fica para o período seguinte.
+ * Cancelados entram, marcados: o serviço foi feito.
  */
 export async function relatorioEstampa(filtros: {
   de: string
@@ -375,7 +377,7 @@ export async function relatorioEstampa(filtros: {
         pedido_status_historico(status, created_at)
       )
     `)
-    .eq('status', 'estampando')
+    .eq('status', 'pronto')
     .gte('created_at', `${filtros.de}T00:00:00`)
     .lte('created_at', `${filtros.ate}T23:59:59`)
     .order('created_at', { ascending: true })
@@ -387,7 +389,7 @@ export async function relatorioEstampa(filtros: {
   const { data, error } = await consulta
   if (error) throw new Error(`Falha ao montar o relatório de estampa: ${error.message}`)
 
-  // Um pedido por linha: fica o último lançamento no período, e conta quantos houve
+  // Um pedido por linha: fica a última saída no período, e conta quantas houve
   const porPedido = new Map<string, LinhaEstampa>()
   for (const h of (data ?? []) as any[]) {
     const p = h.pedidos
@@ -396,21 +398,22 @@ export async function relatorioEstampa(filtros: {
     const anterior = porPedido.get(p.id)
     if (anterior) {
       anterior.lancamentos += 1
-      if (dia > anterior.estampadoEm) anterior.estampadoEm = dia
+      if (dia > anterior.prontoEm) anterior.prontoEm = dia
       continue
     }
-    const hist = ((p.pedido_status_historico ?? []) as { status: string; created_at: string }[])
-    const pronto = hist
-      .filter((x) => x.status === 'pronto' && x.created_at >= h.created_at)
-      .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))[0]
+    const hist = (p.pedido_status_historico ?? []) as { status: string; created_at: string }[]
+    // Entrada em Estampando: o último lançamento dessa etapa antes da saída
+    const entrada = hist
+      .filter((x) => x.status === 'estampando' && x.created_at <= h.created_at)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
     porPedido.set(p.id, {
       pedidoId: p.id,
       numero: Number(p.numero),
       cliente: p.clientes?.razao_social ?? '—',
       clienteId: p.cliente_id,
       tecido: p.tecidos?.nome ?? null,
-      estampadoEm: dia,
-      prontoEm: pronto ? String(pronto.created_at).slice(0, 10) : null,
+      estampadoEm: entrada ? String(entrada.created_at).slice(0, 10) : null,
+      prontoEm: dia,
       metros: p.metragem_impressa != null ? Number(p.metragem_impressa) : 0,
       cancelado: !!p.cancelado_em,
       lancamentos: 1,
@@ -418,7 +421,7 @@ export async function relatorioEstampa(filtros: {
   }
 
   const linhas = [...porPedido.values()].sort(
-    (a, b) => (a.estampadoEm < b.estampadoEm ? -1 : a.estampadoEm > b.estampadoEm ? 1 : a.numero - b.numero)
+    (a, b) => (a.prontoEm < b.prontoEm ? -1 : a.prontoEm > b.prontoEm ? 1 : a.numero - b.numero)
   )
 
   const agrupar = <K extends string>(chave: (l: LinhaEstampa) => K) => {
@@ -433,7 +436,7 @@ export async function relatorioEstampa(filtros: {
     return m
   }
 
-  const porDia = [...agrupar((l) => l.estampadoEm)].map(([dia, g]) => ({ dia, ...g }))
+  const porDia = [...agrupar((l) => l.prontoEm)].map(([dia, g]) => ({ dia, ...g }))
   const nomes = new Map(linhas.map((l) => [l.clienteId, l.cliente]))
   const porCliente = [...agrupar((l) => l.clienteId)]
     .map(([clienteId, g]) => ({ clienteId, cliente: nomes.get(clienteId) ?? '—', ...g }))

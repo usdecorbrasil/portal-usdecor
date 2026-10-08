@@ -166,7 +166,7 @@ decisão é de admin/financeiro, no botão Faturar, no pedido individual ou no a
 | Regra | Situação |
 |---|---|
 | Financeiro → Relatórios → **Estampa (prestador)**: metros que passaram pela estamparia no período, para conferir a fatura do prestador, que cobra por metro | ✅ |
-| O corte é pela **data do lançamento da etapa Estampando** (`pedido_status_historico`), não pela data do pedido; a metragem é a `metragem_impressa` final (já com ajustes de quebra) | ✅ |
+| O corte é pela **data de saída de Estampando** (lançamento de Estampa pronta em `pedido_status_historico`), não pela entrada nem pela data do pedido — decidido pelo dono em 08/10/2026: o serviço conta quando está concluído. A metragem é a `metragem_impressa` final (já com ajustes de quebra); o que ainda está em Estampando fica para o período seguinte | ✅ |
 | Cancelados entram, marcados: o serviço foi feito. Pedido sem romaneio confirmado aparece com 0 m e aviso | ✅ |
 | Totais por tecido, por cliente e por dia; CSV pedido a pedido e por dia. `relatorioEstampa` em `src/app/actions/relatorios.ts` | ✅ |
 
