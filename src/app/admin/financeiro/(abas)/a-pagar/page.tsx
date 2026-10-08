@@ -23,11 +23,16 @@ const dataValida = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : und
 export default async function APagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ situacao?: string; de?: string; ate?: string }>
+  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; comprovante?: string }>
 }) {
   const sp = await searchParams
   const situacao = (SITUACOES.find((s) => s.chave === sp.situacao)?.chave ?? 'abertas') as FiltroContas['situacao']
-  const filtro: FiltroContas = { situacao, de: dataValida(sp.de), ate: dataValida(sp.ate) }
+  const filtro: FiltroContas = {
+    situacao,
+    de: dataValida(sp.de),
+    ate: dataValida(sp.ate),
+    semComprovante: sp.comprovante === 'pendente',
+  }
 
   const r = await listarContasPagar(filtro)
   if (!r) return null
@@ -44,6 +49,7 @@ export default async function APagarPage({
     const q = new URLSearchParams({ situacao: s })
     if (filtro.de) q.set('de', filtro.de)
     if (filtro.ate) q.set('ate', filtro.ate)
+    if (filtro.semComprovante) q.set('comprovante', 'pendente')
     return `?${q.toString()}`
   }
 
@@ -94,6 +100,7 @@ export default async function APagarPage({
         </div>
         <form className="flex flex-wrap items-end gap-2" action="">
           <input type="hidden" name="situacao" value={situacao} />
+          {filtro.semComprovante && <input type="hidden" name="comprovante" value="pendente" />}
           <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
             {situacao === 'pagas' ? 'PAGAS DE' : 'VENCE DE'}
             <input type="date" name="de" defaultValue={filtro.de} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white" />
@@ -110,6 +117,15 @@ export default async function APagarPage({
           )}
         </form>
       </div>
+
+      {filtro.semComprovante && (
+        <div className="flex flex-wrap items-center gap-2 text-xs bg-[#FBEAF0] border border-[#B00063] text-[#B00063] rounded-sm px-3 py-2 mb-3">
+          <span className="flex-1 min-w-0">
+            Mostrando só contas de notas sem foto ou PDF. Abra a conta e use &ldquo;anexar comprovante&rdquo;.
+          </span>
+          <Link href={`?situacao=${situacao}`} className="underline font-semibold">ver todas</Link>
+        </div>
+      )}
 
       <ListaContas contas={contas} situacao={situacao} hoje={hoje} />
     </div>

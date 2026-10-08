@@ -50,6 +50,8 @@ export type FiltroContas = {
   /** AAAA-MM-DD — vencimento (abertas/canceladas/todas) ou pagamento (pagas). */
   de?: string
   ate?: string
+  /** Só as contas cuja nota está sem foto/PDF (aviso do dashboard). */
+  semComprovante?: boolean
 }
 
 type LinhaBanco = {
@@ -148,7 +150,8 @@ export async function listarContasPagar(filtro: FiltroContas): Promise<{ contas:
     pagoNoMes: soma(((pagasMes.data ?? []) as { valor_pago: number | string }[]).map((p) => ({ valor: p.valor_pago }))),
   }
 
-  return { contas: ((lista.data ?? []) as unknown as LinhaBanco[]).map(paraConta), resumo, hoje }
+  const contas = ((lista.data ?? []) as unknown as LinhaBanco[]).map(paraConta)
+  return { contas: filtro.semComprovante ? contas.filter((c) => c.semComprovante) : contas, resumo, hoje }
 }
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

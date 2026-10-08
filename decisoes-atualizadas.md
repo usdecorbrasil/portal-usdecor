@@ -312,5 +312,7 @@ Hobby da Vercel não aceita cron horário.
   pagamento. Não há lançamento de conta avulsa (decidido em 08/10/2026). A nota pode ser salva
   sem foto ou PDF, depois de um pop-up de confirmação que lembra de anexar; a conta fica marcada
   como "sem comprovante".
+- Nota sem foto ou PDF há mais de 2 dias do lançamento aparece num aviso vermelho no dashboard
+  (dono e financeiro), até alguém anexar o comprovante pela própria conta a pagar.
 - Pagar, mudar vencimento/valor, estornar e cancelar ficam registrados; os três últimos
   exigem motivo. Excluir a nota cancela as parcelas ainda não pagas.

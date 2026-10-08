@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, TITULO_GRUPO, VAZIO } from '@/components/estilo-lista'
 import { baixarCsv, paraCsv, numCsv } from '@/components/baixar-csv'
 import { ROTULO_CURTO } from '@/lib/contas-pagar/condicoes'
+import { comprimir } from '@/lib/despesas/comprimir'
+import { anexarComprovanteDespesa } from '@/app/actions/despesas'
 import {
   alterarContaPagar,
   baixarContaPagar,
@@ -164,6 +166,17 @@ function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
   const [texto, setTexto] = useState('')
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
+  const inputAnexo = useRef<HTMLInputElement>(null)
+
+  async function anexar(f: File | undefined) {
+    if (!f || !c.despesaId) return
+    const despesaId = c.despesaId
+    setErro('')
+    const comprimido = await comprimir(f)
+    const fd = new FormData()
+    fd.set('arquivo', comprimido)
+    executar(() => anexarComprovanteDespesa(despesaId, fd))
+  }
 
   const campo = 'border border-[#DDDCD5] rounded-sm px-2 py-1.5 text-sm bg-white w-full outline-none focus:border-[#131A2E]'
   const rotulo = 'block text-[10px] font-mono tracking-wider text-[#6E6E68]'
@@ -195,6 +208,16 @@ function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
         <p className="text-xs text-[#6E6E68] mb-2">
           Valor da conta R$ {brl(c.valor)} · pago R$ {brl(c.valorPago)}
         </p>
+      )}
+
+      {c.semComprovante && c.despesaId && (
+        <div className="flex flex-wrap items-center gap-2 text-xs bg-[#FFFBEE] border border-[#C79600] text-[#6B5320] rounded-sm px-2.5 py-2 mb-2">
+          <input ref={inputAnexo} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => anexar(e.target.files?.[0])} />
+          <span className="flex-1 min-w-0">Nota sem foto ou PDF. Anexe a nota fiscal ou o recibo.</span>
+          <button onClick={() => inputAnexo.current?.click()} disabled={pendente} className="shrink-0 border border-[#C79600] bg-white rounded-sm px-2.5 py-1 font-semibold disabled:opacity-50">
+            {pendente ? 'ENVIANDO…' : '📎 ANEXAR COMPROVANTE'}
+          </button>
+        </div>
       )}
 
       <div className="flex flex-wrap gap-3 text-xs mb-2">

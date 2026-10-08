@@ -532,6 +532,13 @@ Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admi
   pop-up "Salvar a nota sem foto ou PDF?". A conta aparece com a etiqueta
   "sem comprovante" em A pagar (e no CSV). O atalho do dashboard e o botão da aba A pagar
   levam a Nova nota.
+- **Comprovante depois**: na conta a pagar, "📎 Anexar comprovante" (`anexarComprovanteDespesa`
+  → RPC `admin_anexar_arquivo_despesa`, que só preenche nota **sem** arquivo e não
+  excluída; se a RPC recusa, o arquivo sai do bucket). Nota sem arquivo há mais de
+  `PRAZO_COMPROVANTE_DIAS` (2) desde o lançamento gera **aviso vermelho no dashboard**
+  (admin/financeiro) com quantidade e valor, que abre A pagar filtrada em
+  `?comprovante=pendente`. Só conta notas com `condicao_pagamento` (as anteriores ao
+  contas a pagar ficam de fora). Compressão da foto em `src/lib/despesas/comprimir.ts`.
 - Tabela `contas_pagar` (uma linha por parcela; `despesa_id` nulo só nas avulsas criadas
   antes da regra). Escrita só por RPC: `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
   `admin_estornar_conta_pagar`, `admin_cancelar_conta_pagar`, `admin_alterar_conta_pagar`

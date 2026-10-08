@@ -1,5 +1,7 @@
 -- Desfaz 20261008200000_contas_so_pela_nota.sql: volta a conta avulsa,
--- exatamente como em 20261008190000.
+-- exatamente como em 20261008190000, e tira a função de anexar comprovante.
+
+drop function if exists public.admin_anexar_arquivo_despesa(uuid, text);
 
 create or replace function public.admin_criar_conta_pagar(
   p_descricao     text,

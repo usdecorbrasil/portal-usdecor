@@ -28,6 +28,12 @@ export const quitadaNaCompra = (c: Condicao) => c === 'pago' || c === 'debito'
 
 export const MAX_PARCELAS_CONTA = 36
 
+/**
+ * Nota lançada sem foto/PDF: depois deste prazo (desde o lançamento) o
+ * dashboard avisa em vermelho até alguém anexar o comprovante.
+ */
+export const PRAZO_COMPROVANTE_DIAS = 2
+
 export type Parcela = { vencimento: string; valor: number }
 
 const doisDigitos = (n: number) => String(n).padStart(2, '0')

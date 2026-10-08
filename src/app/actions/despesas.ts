@@ -64,6 +64,57 @@ async function lerComIa(conteudo: Buffer, mediaType: (typeof TIPOS_ARQUIVO)[numb
   })
 }
 
+/** Sobe o arquivo (já comprimido no aparelho) para o bucket privado. */
+async function guardarArquivo(conteudo: Buffer, mediaType: (typeof TIPOS_ARQUIVO)[number]): Promise<Resultado<{ caminho: string }>> {
+  const extensao = mediaType === 'application/pdf' ? 'pdf' : mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg'
+  const caminho = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${extensao}`
+  const { error } = await createAdminClient().storage.from(BUCKET).upload(caminho, conteudo, { contentType: mediaType })
+  if (error) return { ok: false, erro: `Não deu para guardar o arquivo: ${error.message}` }
+  return { ok: true, caminho }
+}
+
+/** Valida o arquivo vindo do formulário (campo "arquivo"). */
+function arquivoDoForm(form: FormData): Resultado<{ arquivo: File; mediaType: (typeof TIPOS_ARQUIVO)[number] }> {
+  const arquivo = form.get('arquivo')
+  if (!(arquivo instanceof File)) return { ok: false, erro: 'Escolha a foto ou o arquivo da nota.' }
+  if (arquivo.size === 0) return { ok: false, erro: 'Arquivo vazio.' }
+  if (arquivo.size > TAMANHO_MAXIMO) return { ok: false, erro: 'Arquivo acima de 10 MB. Tire a foto de novo ou reduza o PDF.' }
+  const mediaType = arquivo.type as (typeof TIPOS_ARQUIVO)[number]
+  if (!TIPOS_ARQUIVO.includes(mediaType)) return { ok: false, erro: 'Só JPG, PNG, WebP ou PDF.' }
+  return { ok: true, arquivo, mediaType }
+}
+
+/**
+ * Comprovante enviado depois, para nota lançada sem foto/PDF. O banco só
+ * aceita quando a nota ainda está sem arquivo.
+ */
+export async function anexarComprovanteDespesa(despesaId: string, form: FormData): Promise<Resultado> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+  if (!z.string().uuid().safeParse(despesaId).success) return { ok: false, erro: 'Nota inválida.' }
+  const a = arquivoDoForm(form)
+  if (!a.ok) return a
+  const guardado = await guardarArquivo(Buffer.from(await a.arquivo.arrayBuffer()), a.mediaType)
+  if (!guardado.ok) return guardado
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('admin_anexar_arquivo_despesa', { p_despesa_id: despesaId, p_arquivo_path: guardado.caminho })
+  if (error) {
+    // Não ficou ligado a nada: tira do bucket para não sobrar arquivo órfão
+    await createAdminClient().storage.from(BUCKET).remove([guardado.caminho])
+    return { ok: false, erro: error.message }
+  }
+  await registrar({
+    entidade: 'despesa',
+    entidadeId: despesaId,
+    acao: 'editou',
+    campos: [{ campo: 'Comprovante', de: 'sem arquivo', para: 'foto/PDF anexado' }],
+  })
+  revalidar()
+  revalidatePath('/admin/financeiro/a-pagar')
+  revalidatePath('/admin/dashboard')
+  return { ok: true }
+}
+
 /**
  * Guarda o arquivo e tenta a leitura por IA. Mesmo quando a IA falha, o
  * arquivo fica salvo e a tela abre em branco para preencher à mão.
@@ -72,23 +123,17 @@ export async function lerDespesa(form: FormData): Promise<Resultado<{ rascunho: 
   const perfil = await exigirAdmin()
   if (!perfil) return { ok: false, erro: 'Acesso negado.' }
 
-  const arquivo = form.get('arquivo')
   const origem = form.get('origem') === 'camera' ? 'camera' : 'upload'
   const usarIa = form.get('ia') !== 'nao'
   const modelo: ModeloLeitura = form.get('modelo') === 'preciso' ? 'preciso' : 'rapido'
-  if (!(arquivo instanceof File)) return { ok: false, erro: 'Escolha a foto ou o arquivo da nota.' }
-  if (arquivo.size === 0) return { ok: false, erro: 'Arquivo vazio.' }
-  if (arquivo.size > TAMANHO_MAXIMO) return { ok: false, erro: 'Arquivo acima de 10 MB. Tire a foto de novo ou reduza o PDF.' }
-  const mediaType = arquivo.type as (typeof TIPOS_ARQUIVO)[number]
-  if (!TIPOS_ARQUIVO.includes(mediaType)) return { ok: false, erro: 'Só JPG, PNG, WebP ou PDF.' }
+  const a = arquivoDoForm(form)
+  if (!a.ok) return a
+  const { arquivo, mediaType } = a
 
   const conteudo = Buffer.from(await arquivo.arrayBuffer())
-  const extensao = mediaType === 'application/pdf' ? 'pdf' : mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg'
-  const caminho = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${extensao}`
-
-  const admin = createAdminClient()
-  const { error: erroUpload } = await admin.storage.from(BUCKET).upload(caminho, conteudo, { contentType: mediaType })
-  if (erroUpload) return { ok: false, erro: `Não deu para guardar o arquivo: ${erroUpload.message}` }
+  const guardado = await guardarArquivo(conteudo, mediaType)
+  if (!guardado.ok) return guardado
+  const caminho = guardado.caminho
 
   if (!usarIa) {
     return { ok: true, rascunho: { arquivoPath: caminho, origem, modo: 'manual', modelo: null, documento: null, erroLeitura: null } }

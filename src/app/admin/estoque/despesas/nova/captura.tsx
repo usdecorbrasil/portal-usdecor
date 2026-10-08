@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespesa } from '@/app/actions/despesas'
 import { criarSuprimento } from '@/app/actions/suprimentos'
 import CameraNota from './camera-nota'
+import { comprimir } from '@/lib/despesas/comprimir'
 import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
 import {
   CONDICOES,
@@ -119,27 +120,6 @@ function formVazio(): Form {
     tipo: 'outro', fornecedorNome: '', fornecedorDoc: '', numero: '', serie: '', chaveAcesso: '',
     emissao: new Date().toISOString().slice(0, 10), formaPagamento: '', condicao: '', parcelas: [], subtotal: '', desconto: '', frete: '', impostos: '', total: '',
     observacoes: '', itens: [itemVazio()],
-  }
-}
-
-/** Reduz a foto no aparelho: lado maior 1600 px, JPEG 82%. PDF passa direto. */
-async function comprimir(arquivo: File): Promise<File> {
-  if (!arquivo.type.startsWith('image/')) return arquivo
-  try {
-    const bitmap = await createImageBitmap(arquivo, { imageOrientation: 'from-image' })
-    const maior = Math.max(bitmap.width, bitmap.height)
-    const fator = maior > 1600 ? 1600 / maior : 1
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(bitmap.width * fator)
-    canvas.height = Math.round(bitmap.height * fator)
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return arquivo
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.82))
-    if (!blob) return arquivo
-    return new File([blob], arquivo.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
-  } catch {
-    return arquivo
   }
 }
 

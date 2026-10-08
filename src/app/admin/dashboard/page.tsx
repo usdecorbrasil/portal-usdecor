@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import FiltroPeriodo from './filtro-periodo'
+import { PRAZO_COMPROVANTE_DIAS } from '@/lib/contas-pagar/condicoes'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -112,7 +113,9 @@ export default async function DashboardPage({
   // A contagem de clientes não depende dos pedidos: busca junto
   // Contas a pagar vencidas, para o atalho (data de hoje em Brasília)
   const hojeBr = new Date(hoje.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const [{ data: pedidos }, { count: clientesAtivos }, { data: travados }, { data: contasVencidas }] = await Promise.all([
+  // Notas lançadas sem foto/PDF há mais do prazo: aviso vermelho até anexarem
+  const limiteComprovante = new Date(hoje.getTime() - PRAZO_COMPROVANTE_DIAS * 24 * 60 * 60 * 1000).toISOString()
+  const [{ data: pedidos }, { count: clientesAtivos }, { data: travados }, { data: contasVencidas }, { data: notasSemArquivo }] = await Promise.all([
     supabase
     .from('pedidos')
     .select(`
@@ -135,7 +138,16 @@ export default async function DashboardPage({
       .is('pago_em', null)
       .is('cancelada_em', null)
       .lt('vencimento', hojeBr),
+    supabase
+      .from('despesas')
+      .select('total')
+      .is('arquivo_path', null)
+      .is('excluido_em', null)
+      .not('condicao_pagamento', 'is', null)
+      .lt('criado_em', limiteComprovante),
   ])
+  const semComprovante = (notasSemArquivo ?? []) as { total: number | string }[]
+  const valorSemComprovante = semComprovante.reduce((s, d) => s + Number(d.total), 0)
   const vencidasPagar = (contasVencidas ?? []) as { valor: number | string }[]
   const valorVencidasPagar = vencidasPagar.reduce((s, c) => s + Number(c.valor), 0)
 
@@ -253,6 +265,23 @@ export default async function DashboardPage({
           </Link>
         )}
       </div>
+
+      {semComprovante.length > 0 && (
+        <Link
+          href="/admin/financeiro/a-pagar?situacao=todas&comprovante=pendente"
+          className="flex items-center gap-3 bg-[#FBEAF0] border-2 border-[#B00063] rounded-sm px-3 py-2.5 sm:px-4 sm:py-3.5 hover:bg-[#F7DCE7] mb-4"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold tracking-tight text-xs sm:text-sm text-[#B00063]">
+              {semComprovante.length} nota{semComprovante.length > 1 ? 's' : ''} de compra sem comprovante há mais de {PRAZO_COMPROVANTE_DIAS} dias
+            </div>
+            <div className="text-[10px] sm:text-xs text-[#B00063]/80 mt-0.5">
+              R$ {brl(valorSemComprovante)} em contas a pagar sem nota fiscal ou recibo anexado · toque para anexar
+            </div>
+          </div>
+          <span className="text-[#B00063] shrink-0">›</span>
+        </Link>
+      )}
 
       <FiltroPeriodo de={dataDe} ate={dataAte} />
 
