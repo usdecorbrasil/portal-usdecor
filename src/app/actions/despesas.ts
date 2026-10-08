@@ -8,6 +8,7 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import { registrar } from '@/lib/auditoria'
 import { lerDocumento, TIPOS_DOCUMENTO, type DocumentoLido, type ModeloLeitura } from '@/lib/despesas/ler-documento'
 import { cnpjCpfValido, chaveAcessoValida } from '@/lib/despesas/validar'
+import { aplicarCustosAutomaticos } from '@/lib/custos/compras'
 
 /**
  * Despesas por documento (nota, cupom, recibo) — só admin/financeiro.
@@ -174,7 +175,7 @@ function soDigitos(v: string | null | undefined) {
   return d.length ? d : null
 }
 
-export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id: string }>> {
+export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id: string; avisoCustos: string | null }>> {
   const perfil = await exigirAdmin()
   if (!perfil) return { ok: false, erro: 'Acesso negado.' }
 
@@ -241,6 +242,10 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     return { ok: false, erro: erroItens.message }
   }
 
+  // Compra de suprimento pode mexer no custo por metro, se a opção estiver
+  // ligada em Financeiro → Custos. Nunca derruba o lançamento da nota
+  const avisoCustos = d.itens.some((i) => i.suprimentoId) ? await aplicarCustosAutomaticos(supabase) : null
+
   await registrar({
     entidade: 'despesa',
     entidadeId: despesa.id,
@@ -253,7 +258,8 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
   })
 
   revalidar()
-  return { ok: true, id: despesa.id }
+  if (avisoCustos) revalidatePath('/admin/financeiro/custos')
+  return { ok: true, id: despesa.id, avisoCustos }
 }
 
 export async function excluirDespesa(id: string, motivo: string): Promise<Resultado> {

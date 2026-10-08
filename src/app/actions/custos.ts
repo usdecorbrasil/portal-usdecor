@@ -4,6 +4,13 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { Custos } from '@/lib/custos/calculo'
+import { registrar } from '@/lib/auditoria'
+import {
+  carregarSugestaoCustos,
+  lerConfigCustosAutomaticos,
+  type ConfigCustosAutomaticos,
+} from '@/lib/custos/compras'
+import type { SugestaoCustos } from '@/lib/custos/sugestao'
 
 type Resultado = { ok: true } | { ok: false; erro: string }
 
@@ -80,6 +87,49 @@ export async function atualizarCustos(dados: {
 
   revalidatePath('/admin/financeiro/custos')
   revalidatePath('/admin/financeiro/apuracao')
+  return { ok: true }
+}
+
+/* ------------------------ custos pelas compras ------------------------ */
+
+export async function buscarSugestaoCustos(janelaDias = 30): Promise<SugestaoCustos | null> {
+  if (!(await exigirFinanceiro())) return null
+  const supabase = await createClient()
+  return carregarSugestaoCustos(supabase, [30, 60, 90].includes(janelaDias) ? janelaDias : 30)
+}
+
+export async function buscarConfigCustosAutomaticos(): Promise<ConfigCustosAutomaticos> {
+  const supabase = await createClient()
+  return lerConfigCustosAutomaticos(supabase)
+}
+
+export async function atualizarConfigCustosAutomaticos(nova: ConfigCustosAutomaticos): Promise<Resultado> {
+  if (!(await exigirFinanceiro())) return { ok: false, erro: 'Acesso negado.' }
+  const parsed = z.object({ ativo: z.boolean(), janelaDias: z.union([z.literal(30), z.literal(60), z.literal(90)]) }).safeParse(nova)
+  if (!parsed.success) return { ok: false, erro: 'Configuração inválida.' }
+
+  const supabase = await createClient()
+  const antes = await lerConfigCustosAutomaticos(supabase)
+  const { data: { user } } = await supabase.auth.getUser()
+  const { error } = await supabase
+    .from('configuracoes')
+    .upsert(
+      { chave: 'custos_automaticos', valor: JSON.stringify(parsed.data), atualizado_em: new Date().toISOString(), atualizado_por: user?.id },
+      { onConflict: 'chave' }
+    )
+  if (error) return { ok: false, erro: error.message }
+
+  await registrar({
+    entidade: 'configuracao',
+    entidadeId: null,
+    acao: 'editou',
+    campos: [
+      { campo: 'Custos pelas compras · atualizar sozinho', de: antes.ativo ? 'sim' : 'não', para: parsed.data.ativo ? 'sim' : 'não' },
+      { campo: 'Custos pelas compras · período', de: `${antes.janelaDias} dias`, para: `${parsed.data.janelaDias} dias` },
+    ].filter((c) => c.de !== c.para),
+  })
+
+  revalidatePath('/admin/financeiro/custos')
   return { ok: true }
 }
 

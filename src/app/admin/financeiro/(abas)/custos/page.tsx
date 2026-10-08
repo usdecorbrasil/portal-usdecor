@@ -1,8 +1,15 @@
-import { buscarCustos } from '@/app/actions/custos'
+import { buscarCustos, buscarSugestaoCustos, buscarConfigCustosAutomaticos } from '@/app/actions/custos'
 import FormularioCustos from './formulario'
 
-export default async function CustosPage() {
-  const custos = await buscarCustos()
+export default async function CustosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ janela?: string }>
+}) {
+  const { janela } = await searchParams
+  const config = await buscarConfigCustosAutomaticos()
+  const janelaDias = [30, 60, 90].includes(Number(janela)) ? Number(janela) : config.janelaDias
+  const [custos, sugestao] = await Promise.all([buscarCustos(), buscarSugestaoCustos(janelaDias)])
 
   return (
     <div>
@@ -12,7 +19,7 @@ export default async function CustosPage() {
         lucro já apurado de pedidos anteriores.
       </p>
 
-      <FormularioCustos custos={custos} />
+      <FormularioCustos custos={custos} sugestao={sugestao} config={config} />
     </div>
   )
 }
