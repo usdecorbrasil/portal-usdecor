@@ -237,15 +237,10 @@ export default async function DashboardPage({
 
       {/* ---- atalhos ---- */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <Link
-          href="/admin/financeiro/a-pagar?nova=1"
-          className="inline-flex items-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
-        >
-          + LANÇAR CONTA A PAGAR
-        </Link>
+        {/* Conta a pagar só nasce da nota: o atalho é o lançamento da nota */}
         <Link
           href="/admin/estoque/despesas/nova"
-          className="inline-flex items-center gap-1.5 bg-white border border-[#131A2E] text-[#131A2E] rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+          className="inline-flex items-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
         >
           📷 LANÇAR NOTA DE COMPRA
         </Link>

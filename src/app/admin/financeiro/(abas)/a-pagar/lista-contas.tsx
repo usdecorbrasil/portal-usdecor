@@ -130,7 +130,7 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
           <span className="flex-1 min-w-0">
             <span className={NOME + ' block'}>{c.descricao}</span>
             <span className="block text-[11px] text-[#6E6E68] truncate">
-              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.despesaId ? 'da nota' : 'lançada à mão']
+              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.despesaId ? 'da nota' : 'sem nota (antiga)']
                 .filter(Boolean)
                 .join(' · ')}
             </span>

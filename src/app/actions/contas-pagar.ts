@@ -5,12 +5,12 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { registrar } from '@/lib/auditoria'
-import { validarParcelas, type Condicao } from '@/lib/contas-pagar/condicoes'
+import type { Condicao } from '@/lib/contas-pagar/condicoes'
 
 /**
  * Contas a pagar — só admin/financeiro.
  *
- * Nascem da nota (Estoque → Despesas, ao salvar) ou à mão aqui. Toda escrita
+ * Só nascem da nota ou recibo (Estoque → Despesas, ao salvar). Toda escrita
  * passa por função do banco (`admin_*_conta_pagar`), que valida de novo; a
  * auditoria guarda quem fez e o motivo.
  */
@@ -151,55 +151,6 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2,
 const dataBr = (iso: string) => iso.split('-').reverse().join('/')
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida')
 const motivo = z.string().trim().min(10, 'Descreva o motivo (mín. 10 caracteres)').max(500)
-
-export async function criarContaPagar(dados: {
-  descricao: string
-  fornecedor: string | null
-  categoriaId: string | null
-  forma: 'credito' | 'boleto' | 'a_pagar'
-  parcelas: { vencimento: string; valor: number }[]
-  observacao: string | null
-}): Promise<Resultado> {
-  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
-  const parsed = z
-    .object({
-      descricao: z.string().trim().min(3, 'Descreva a conta (mín. 3 caracteres)').max(200),
-      fornecedor: z.string().trim().max(200).nullable(),
-      categoriaId: z.string().uuid().nullable(),
-      forma: z.enum(['credito', 'boleto', 'a_pagar']),
-      parcelas: z.array(z.object({ vencimento: data, valor: z.number().positive() })).min(1).max(36),
-      observacao: z.string().trim().max(500).nullable(),
-    })
-    .safeParse(dados)
-  if (!parsed.success) return { ok: false, erro: parsed.error.issues[0].message }
-  const d = parsed.data
-  const erro = validarParcelas(d.parcelas, null)
-  if (erro) return { ok: false, erro }
-
-  const supabase = await createClient()
-  const { error } = await supabase.rpc('admin_criar_conta_pagar', {
-    p_descricao: d.descricao,
-    p_fornecedor: d.fornecedor,
-    p_categoria_id: d.categoriaId,
-    p_forma: d.forma,
-    p_parcelas: d.parcelas,
-    p_observacao: d.observacao,
-  })
-  if (error) return { ok: false, erro: error.message }
-
-  const total = d.parcelas.reduce((s, p) => s + p.valor, 0)
-  await registrar({
-    entidade: 'conta_pagar',
-    entidadeId: null,
-    acao: 'criou',
-    campos: [
-      { campo: 'Conta', de: null, para: d.descricao },
-      { campo: 'Valor', de: null, para: `R$ ${brl(total)} em ${d.parcelas.length}x` },
-    ],
-  })
-  revalidatePath(CAMINHO)
-  return { ok: true }
-}
 
 export async function baixarContaPagar(id: string, pagoEm: string, valorPago: number, obs: string | null): Promise<Resultado> {
   if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }

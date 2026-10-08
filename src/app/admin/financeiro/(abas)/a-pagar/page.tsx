@@ -1,13 +1,12 @@
 import Link from 'next/link'
 import { listarContasPagar, type FiltroContas } from '@/app/actions/contas-pagar'
-import { createClient } from '@/lib/supabase/server'
 import ListaContas from './lista-contas'
-import NovaConta from './nova-conta'
 
 /**
- * Contas a pagar. Nascem das notas lançadas em Estoque → Despesas (a forma de
- * pagamento da nota define se já entram pagas ou com vencimentos) ou são
- * lançadas aqui, à mão, para o que não tem nota (aluguel, energia).
+ * Contas a pagar. Só nascem das notas e recibos lançados (com foto ou PDF) em
+ * Estoque → Despesas — decisão do dono em 08/10/2026: não existe conta sem
+ * comprovante. A forma de pagamento da nota define se a conta entra já paga
+ * ou com vencimentos.
  */
 
 const SITUACOES: { chave: FiltroContas['situacao']; rotulo: string }[] = [
@@ -23,17 +22,13 @@ const dataValida = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : und
 export default async function APagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; nova?: string }>
+  searchParams: Promise<{ situacao?: string; de?: string; ate?: string }>
 }) {
   const sp = await searchParams
   const situacao = (SITUACOES.find((s) => s.chave === sp.situacao)?.chave ?? 'abertas') as FiltroContas['situacao']
   const filtro: FiltroContas = { situacao, de: dataValida(sp.de), ate: dataValida(sp.ate) }
 
-  const supabase = await createClient()
-  const [r, { data: categorias }] = await Promise.all([
-    listarContasPagar(filtro),
-    supabase.from('categorias_despesa').select('id, nome').eq('ativo', true).order('nome'),
-  ])
+  const r = await listarContasPagar(filtro)
   if (!r) return null
   const { contas, resumo, hoje } = r
 
@@ -53,10 +48,18 @@ export default async function APagarPage({
 
   return (
     <div>
-      <p className="text-sm text-[#6E6E68] mb-4 leading-relaxed">
-        Contas geradas pelas notas lançadas em Estoque → Despesas e as lançadas aqui. Nota paga na
-        hora (dinheiro, Pix, débito) entra já quitada.
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <p className="text-sm text-[#6E6E68] leading-relaxed flex-1">
+          Toda conta a pagar nasce de uma nota ou recibo, com foto ou PDF, lançado com a forma de
+          pagamento. Nota paga na hora (dinheiro, Pix, débito) entra já quitada.
+        </p>
+        <Link
+          href="/admin/estoque/despesas/nova"
+          className="shrink-0 inline-flex items-center justify-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+        >
+          📷 LANÇAR NOTA DE COMPRA
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
         {quadros.map((q) => (
@@ -105,12 +108,6 @@ export default async function APagarPage({
           )}
         </form>
       </div>
-
-      <NovaConta
-        categorias={(categorias ?? []).map((c) => ({ id: c.id as string, nome: c.nome as string }))}
-        hoje={hoje}
-        abrir={sp.nova === '1'}
-      />
 
       <ListaContas contas={contas} situacao={situacao} hoje={hoje} />
     </div>

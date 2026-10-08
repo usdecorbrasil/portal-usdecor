@@ -147,7 +147,7 @@ const schemaItem = z.object({
 })
 
 const schemaDespesa = z.object({
-  arquivoPath: z.string().min(1).nullable(),
+  arquivoPath: z.string({ message: 'Anexe a foto ou o PDF da nota ou do recibo' }).min(1, 'Anexe a foto ou o PDF da nota ou do recibo'),
   origem: z.enum(['camera', 'upload']),
   modo: z.enum(['manual', 'ia']),
   modeloIa: z.enum(['rapido', 'preciso']).nullable().optional(),

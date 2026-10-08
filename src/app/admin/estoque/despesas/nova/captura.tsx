@@ -375,6 +375,11 @@ export default function Captura({
 
   function salvar() {
     setErro('')
+    // Conta a pagar só com comprovante: sem arquivo guardado não há nota
+    if (!rascunho?.arquivoPath) {
+      setErro('Anexe a foto ou o PDF da nota ou do recibo antes de salvar.')
+      return
+    }
     if (!form.condicao) {
       setErro('Escolha como a nota foi paga (seção Pagamento).')
       return
@@ -384,7 +389,7 @@ export default function Captura({
       return
     }
     const dados: DadosDespesa = {
-      arquivoPath: rascunho?.arquivoPath ?? null,
+      arquivoPath: rascunho.arquivoPath,
       origem: rascunho?.origem ?? origem,
       modo: rascunho?.modo ?? 'manual',
       modeloIa: rascunho?.modelo ?? null,

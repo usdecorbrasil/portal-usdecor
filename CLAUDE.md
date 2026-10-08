@@ -525,9 +525,12 @@ Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admi
   **antes dos itens** de propósito: se falharem, a nota é apagada sem ter gerado entrada de
   estoque. Pago e débito entram já quitados na emissão; os demais, uma linha por parcela,
   com soma igual ao total (tolerância de 1 centavo).
-- Tabela `contas_pagar` (uma linha por parcela, `despesa_id` opcional — conta sem nota
-  pelo botão "Lançar conta sem nota"). Escrita só por RPC: `admin_criar_conta_pagar`,
-  `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
+- **Conta a pagar só nasce de nota ou recibo com arquivo** (decisão do dono, 08/10/2026,
+  migration `20261008200000`): `admin_criar_conta_pagar` (conta avulsa) foi removida e
+  `admin_gerar_contas_despesa` recusa nota sem `arquivo_path`; `salvarDespesa` também
+  exige o arquivo. O atalho do dashboard e o botão da aba A pagar levam a Nova nota.
+- Tabela `contas_pagar` (uma linha por parcela; `despesa_id` nulo só nas avulsas criadas
+  antes da regra). Escrita só por RPC: `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
   `admin_estornar_conta_pagar`, `admin_cancelar_conta_pagar`, `admin_alterar_conta_pagar`
   (vencimento/valor); as três últimas exigem motivo ≥ 10 e anotam em `observacao`. Tudo
   também vai para `auditoria` (entidade `conta_pagar`).
