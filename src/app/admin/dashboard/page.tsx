@@ -110,7 +110,9 @@ export default async function DashboardPage({
   const supabase = await createClient()
 
   // A contagem de clientes não depende dos pedidos: busca junto
-  const [{ data: pedidos }, { count: clientesAtivos }, { data: travados }] = await Promise.all([
+  // Contas a pagar vencidas, para o atalho (data de hoje em Brasília)
+  const hojeBr = new Date(hoje.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const [{ data: pedidos }, { count: clientesAtivos }, { data: travados }, { data: contasVencidas }] = await Promise.all([
     supabase
     .from('pedidos')
     .select(`
@@ -127,7 +129,15 @@ export default async function DashboardPage({
       .select('*', { count: 'exact', head: true })
       .eq('ativo', true),
     supabase.rpc('clientes_bloqueados_por_atraso'),
+    supabase
+      .from('contas_pagar')
+      .select('valor')
+      .is('pago_em', null)
+      .is('cancelada_em', null)
+      .lt('vencimento', hojeBr),
   ])
+  const vencidasPagar = (contasVencidas ?? []) as { valor: number | string }[]
+  const valorVencidasPagar = vencidasPagar.reduce((s, c) => s + Number(c.valor), 0)
 
   const clientesTravados = new Set<string>(((travados ?? []) as any[]).map(String))
 
@@ -224,6 +234,30 @@ export default async function DashboardPage({
         {tituloPeriodo}
         {clientesAtivos ? ` · ${clientesAtivos} cliente${clientesAtivos > 1 ? 's' : ''} ativo${clientesAtivos > 1 ? 's' : ''}` : ''}
       </p>
+
+      {/* ---- atalhos ---- */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <Link
+          href="/admin/financeiro/a-pagar?nova=1"
+          className="inline-flex items-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+        >
+          + LANÇAR CONTA A PAGAR
+        </Link>
+        <Link
+          href="/admin/estoque/despesas/nova"
+          className="inline-flex items-center gap-1.5 bg-white border border-[#131A2E] text-[#131A2E] rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+        >
+          📷 LANÇAR NOTA DE COMPRA
+        </Link>
+        {vencidasPagar.length > 0 && (
+          <Link
+            href="/admin/financeiro/a-pagar"
+            className="inline-flex items-center gap-1.5 bg-[#FBEAF0] border border-[#B00063] text-[#B00063] rounded-sm px-3.5 py-2 text-xs font-semibold"
+          >
+            {vencidasPagar.length} conta{vencidasPagar.length > 1 ? 's' : ''} a pagar vencida{vencidasPagar.length > 1 ? 's' : ''} · R$ {brl(valorVencidasPagar)}
+          </Link>
+        )}
+      </div>
 
       <FiltroPeriodo de={dataDe} ate={dataAte} />
 

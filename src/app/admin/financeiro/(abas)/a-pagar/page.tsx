@@ -23,7 +23,7 @@ const dataValida = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : und
 export default async function APagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ situacao?: string; de?: string; ate?: string }>
+  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; nova?: string }>
 }) {
   const sp = await searchParams
   const situacao = (SITUACOES.find((s) => s.chave === sp.situacao)?.chave ?? 'abertas') as FiltroContas['situacao']
@@ -106,7 +106,11 @@ export default async function APagarPage({
         </form>
       </div>
 
-      <NovaConta categorias={(categorias ?? []).map((c) => ({ id: c.id as string, nome: c.nome as string }))} hoje={hoje} />
+      <NovaConta
+        categorias={(categorias ?? []).map((c) => ({ id: c.id as string, nome: c.nome as string }))}
+        hoje={hoje}
+        abrir={sp.nova === '1'}
+      />
 
       <ListaContas contas={contas} situacao={situacao} hoje={hoje} />
     </div>

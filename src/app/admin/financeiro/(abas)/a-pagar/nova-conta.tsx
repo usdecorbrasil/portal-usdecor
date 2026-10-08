@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { criarContaPagar } from '@/app/actions/contas-pagar'
 import { gerarParcelas, validarParcelas, somarDias, MAX_PARCELAS_CONTA } from '@/lib/contas-pagar/condicoes'
@@ -25,9 +25,26 @@ const FORMAS = [
 ] as const
 type Forma = (typeof FORMAS)[number]['chave']
 
-export default function NovaConta({ categorias, hoje }: { categorias: { id: string; nome: string }[]; hoje: string }) {
+export default function NovaConta({
+  categorias,
+  hoje,
+  abrir = false,
+}: {
+  categorias: { id: string; nome: string }[]
+  hoje: string
+  /** Vindo do atalho do dashboard (?nova=1): já abre o formulário. */
+  abrir?: boolean
+}) {
   const router = useRouter()
-  const [aberto, setAberto] = useState(false)
+  const [aberto, setAberto] = useState(abrir)
+  const caixa = useRef<HTMLDivElement>(null)
+
+  // Atalho: leva o formulário para a vista e põe o cursor na descrição
+  useEffect(() => {
+    if (!abrir) return
+    caixa.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    caixa.current?.querySelector('input')?.focus({ preventScroll: true })
+  }, [abrir])
   const [descricao, setDescricao] = useState('')
   const [fornecedor, setFornecedor] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
@@ -73,7 +90,8 @@ export default function NovaConta({ categorias, hoje }: { categorias: { id: stri
       setTotal('')
       setParcelas([])
       setObservacao('')
-      router.refresh()
+      if (abrir) router.replace('/admin/financeiro/a-pagar')
+      else router.refresh()
     })
   }
 
@@ -86,7 +104,7 @@ export default function NovaConta({ categorias, hoje }: { categorias: { id: stri
   }
 
   return (
-    <div className="bg-white border border-[#131A2E] rounded-sm p-3">
+    <div ref={caixa} className="bg-white border border-[#131A2E] rounded-sm p-3 scroll-mt-4">
       <p className="text-[10px] font-mono tracking-wider text-[#131A2E] mb-2">NOVA CONTA A PAGAR</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <label className={rotulo + ' col-span-2'}>DESCRIÇÃO
