@@ -7,6 +7,7 @@ export const TIPOS = [
   { id: 'financeiro', label: 'Financeiro' },
   { id: 'clientes', label: 'Clientes' },
   { id: 'sku', label: 'Artes / SKU' },
+  { id: 'estampa', label: 'Estampa (prestador)' },
 ] as const
 
 export type TipoRelatorio = (typeof TIPOS)[number]['id']

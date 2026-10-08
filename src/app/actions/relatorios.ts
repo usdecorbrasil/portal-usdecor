@@ -322,3 +322,138 @@ export async function gerarRelatorio(filtros: {
     },
   }
 }
+
+
+/* ------------------------- estampa (prestador) ------------------------- */
+
+export type LinhaEstampa = {
+  pedidoId: string
+  numero: number
+  cliente: string
+  clienteId: string
+  tecido: string | null
+  /** Dia em que entrou em Estampando (AAAA-MM-DD), se registrado. */
+  estampadoEm: string | null
+  /** Dia em que saiu de Estampando — lançamento de Estampa pronta. É o corte do período. */
+  prontoEm: string
+  /** Metragem impressa, já com ajustes de quebra. */
+  metros: number
+  cancelado: boolean
+  /** Quantas vezes saiu de Estampando no período (reimpressão repete o ciclo). */
+  lancamentos: number
+}
+
+export type RelatorioEstampa = {
+  linhas: LinhaEstampa[]
+  porDia: { dia: string; pedidos: number; metros: number }[]
+  porCliente: { clienteId: string; cliente: string; pedidos: number; metros: number }[]
+  porTecido: { tecido: string; pedidos: number; metros: number }[]
+  resumo: { pedidos: number; metros: number; semMetragem: number }
+}
+
+/**
+ * Metros que saíram da estamparia no período: pedidos cuja etapa Estampa
+ * pronta foi lançada entre `de` e `ate` (a saída de Estampando), com a
+ * metragem impressa final. Serve para conferir a fatura do prestador de
+ * serviço, que cobra por metro estampado — o corte é pela data de saída
+ * (decidido pelo dono em 08/10/2026), porque é quando o serviço está
+ * concluído; o que ainda está em Estampando fica para o período seguinte.
+ * Cancelados entram, marcados: o serviço foi feito.
+ */
+export async function relatorioEstampa(filtros: {
+  de: string
+  ate: string
+  clienteId?: string
+}): Promise<RelatorioEstampa> {
+  const supabase = await createClient()
+
+  let consulta = supabase
+    .from('pedido_status_historico')
+    .select(`
+      pedido_id, created_at,
+      pedidos!inner(
+        id, numero, cliente_id, cancelado_em, metragem_impressa,
+        tecidos(nome), clientes(razao_social),
+        pedido_status_historico(status, created_at)
+      )
+    `)
+    .eq('status', 'pronto')
+    .gte('created_at', `${filtros.de}T00:00:00`)
+    .lte('created_at', `${filtros.ate}T23:59:59`)
+    .order('created_at', { ascending: true })
+
+  if (filtros.clienteId) {
+    consulta = consulta.eq('pedidos.cliente_id', filtros.clienteId)
+  }
+
+  const { data, error } = await consulta
+  if (error) throw new Error(`Falha ao montar o relatório de estampa: ${error.message}`)
+
+  // Um pedido por linha: fica a última saída no período, e conta quantas houve
+  const porPedido = new Map<string, LinhaEstampa>()
+  for (const h of (data ?? []) as any[]) {
+    const p = h.pedidos
+    if (!p) continue
+    const dia = String(h.created_at).slice(0, 10)
+    const anterior = porPedido.get(p.id)
+    if (anterior) {
+      anterior.lancamentos += 1
+      if (dia > anterior.prontoEm) anterior.prontoEm = dia
+      continue
+    }
+    const hist = (p.pedido_status_historico ?? []) as { status: string; created_at: string }[]
+    // Entrada em Estampando: o último lançamento dessa etapa antes da saída
+    const entrada = hist
+      .filter((x) => x.status === 'estampando' && x.created_at <= h.created_at)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+    porPedido.set(p.id, {
+      pedidoId: p.id,
+      numero: Number(p.numero),
+      cliente: p.clientes?.razao_social ?? '—',
+      clienteId: p.cliente_id,
+      tecido: p.tecidos?.nome ?? null,
+      estampadoEm: entrada ? String(entrada.created_at).slice(0, 10) : null,
+      prontoEm: dia,
+      metros: p.metragem_impressa != null ? Number(p.metragem_impressa) : 0,
+      cancelado: !!p.cancelado_em,
+      lancamentos: 1,
+    })
+  }
+
+  const linhas = [...porPedido.values()].sort(
+    (a, b) => (a.prontoEm < b.prontoEm ? -1 : a.prontoEm > b.prontoEm ? 1 : a.numero - b.numero)
+  )
+
+  const agrupar = <K extends string>(chave: (l: LinhaEstampa) => K) => {
+    const m = new Map<K, { pedidos: number; metros: number }>()
+    for (const l of linhas) {
+      const k = chave(l)
+      const g = m.get(k) ?? { pedidos: 0, metros: 0 }
+      g.pedidos += 1
+      g.metros += l.metros
+      m.set(k, g)
+    }
+    return m
+  }
+
+  const porDia = [...agrupar((l) => l.prontoEm)].map(([dia, g]) => ({ dia, ...g }))
+  const nomes = new Map(linhas.map((l) => [l.clienteId, l.cliente]))
+  const porCliente = [...agrupar((l) => l.clienteId)]
+    .map(([clienteId, g]) => ({ clienteId, cliente: nomes.get(clienteId) ?? '—', ...g }))
+    .sort((a, b) => b.metros - a.metros)
+  const porTecido = [...agrupar((l) => l.tecido ?? 'sem tecido informado')]
+    .map(([tecido, g]) => ({ tecido, ...g }))
+    .sort((a, b) => b.metros - a.metros)
+
+  return {
+    linhas,
+    porDia,
+    porCliente,
+    porTecido,
+    resumo: {
+      pedidos: linhas.length,
+      metros: linhas.reduce((a, l) => a + l.metros, 0),
+      semMetragem: linhas.filter((l) => l.metros === 0).length,
+    },
+  }
+}

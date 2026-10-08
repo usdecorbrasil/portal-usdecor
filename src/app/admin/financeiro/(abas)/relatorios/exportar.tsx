@@ -1,6 +1,6 @@
 'use client'
 
-import type { Relatorio } from '@/app/actions/relatorios'
+import type { Relatorio, RelatorioEstampa } from '@/app/actions/relatorios'
 import type { TipoRelatorio } from './seletor-tipo'
 
 /** Excel em pt-BR espera ponto e vírgula como separador */
@@ -40,11 +40,47 @@ export default function Exportar({
   relatorio,
   periodo,
   tipo,
+  estampa = null,
 }: {
   relatorio: Relatorio
   periodo: string
   tipo: TipoRelatorio
+  estampa?: RelatorioEstampa | null
 }) {
+  function estampaCsv() {
+    if (!estampa) return
+    baixar(
+      `estampa-${periodo}.csv`,
+      paraCsv([
+        ['Saída de Estampando', 'Pedido', 'Cliente', 'Tecido', 'Metros', 'Entrada em Estampando', 'Saídas', 'Cancelado'],
+        ...estampa.linhas.map((l) => [
+          dataBr(l.prontoEm + 'T12:00:00'),
+          l.numero,
+          l.cliente,
+          l.tecido ?? '',
+          num(l.metros),
+          l.estampadoEm ? dataBr(l.estampadoEm + 'T12:00:00') : '',
+          l.lancamentos,
+          l.cancelado ? 'sim' : '',
+        ]),
+        [],
+        ['Total', '', '', '', num(estampa.resumo.metros), '', '', ''],
+      ])
+    )
+  }
+
+  function estampaPorDiaCsv() {
+    if (!estampa) return
+    baixar(
+      `estampa-por-dia-${periodo}.csv`,
+      paraCsv([
+        ['Dia de saída', 'Pedidos', 'Metros'],
+        ...estampa.porDia.map((d) => [dataBr(d.dia + 'T12:00:00'), d.pedidos, num(d.metros)]),
+        ['Total', estampa.resumo.pedidos, num(estampa.resumo.metros)],
+      ])
+    )
+  }
+
   function pedidos() {
     baixar(
       `pedidos-${periodo}.csv`,
@@ -130,6 +166,16 @@ export default function Exportar({
   // Só o CSV da divisão aberta: exportar tudo confundiria mais que ajudar
   return (
     <div className="flex flex-wrap gap-2">
+      {tipo === 'estampa' && estampa && estampa.linhas.length > 0 && (
+        <>
+          <button onClick={estampaCsv} className={botao}>
+            CSV · PEDIDO A PEDIDO
+          </button>
+          <button onClick={estampaPorDiaCsv} className={botao}>
+            CSV · POR DIA
+          </button>
+        </>
+      )}
       {tipo === 'pedidos' && (
         <>
           <button onClick={pedidos} className={botao}>
