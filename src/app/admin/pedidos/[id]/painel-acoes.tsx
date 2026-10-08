@@ -218,10 +218,15 @@ export default function PainelAcoes({
 
   const escolhidaEhCartao = formaEscolhida.startsWith('cartao')
   const cfgEscolhida = formaEscolhida ? configDaForma(configPagamento, formaEscolhida) : null
+
+  // Pedidos reunidos (unificação): teto de parcelas e avaliação usam a soma
+  const outrosEscolhidos = outrosProntos.filter((o) => (faturaPendente ?? []).includes(o.id))
+  const mercadoriaFatura = total + outrosEscolhidos.reduce((s, o) => s + o.total, 0)
+
   // Boleto parcelado: o teto cai conforme a parcela mínima; cartão usa o da configuração
   const tetoParcelas =
     formaEscolhida === 'boleto_parcelado'
-      ? maxParcelasPorMinimo(total, configPagamento.boleto)
+      ? maxParcelasPorMinimo(mercadoriaFatura, configPagamento.boleto)
       : formaEscolhida === 'cartao_credito'
       ? Math.max(1, Math.min(configPagamento.cartao_credito.maxParcelas, MAX_PARCELAS))
       : 1
@@ -232,9 +237,6 @@ export default function PainelAcoes({
       ? Math.max(1, Math.min(parcelasFatura, tetoParcelas))
       : 1
 
-  // Pedidos reunidos (unificação): a avaliação usa a soma
-  const outrosEscolhidos = outrosProntos.filter((o) => (faturaPendente ?? []).includes(o.id))
-  const mercadoriaFatura = total + outrosEscolhidos.reduce((s, o) => s + o.total, 0)
   const metragemFatura =
     metragemImpressa === null && outrosEscolhidos.length === 0
       ? null
