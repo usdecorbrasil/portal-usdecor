@@ -17,7 +17,7 @@ import { faturarPedido, enviarLinkPagamento, type OpcoesFatura } from '@/app/act
 import { agruparPedidos } from '@/app/actions/agrupamento'
 import ModalUnificar, { type OutroPronto } from './modal-unificar'
 import ModalFaturar from './modal-faturar'
-import { MAX_PARCELAS, maxParcelasPorMinimo, type ConfigPagamento } from '@/lib/pagamento/config'
+import { MAX_PARCELAS, BOLETO_AVISTA_DIAS_UTEIS, PRAZO_MAXIMO_BOLETO_AVISTA_DIAS, maxParcelasPorMinimo, type ConfigPagamento } from '@/lib/pagamento/config'
 import {
   FORMAS_FATURA,
   ROTULOS_FATURA,
@@ -100,6 +100,7 @@ export default function PainelAcoes({
   parcelasSolicitadas,
   parcelasAtuais,
   primeiroVencimentoAtual,
+  vencimentoAvistaPadrao,
   maxParcelas,
   valorMinimoBoleto,
   valorDocumentoBoleto,
@@ -139,6 +140,8 @@ export default function PainelAcoes({
   parcelasAtuais: number
   /** Vencimento da 1ª parcela já gerada (pedidos antigos), AAAA-MM-DD. */
   primeiroVencimentoAtual: string | null
+  /** Boleto à vista: hoje + dias úteis configurados (conta do banco), AAAA-MM-DD. */
+  vencimentoAvistaPadrao: string
   maxParcelas: number
   valorMinimoBoleto: number
   /** Menor boleto do pedido, ou null quando não é boleto / não tem valor. */
@@ -191,6 +194,8 @@ export default function PainelAcoes({
   const [primeiroVencimento, setPrimeiroVencimento] = useState(
     primeiroVencimentoAtual && primeiroVencimentoAtual >= dataPadrao(0)
       ? primeiroVencimentoAtual
+      : formaPagamento === 'boleto_avista'
+      ? vencimentoAvistaPadrao
       : dataPadrao(intervaloBoleto)
   )
   const [statusPendente, setStatusPendente] = useState<string | null>(null)
@@ -269,7 +274,7 @@ export default function PainelAcoes({
     return {
       forma: formaEscolhida || undefined,
       parcelas: parcelasEfetivas > 1 ? parcelasEfetivas : undefined,
-      primeiroVencimento: formaEscolhida === 'boleto_parcelado' ? primeiroVencimento : undefined,
+      primeiroVencimento: formaEscolhida.startsWith('boleto') ? primeiroVencimento : undefined,
       motivoLiberacao: avaliacao.credito && liberacaoPreenchida ? motivoLiberacao.trim() : undefined,
       linkPagamento: escolhidaEhCartao && linkPagamento.trim() ? linkPagamento.trim() : undefined,
     }
@@ -859,6 +864,9 @@ export default function PainelAcoes({
                       onChange={() => {
                         setFormaEscolhida(f)
                         setParcelasFatura(f === 'boleto_parcelado' ? Math.max(2, parcelasFatura) : 1)
+                        // Cada boleto tem seu padrão de data; quem fatura ajusta depois
+                        if (f === 'boleto_avista') setPrimeiroVencimento(vencimentoAvistaPadrao)
+                        else if (f === 'boleto_parcelado') setPrimeiroVencimento(dataPadrao(intervaloBoleto))
                         setErro('')
                       }}
                       className="accent-[#B00063]"
@@ -881,8 +889,9 @@ export default function PainelAcoes({
             </div>
           </div>
 
-          {(formaEscolhida === 'boleto_parcelado' || formaEscolhida === 'cartao_credito') && (
+          {(formaEscolhida === 'boleto_parcelado' || formaEscolhida === 'cartao_credito' || formaEscolhida === 'boleto_avista') && (
             <div className="mt-3 grid grid-cols-2 gap-3">
+              {formaEscolhida !== 'boleto_avista' && (
               <div>
                 <label
                   htmlFor="parcelas-fatura"
@@ -916,18 +925,21 @@ export default function PainelAcoes({
                     </p>
                   )}
               </div>
-              {formaEscolhida === 'boleto_parcelado' && (
+              )}
+              {formaEscolhida.startsWith('boleto') && (
                 <div>
                   <label
                     htmlFor="primeiro-venc-fatura"
                     className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1"
                   >
-                    1º VENCIMENTO
+                    {formaEscolhida === 'boleto_parcelado' ? '1º VENCIMENTO' : 'VENCIMENTO'}
                   </label>
                   <input
                     id="primeiro-venc-fatura"
                     type="date"
                     value={primeiroVencimento}
+                    min={dataPadrao(0)}
+                    max={formaEscolhida === 'boleto_avista' ? dataPadrao(PRAZO_MAXIMO_BOLETO_AVISTA_DIAS) : undefined}
                     disabled={pendente}
                     onChange={(e) => {
                       setPrimeiroVencimento(e.target.value)
@@ -936,7 +948,9 @@ export default function PainelAcoes({
                     className="w-full border border-[#DDDCD5] rounded-sm px-3 py-2 bg-white text-sm outline-none focus:border-[#131A2E]"
                   />
                   <p className="text-[10px] text-[#6E6E68] mt-1">
-                    demais a cada {cfgEscolhida?.intervaloDias ?? intervaloBoleto} dias
+                    {formaEscolhida === 'boleto_parcelado'
+                      ? `demais a cada ${cfgEscolhida?.intervaloDias ?? intervaloBoleto} dias`
+                      : `padrão ${BOLETO_AVISTA_DIAS_UTEIS} dias úteis · no máximo ${PRAZO_MAXIMO_BOLETO_AVISTA_DIAS} dias`}
                   </p>
                 </div>
               )}
