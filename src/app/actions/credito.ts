@@ -47,8 +47,27 @@ export type MudancaLimite = {
   autor: string | null
 }
 
+/**
+ * Pedido em boleto que já conta no crédito em uso mas ainda não virou
+ * boleto emitido: em produção (valor conhecido, cobrança só no Faturar) ou
+ * faturado sem a cobrança gerada. Espelha a segunda metade de
+ * `credito_em_uso` no banco — mexeu numa, mexa na outra.
+ */
+export type CobrancaPrevista = {
+  pedidoId: string
+  pedidoNumero: number
+  etapa: string
+  forma: string
+  parcelas: number | null
+  /** Valor cobrado estimado (mercadoria + taxa); 0 quando a metragem ainda não existe. */
+  valor: number
+  vencimentoPrevisto: string | null
+}
+
 export type FichaCredito = LinhaCredito & {
   boletos: BoletoHistorico[]
+  /** Pedidos em boleto ainda sem boleto emitido (contam no crédito em uso). */
+  previstos: CobrancaPrevista[]
   mudancasLimite: MudancaLimite[]
   atrasoLiberadoEm: string | null
   atrasoLiberadoMotivo: string | null
@@ -153,6 +172,67 @@ async function carregarBoletos(
   return porCliente
 }
 
+/**
+ * Pedidos em boleto do cliente que ainda não têm boleto emitido: sem parcela
+ * gravada e, no à vista, sem cobrança gerada. São os que `credito_em_uso`
+ * soma pelo `valor_cobranca_pedido`, e a ficha precisa mostrá-los, senão o
+ * "em boletos hoje" não fecha com o histórico.
+ */
+async function carregarPrevistos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clienteId: string
+): Promise<CobrancaPrevista[]> {
+  const { data } = await supabase
+    .from('pedidos')
+    .select(
+      'id, numero, total, taxa_pagamento_percentual, taxa_pagamento_fixa, forma_pagamento, ' +
+        'parcelas_solicitadas, vencimento_avista, cobranca_gerada_em, ' +
+        'pedido_parcelas(id), pedido_status_historico(status, created_at)'
+    )
+    .eq('cliente_id', clienteId)
+    .like('forma_pagamento', 'boleto%')
+    .is('cancelado_em', null)
+    .is('agrupado_em', null)
+    .is('pago_em', null)
+
+  const CONTAM = new Set(['recebido', 'impressao', 'estampando', 'pronto', 'faturado', 'nf_emitida', 'expedido', 'entregue'])
+  const lista: CobrancaPrevista[] = []
+
+  for (const p of (data ?? []) as any[]) {
+    const hist = ((p.pedido_status_historico ?? []) as { status: string; created_at: string }[])
+      .slice()
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    const etapa = hist[0]?.status ?? 'aguardando'
+    if (!CONTAM.has(etapa)) continue
+    // Já tem boleto emitido: aparece no histórico, não aqui
+    if ((p.pedido_parcelas ?? []).length > 0) continue
+    if (p.forma_pagamento === 'boleto_avista' && p.cobranca_gerada_em && p.vencimento_avista) continue
+
+    const total = Number(p.total ?? 0)
+    lista.push({
+      pedidoId: p.id,
+      pedidoNumero: Number(p.numero),
+      etapa,
+      forma: String(p.forma_pagamento),
+      parcelas: p.parcelas_solicitadas != null ? Number(p.parcelas_solicitadas) : null,
+      valor:
+        total > 0
+          ? valorCobranca(
+              total,
+              Number(p.taxa_pagamento_percentual ?? 0),
+              Number(p.taxa_pagamento_fixa ?? 0),
+              String(p.forma_pagamento),
+              Number(p.parcelas_solicitadas ?? 1)
+            )
+          : 0,
+      vencimentoPrevisto: p.vencimento_avista ? String(p.vencimento_avista).slice(0, 10) : null,
+    })
+  }
+
+  lista.sort((a, b) => b.pedidoNumero - a.pedidoNumero)
+  return lista
+}
+
 export async function painelCredito(meses = 12): Promise<PainelCredito | null> {
   if (!(await exigirAdmin())) return null
   const supabase = await createClient()
@@ -227,8 +307,9 @@ export async function fichaCredito(clienteId: string, meses = 12): Promise<Ficha
   if (!painel || !linha) return null
 
   const supabase = await createClient()
-  const [boletos, { data: auditoria }, { data: cliente }] = await Promise.all([
+  const [boletos, previstos, { data: auditoria }, { data: cliente }] = await Promise.all([
     carregarBoletos(supabase, clienteId),
+    carregarPrevistos(supabase, clienteId),
     supabase
       .from('auditoria')
       .select('created_at, campos, motivo, criado_por')
@@ -259,6 +340,7 @@ export async function fichaCredito(clienteId: string, meses = 12): Promise<Ficha
   return {
     ...linha,
     boletos: boletos.get(clienteId) ?? [],
+    previstos,
     mudancasLimite: mudancas.map(({ a, c }) => ({
       data: a.created_at,
       de: c.de != null ? Number(c.de) : null,

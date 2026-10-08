@@ -27,6 +27,10 @@ export default async function FichaCreditoPage({
 
   const s = f.score
   const uso = f.limite > 0 ? f.emUso / f.limite : 0
+  // O "em boletos hoje" vem de credito_em_uso; aqui se abre a conta para a
+  // tela não parecer contradizer a lista de boletos logo abaixo
+  const emitidoAberto = f.boletos.filter((b) => !b.pagoEm).reduce((s, b) => s + b.valor, 0)
+  const previstoTotal = f.previstos.reduce((s, p) => s + p.valor, 0)
   const sug = s.sugestao
 
   return (
@@ -72,6 +76,16 @@ export default async function FichaCreditoPage({
             <p className="text-xs text-[#6E6E68]">
               <span className="font-mono">R$ {brl(f.emUso)}</span> em boletos hoje
               {f.limite > 0 && ` · ${Math.round(uso * 100)}% do limite`}
+            </p>
+            <p className="text-[11px] text-[#9B9A93]">
+              <span className="font-mono">R$ {brl(emitidoAberto)}</span> em boletos emitidos
+              {f.previstos.length > 0 && (
+                <>
+                  {' · '}
+                  <span className="font-mono">R$ {brl(previstoTotal)}</span> em {f.previstos.length} pedido
+                  {f.previstos.length > 1 ? 's' : ''} em boleto ainda sem boleto gerado
+                </>
+              )}
             </p>
             {f.limite > 0 && (
               <div className="h-1.5 w-56 max-w-full bg-[#EEEDE7] rounded-full mt-1.5 overflow-hidden">
@@ -122,7 +136,7 @@ export default async function FichaCreditoPage({
         )}
       </div>
 
-      <HistoricoBoletos cliente={f.cliente} boletos={f.boletos} hoje={new Date().toISOString().slice(0, 10)} />
+      <HistoricoBoletos cliente={f.cliente} boletos={f.boletos} previstos={f.previstos} hoje={new Date().toISOString().slice(0, 10)} />
     </div>
   )
 }
