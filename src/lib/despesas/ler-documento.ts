@@ -34,6 +34,10 @@ const DocumentoLido = z.object({
   fornecedor_nome: z.string().nullable(),
   /** CNPJ ou CPF só com dígitos. */
   fornecedor_doc: z.string().nullable(),
+  /** Comprador (destinatário/tomador), quando o documento traz. */
+  destinatario_nome: z.string().nullable(),
+  /** CNPJ ou CPF do comprador, só dígitos. */
+  destinatario_doc: z.string().nullable(),
   numero: z.string().nullable(),
   serie: z.string().nullable(),
   /** Chave de acesso de 44 dígitos, se houver. */
@@ -85,9 +89,17 @@ export type EntradaLeitura = {
    * para reler uma nota que o rápido não entendeu.
    */
   modelo?: ModeloLeitura
+  /** Releitura automática usa o preciso em esforço médio, para caber no tempo da tela. */
+  esforco?: 'low' | 'medium' | 'high'
 }
 
 export type ModeloLeitura = 'rapido' | 'preciso'
+
+/**
+ * Versão das instruções abaixo. Vai gravada com cada nota (`despesas.versao_prompt`)
+ * para comparar a taxa de acerto quando o texto mudar — mudou o texto, suba a versão.
+ */
+export const VERSAO_PROMPT = 'v2-2026-10-09'
 
 export const MODELOS: Record<ModeloLeitura, { id: string; rotulo: string }> = {
   rapido: { id: 'claude-haiku-5-5', rotulo: 'rápido (Haiku)' },
@@ -120,6 +132,7 @@ TIPOS DE DOCUMENTO
 QUEM É O FORNECEDOR
 - O fornecedor é o EMITENTE (quem vendeu/prestou), nunca o destinatário/tomador. Em DANFE o emitente está no cabeçalho; "DESTINATÁRIO/REMETENTE" é o comprador — ignore.
 - A estamparia (compradora) pode aparecer como destinatário; não a devolva como fornecedor.
+- destinatario_nome / destinatario_doc: o comprador ("DESTINATÁRIO/REMETENTE" na DANFE, "CONSUMIDOR"/"CPF/CNPJ do consumidor" na NFC-e, "TOMADOR" na NFS-e), só dígitos no documento. Sem comprador identificado, null nos dois.
 - fornecedor_doc: CNPJ (14 dígitos) ou CPF (11 dígitos), SÓ DÍGITOS. Se houver dois CNPJs, o do emitente. Se não estiver legível por inteiro, devolva null — nunca complete dígitos.
 
 NÚMEROS E DATAS
@@ -139,7 +152,7 @@ ITENS
 
 TOTAIS
 - subtotal = soma dos itens antes de desconto/frete; total = valor final a pagar impresso no documento ("VALOR TOTAL", "TOTAL A PAGAR", "VALOR LÍQUIDO"). Nunca calcule o total: copie o impresso.
-- impostos = soma dos impostos DESTACADOS que se somam ao preço (IPI, ST, juros). ICMS "incluso" e PIS/COFINS "aproximados" NÃO entram.
+- impostos = soma do que se soma ao preço além de itens e frete: IPI, ICMS-ST, SEGURO, OUTRAS DESPESAS ACESSÓRIAS, juros. ICMS "incluso" e PIS/COFINS "aproximados" NÃO entram.
 - Confira: soma dos itens − desconto + frete + impostos deve dar o total. Se não bater, mantenha os valores lidos e baixe confianca.itens para 0.5 ou menos.
 
 PAGAMENTO
@@ -184,7 +197,7 @@ export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLe
       model: MODELOS[modelo].id,
       max_tokens: 16000,
       // Rápido: esforço baixo (custo por página na casa do centavo). Preciso: alto.
-      output_config: { effort: modelo === 'preciso' ? 'high' : 'low', format: zodOutputFormat(DocumentoLido) },
+      output_config: { effort: entrada.esforco ?? (modelo === 'preciso' ? 'high' : 'low'), format: zodOutputFormat(DocumentoLido) },
       system: [{ type: 'text', text: instrucoes(entrada.categorias, entrada.suprimentos), cache_control: { type: 'ephemeral' } }],
       messages: [
         {

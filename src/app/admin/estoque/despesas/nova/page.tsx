@@ -4,7 +4,8 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import BotaoVoltar from '@/components/botao-voltar'
 import Captura from './captura'
 
-export const maxDuration = 60
+// Leitura rápida + releitura automática com o modelo preciso, quando a primeira falha
+export const maxDuration = 120
 
 /**
  * Nova despesa: foto ou arquivo → leitura por IA → conferência → salvar.
@@ -14,7 +15,7 @@ export default async function NovaDespesaPage() {
   const perfil = await lerPerfil()
   if (!perfil || !perfil.veValores) redirect('/admin/estoque')
   const supabase = await createClient()
-  const [{ data: categorias }, { data: suprimentos }, { data: vinculos }] = await Promise.all([
+  const [{ data: categorias }, { data: suprimentos }, { data: vinculos }, { data: compradores }] = await Promise.all([
     supabase.from('categorias_despesa').select('id, nome').eq('ativo', true).order('nome'),
     supabase.from('suprimentos').select('id, nome, unidade').eq('ativo', true).order('nome'),
     // Itens de notas anteriores já ligados a suprimento: base da sugestão de vínculo
@@ -24,7 +25,14 @@ export default async function NovaDespesaPage() {
       .not('suprimento_id', 'is', null)
       .is('despesas.excluido_em', null)
       .limit(1000),
+    // Destinatário das notas já salvas: o comprador de sempre é a empresa
+    supabase.from('despesas').select('destinatario_doc').not('destinatario_doc', 'is', null).is('excluido_em', null).limit(500),
   ])
+
+  // Quem aparece em 2+ notas conta como "a empresa" (aprende sozinho, sem cadastro)
+  const contagem = new Map<string, number>()
+  for (const c of compradores ?? []) contagem.set(String(c.destinatario_doc), (contagem.get(String(c.destinatario_doc)) ?? 0) + 1)
+  const destinatarios = [...contagem].filter(([, n]) => n >= 2).map(([doc]) => doc)
 
   type LinhaVinculo = {
     descricao: string
@@ -55,6 +63,7 @@ export default async function NovaDespesaPage() {
         categorias={(categorias ?? []).map((c) => ({ id: c.id as string, nome: c.nome as string }))}
         suprimentos={(suprimentos ?? []).map((s) => ({ id: s.id as string, nome: s.nome as string, unidade: s.unidade as string }))}
         historico={historico}
+        destinatarios={destinatarios}
       />
     </div>
   )

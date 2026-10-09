@@ -513,6 +513,26 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   de tecido — para cada suprimento com `consumo_por_metro`, mantém o consumo do pedido
   igual a `metragem_impressa × fator`; roda no mesmo UPDATE do romaneio e do ajuste de
   metragem. Suprimento sem fator é só manual (`registrar_movimento_suprimento`, equipe).
+- **Conferência automática da leitura** (09/10/2026, migration `20261009140000`):
+  - **Chave de acesso manda**: os 44 dígitos trazem CNPJ/CPF do emitente, modelo, série,
+    número e mês/ano (`src/lib/despesas/chave.ts`, puro). Com chave válida, a leitura é
+    corrigida sozinha (aviso verde "Corrigido pela chave"), a tela mostra divergência ao vivo
+    com o botão "usar o que a chave diz", e o servidor e o gatilho `despesas_validar`
+    recusam CNPJ ou número diferentes da chave.
+  - **Releitura automática**: se o rápido erra o que dá para provar (dígito de CNPJ ou chave,
+    soma que não fecha por mais de R$ 0,05, total ausente — `problemasDaLeitura` em
+    `src/lib/despesas/conferir.ts`), `lerEConferir` relê uma vez com o preciso em esforço
+    médio e fica com a leitura de menos problemas. Por isso a tela nova tem
+    `maxDuration = 120`. O botão manual "Reler com o modelo preciso" continua.
+  - **Duplicidade**: o gatilho recusa mesmo fornecedor + número + série (zeros à esquerda
+    ignorados, só não excluídas); `salvarDespesa` avisa (pop-up) quando há nota do mesmo
+    fornecedor, mesma data e mesmo valor — cupom sem número cai aqui.
+  - **Datas**: emissão no futuro bloqueia (tela, servidor e gatilho); mais de 90 dias só avisa.
+  - **Comprador**: a IA lê `destinatario_nome/doc`; quem aparece como comprador em 2+ notas
+    salvas é tratado como a empresa, e comprador diferente gera aviso amarelo (sem cadastro).
+  - **Métrica de acerto**: `despesas.leitura_ia` guarda o que a IA devolveu, o modelo, o
+    motivo da releitura e `alterados` (campos que a conferência mudou); `versao_prompt`
+    guarda `VERSAO_PROMPT` de `ler-documento.ts` — mudou as instruções, suba a versão.
 - Não existe XML/SEFAZ nem QR code de NFC-e ainda (está na especificação do dono como
   caminho preferencial); hoje é só imagem/PDF + IA ou digitação.
 
