@@ -326,3 +326,11 @@ Hobby da Vercel não aceita cron horário.
 - Todo dia de manhã, se houver nota sem comprovante há mais de 2 dias ou conta a pagar vencida,
   sai um e-mail de resumo para quem estiver em Configurações → Notificações → "Pendências de
   contas a pagar". Sem pendência, não sai nada.
+
+### Limite de crédito só no portal (09/10/2026)
+
+| Regra | Status |
+|---|---|
+| O limite de crédito vale só no portal (Faturar). Se o cadastro do cliente no Bling barra o pedido de venda pelo limite de lá, o portal tira esse limite do contato (`limiteCredito = 0`), registra em auditoria e tenta de novo uma vez | ✅ |
+| Se o Bling continuar barrando, a tela pede para marcar "Limite ilimitado" no contato do Bling | ✅ |
+

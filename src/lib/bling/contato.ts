@@ -224,3 +224,41 @@ export async function tentarSincronizarContato(
     return e instanceof Error ? e.message : 'Erro desconhecido ao falar com o Bling.'
   }
 }
+
+/* --------------------------- limite de crédito --------------------------- */
+
+/**
+ * O limite de crédito é controlado só no portal (decisão do dono, 09/10/2026).
+ * O cadastro do contato no Bling tem um limite próprio, que soma tudo o que o
+ * Bling tem em aberto para o cliente — inclusive contas que o portal não
+ * conhece — e recusa o pedido de venda quando passa. Foi o que barrou o #1025.
+ *
+ * Esta função tira esse limite do contato: lê, mescla e grava com
+ * `financeiro.limiteCredito = 0` — segundo o próprio Bling, zero no campo é
+ * tratado como sem limite (a opção "Limite zero" da tela seria outra marcação).
+ * Não deu para confirmar na documentação da API; se a conta tratar diferente,
+ * a segunda tentativa do pedido falha e a mensagem manda marcar "Limite
+ * ilimitado" no contato. Só é chamada quando o Bling já recusou por limite —
+ * cliente que hoje fatura normalmente não é tocado.
+ * Devolve o limite que estava lá, para a auditoria.
+ */
+export async function liberarLimiteNoBling(
+  contatoId: number
+): Promise<{ ok: true; antes: number | null } | { ok: false; erro: string }> {
+  const rAtual = await chamarBling(`/contatos/${contatoId}`)
+  if (!rAtual.ok) return { ok: false, erro: `Falha ao ler contato no Bling: ${rAtual.erro.slice(0, 200)}` }
+
+  const atual = ((rAtual.dados as { data?: Record<string, unknown> })?.data ?? {}) as Record<string, unknown>
+  const financeiro = (atual.financeiro as Record<string, unknown> | undefined) ?? {}
+  const antes = typeof financeiro.limiteCredito === 'number' ? financeiro.limiteCredito : null
+
+  const mesclado: Record<string, unknown> = { ...atual, financeiro: { ...financeiro, limiteCredito: 0 } }
+  delete mesclado.id
+
+  await pausa()
+  const rPut = await chamarBling(`/contatos/${contatoId}`, { method: 'PUT', body: JSON.stringify(mesclado) })
+  if (!rPut.ok) return { ok: false, erro: `Falha ao tirar o limite do contato no Bling: ${rPut.erro.slice(0, 300)}` }
+
+  return { ok: true, antes }
+}
+
