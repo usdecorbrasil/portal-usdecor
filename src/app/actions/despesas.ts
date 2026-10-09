@@ -310,9 +310,11 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     }))
   )
   if (erroItens) {
-    // Sem os itens a despesa não vale: tira o cabeçalho (e, em cascata, as
-    // contas a pagar) para não ficar pela metade
-    await createAdminClient().from('despesas').delete().eq('id', despesa.id)
+    // Sem os itens a despesa não vale: tira as contas a pagar e o cabeçalho
+    // para não ficar pela metade (a chave das contas é RESTRICT de propósito)
+    const admin = createAdminClient()
+    await admin.from('contas_pagar').delete().eq('despesa_id', despesa.id)
+    await admin.from('despesas').delete().eq('id', despesa.id)
     return { ok: false, erro: erroItens.message }
   }
 
