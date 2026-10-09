@@ -6,8 +6,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { registrar } from '@/lib/auditoria'
-import { lerDocumento, TIPOS_DOCUMENTO, type DocumentoLido, type ModeloLeitura } from '@/lib/despesas/ler-documento'
+import { lerDocumento, TIPOS_DOCUMENTO, VERSAO_PROMPT, type DocumentoLido, type ModeloLeitura } from '@/lib/despesas/ler-documento'
 import { cnpjCpfValido, chaveAcessoValida } from '@/lib/despesas/validar'
+import { corrigirPelaChave, divergenciasDaChave } from '@/lib/despesas/chave'
+import { problemasDaLeitura, avisoDaEmissao } from '@/lib/despesas/conferir'
+import { hojeBrasilia } from '@/lib/datas'
 import { aplicarCustosAutomaticos } from '@/lib/custos/compras'
 import { CONDICOES, quitadaNaCompra, validarParcelas, ROTULO_CURTO } from '@/lib/contas-pagar/condicoes'
 
@@ -47,9 +50,20 @@ export type Rascunho = {
   modelo: ModeloLeitura | null
   documento: DocumentoLido | null
   erroLeitura: string | null
+  /** Campos que a chave de acesso corrigiu na leitura (ex.: "CNPJ/CPF do fornecedor"). */
+  ajustes?: string[]
+  /** Quando o rápido errou o que dá para provar e o preciso releu sozinho: por quê. */
+  releitura?: string[] | null
+  /** Como a IA devolveu, antes de qualquer correção — fica gravado para medir o acerto. */
+  leituraOriginal?: DocumentoLido | null
 }
 
-async function lerComIa(conteudo: Buffer, mediaType: (typeof TIPOS_ARQUIVO)[number], modelo: ModeloLeitura) {
+async function lerComIa(
+  conteudo: Buffer,
+  mediaType: (typeof TIPOS_ARQUIVO)[number],
+  modelo: ModeloLeitura,
+  esforco?: 'low' | 'medium' | 'high'
+) {
   const supabase = await createClient()
   const [{ data: categorias }, { data: suprimentos }] = await Promise.all([
     supabase.from('categorias_despesa').select('nome').eq('ativo', true).order('nome'),
@@ -59,9 +73,57 @@ async function lerComIa(conteudo: Buffer, mediaType: (typeof TIPOS_ARQUIVO)[numb
     conteudo,
     mediaType,
     modelo,
+    esforco,
     categorias: (categorias ?? []).map((c) => c.nome as string),
     suprimentos: (suprimentos ?? []).map((s) => `${s.nome} (${s.unidade})`),
   })
+}
+
+/** Aplica à leitura o que a chave de acesso diz com certeza (emitente, número, série, tipo). */
+function conferirPelaChave(d: DocumentoLido): { documento: DocumentoLido; ajustes: string[] } {
+  const { campos, ajustes } = corrigirPelaChave(
+    { tipo: d.tipo, fornecedorDoc: d.fornecedor_doc ?? '', numero: d.numero ?? '', serie: d.serie ?? '', emissao: d.emissao ?? '' },
+    d.chave_acesso
+  )
+  if (!ajustes.length && campos.numero === (d.numero ?? '') && campos.serie === (d.serie ?? '')) return { documento: d, ajustes }
+  return {
+    documento: {
+      ...d,
+      tipo: campos.tipo as DocumentoLido['tipo'],
+      fornecedor_doc: campos.fornecedorDoc || null,
+      numero: campos.numero || null,
+      serie: campos.serie || null,
+    },
+    ajustes,
+  }
+}
+
+/**
+ * Lê com o modelo pedido e confere. Se o rápido errou algo que dá para
+ * provar (dígito de CNPJ ou chave, soma que não fecha, total ausente), relê
+ * uma vez com o preciso em esforço médio e fica com a leitura de menos
+ * problemas. O custo extra só aparece nas notas difíceis.
+ */
+async function lerEConferir(
+  conteudo: Buffer,
+  mediaType: (typeof TIPOS_ARQUIVO)[number],
+  modelo: ModeloLeitura
+): Promise<
+  | { ok: true; documento: DocumentoLido; original: DocumentoLido; modelo: ModeloLeitura; ajustes: string[]; releitura: string[] | null }
+  | { ok: false; erro: string }
+> {
+  const primeira = await lerComIa(conteudo, mediaType, modelo)
+  if (!primeira.ok) return primeira
+  const p1 = conferirPelaChave(primeira.documento)
+  const problemas = problemasDaLeitura(p1.documento)
+  const resultado = { ok: true as const, documento: p1.documento, original: primeira.documento, modelo, ajustes: p1.ajustes, releitura: null as string[] | null }
+  if (modelo !== 'rapido' || !problemas.length) return resultado
+
+  const segunda = await lerComIa(conteudo, mediaType, 'preciso', 'medium')
+  if (!segunda.ok) return resultado
+  const p2 = conferirPelaChave(segunda.documento)
+  if (problemasDaLeitura(p2.documento).length > problemas.length) return { ...resultado, releitura: problemas }
+  return { ok: true, documento: p2.documento, original: segunda.documento, modelo: 'preciso', ajustes: p2.ajustes, releitura: problemas }
 }
 
 /** Sobe o arquivo (já comprimido no aparelho) para o bucket privado. */
@@ -139,18 +201,23 @@ export async function lerDespesa(form: FormData): Promise<Resultado<{ rascunho: 
     return { ok: true, rascunho: { arquivoPath: caminho, origem, modo: 'manual', modelo: null, documento: null, erroLeitura: null } }
   }
 
-  const leitura = await lerComIa(conteudo, mediaType, modelo)
+  const leitura = await lerEConferir(conteudo, mediaType, modelo)
 
   return {
     ok: true,
-    rascunho: {
-      arquivoPath: caminho,
-      origem,
-      modo: leitura.ok ? 'ia' : 'manual',
-      modelo: leitura.ok ? leitura.modelo : null,
-      documento: leitura.ok ? leitura.documento : null,
-      erroLeitura: leitura.ok ? null : leitura.erro,
-    },
+    rascunho: leitura.ok
+      ? {
+          arquivoPath: caminho,
+          origem,
+          modo: 'ia',
+          modelo: leitura.modelo,
+          documento: leitura.documento,
+          erroLeitura: null,
+          ajustes: leitura.ajustes,
+          releitura: leitura.releitura,
+          leituraOriginal: leitura.original,
+        }
+      : { arquivoPath: caminho, origem, modo: 'manual', modelo: null, documento: null, erroLeitura: leitura.erro },
   }
 }
 
@@ -169,12 +236,22 @@ export async function relerDespesa(arquivoPath: string, modelo: ModeloLeitura): 
 
   const extensao = arquivoPath.slice(arquivoPath.lastIndexOf('.') + 1)
   const mediaType = (extensao === 'pdf' ? 'application/pdf' : extensao === 'png' ? 'image/png' : extensao === 'webp' ? 'image/webp' : 'image/jpeg') as (typeof TIPOS_ARQUIVO)[number]
-  const leitura = await lerComIa(Buffer.from(await data.arrayBuffer()), mediaType, modelo)
+  const leitura = await lerEConferir(Buffer.from(await data.arrayBuffer()), mediaType, modelo)
   if (!leitura.ok) return { ok: false, erro: leitura.erro }
 
   return {
     ok: true,
-    rascunho: { arquivoPath, origem: 'upload', modo: 'ia', modelo: leitura.modelo, documento: leitura.documento, erroLeitura: null },
+    rascunho: {
+      arquivoPath,
+      origem: 'upload',
+      modo: 'ia',
+      modelo: leitura.modelo,
+      documento: leitura.documento,
+      erroLeitura: null,
+      ajustes: leitura.ajustes,
+      releitura: leitura.releitura,
+      leituraOriginal: leitura.original,
+    },
   }
 }
 
@@ -200,6 +277,8 @@ const schemaDespesa = z.object({
   tipo: z.enum(TIPOS_DOCUMENTO),
   fornecedorNome: z.string().trim().max(200).nullable().optional(),
   fornecedorDoc: z.string().trim().max(20).nullable().optional(),
+  destinatarioNome: z.string().trim().max(200).nullable().optional(),
+  destinatarioDoc: z.string().trim().max(20).nullable().optional(),
   numero: z.string().trim().max(40).nullable().optional(),
   serie: z.string().trim().max(10).nullable().optional(),
   chaveAcesso: z.string().trim().max(44).nullable().optional(),
@@ -218,6 +297,13 @@ const schemaDespesa = z.object({
   observacoes: z.string().trim().max(1000).nullable().optional(),
   confianca: z.record(z.string(), z.number()).nullable().optional(),
   itens: z.array(schemaItem).min(1, 'A nota precisa ter ao menos um item').max(200),
+  /** O que a IA leu, como veio (só para medir o acerto; não muda nada do que é gravado). */
+  leituraIa: z
+    .object({ documento: z.record(z.string(), z.unknown()), releitura: z.array(z.string()).nullable().optional() })
+    .nullable()
+    .optional(),
+  /** Quem confere já viu o aviso de nota parecida e quer salvar mesmo assim. */
+  confirmarDuplicada: z.boolean().optional(),
 })
 
 export type DadosDespesa = z.input<typeof schemaDespesa>
@@ -227,7 +313,31 @@ function soDigitos(v: string | null | undefined) {
   return d.length ? d : null
 }
 
-export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id: string; avisoCustos: string | null }>> {
+/** Nota já lançada com o mesmo fornecedor, data e valor — provável repetição. */
+export type DuplicataProvavel = { fornecedor: string; numero: string | null; emissao: string; total: number }
+
+/** O que mudou entre a leitura da IA e o que foi salvo, para a métrica de acerto. */
+function camposAlterados(lido: Record<string, unknown>, d: z.output<typeof schemaDespesa>, docFornecedor: string | null, chave: string | null) {
+  const dig = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+  const semZeros = (v: unknown) => dig(v).replace(/^0+(?=\d)/, '')
+  const itensLidos = Array.isArray(lido.itens) ? (lido.itens as { valor_total?: number }[]) : []
+  const comparacoes: [string, boolean][] = [
+    ['tipo', lido.tipo === d.tipo],
+    ['fornecedor_doc', dig(lido.fornecedor_doc) === (docFornecedor ?? '')],
+    ['numero', semZeros(lido.numero) === semZeros(d.numero)],
+    ['serie', semZeros(lido.serie) === semZeros(d.serie)],
+    ['chave_acesso', dig(lido.chave_acesso) === (chave ?? '')],
+    ['emissao', lido.emissao === d.emissao],
+    ['total', Math.abs(Number(lido.total ?? 0) - d.total) < 0.005],
+    ['condicao_pagamento', (lido.condicao_pagamento ?? null) === d.condicao],
+    ['qtd_itens', itensLidos.length === d.itens.length],
+  ]
+  return comparacoes.filter(([, igual]) => !igual).map(([campo]) => campo)
+}
+
+export async function salvarDespesa(
+  dados: DadosDespesa
+): Promise<Resultado<{ id: string; avisoCustos: string | null }> | { ok: false; erro: string; duplicata: DuplicataProvavel }> {
   const perfil = await exigirAdmin()
   if (!perfil) return { ok: false, erro: 'Acesso negado.' }
 
@@ -239,6 +349,18 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
   if (chave && !chaveAcessoValida(chave)) return { ok: false, erro: 'Chave de acesso inválida: confira os 44 dígitos com o documento.' }
   const docFornecedor = soDigitos(d.fornecedorDoc)
   if (docFornecedor && !cnpjCpfValido(docFornecedor)) return { ok: false, erro: 'CNPJ/CPF do fornecedor inválido: confira os dígitos com o documento.' }
+  const docDestinatario = soDigitos(d.destinatarioDoc)
+  if (docDestinatario && !cnpjCpfValido(docDestinatario)) return { ok: false, erro: 'CNPJ/CPF do destinatário inválido: confira os dígitos ou apague o campo.' }
+
+  const emissao = avisoDaEmissao(d.emissao, hojeBrasilia())
+  if (emissao?.bloqueia) return { ok: false, erro: emissao.texto }
+
+  // A chave é a fonte mais confiável da nota: o que ela diz não pode divergir
+  const divergencias = divergenciasDaChave(
+    { tipo: d.tipo, fornecedorDoc: docFornecedor ?? '', numero: d.numero ?? '', serie: d.serie ?? '', emissao: d.emissao },
+    chave
+  )
+  if (divergencias.length) return { ok: false, erro: `Não bate com a chave de acesso: ${divergencias.join('; ')}. Corrija o campo ou confira a chave.` }
 
   if (!quitadaNaCompra(d.condicao)) {
     const erroParcelas = validarParcelas(d.parcelas, d.total)
@@ -246,12 +368,43 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
   }
 
   const supabase = await createClient()
+
+  // Mesmo fornecedor, mesmo dia e mesmo valor: quase sempre é a mesma nota
+  // lançada duas vezes (cupom sem chave, foto de novo). Avisa; quem confere decide
+  if (!d.confirmarDuplicada) {
+    const { data: parecidas } = await supabase
+      .from('despesas')
+      .select('fornecedor_nome, fornecedor_doc, numero, emissao, total')
+      .is('excluido_em', null)
+      .eq('emissao', d.emissao)
+      .eq('total', d.total)
+      .limit(20)
+    const nome = (d.fornecedorNome ?? '').trim().toLowerCase()
+    const igual = (parecidas ?? []).find((x) =>
+      docFornecedor && x.fornecedor_doc ? x.fornecedor_doc === docFornecedor : !!nome && String(x.fornecedor_nome ?? '').trim().toLowerCase() === nome
+    )
+    if (igual) {
+      return {
+        ok: false,
+        erro: 'Parece que esta nota já foi lançada.',
+        duplicata: {
+          fornecedor: String(igual.fornecedor_nome ?? d.fornecedorNome ?? 'fornecedor'),
+          numero: (igual.numero as string | null) ?? null,
+          emissao: String(igual.emissao),
+          total: Number(igual.total),
+        },
+      }
+    }
+  }
+
   const { data: despesa, error } = await supabase
     .from('despesas')
     .insert({
       tipo: d.tipo,
       fornecedor_nome: d.fornecedorNome || null,
       fornecedor_doc: docFornecedor,
+      destinatario_nome: d.destinatarioNome || null,
+      destinatario_doc: docDestinatario,
       numero: d.numero || null,
       serie: d.serie || null,
       chave_acesso: chave,
@@ -267,6 +420,16 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
       modo: d.modo,
       modelo_ia: d.modo === 'ia' ? d.modeloIa ?? null : null,
       confianca: d.confianca ?? null,
+      versao_prompt: d.modo === 'ia' ? VERSAO_PROMPT : null,
+      leitura_ia:
+        d.modo === 'ia' && d.leituraIa
+          ? {
+              modelo: d.modeloIa ?? null,
+              releitura: d.leituraIa.releitura ?? null,
+              alterados: camposAlterados(d.leituraIa.documento, d, docFornecedor, chave),
+              documento: d.leituraIa.documento,
+            }
+          : null,
       observacoes: d.observacoes || null,
       criado_por: perfil.id,
     })
@@ -274,6 +437,8 @@ export async function salvarDespesa(dados: DadosDespesa): Promise<Resultado<{ id
     .single()
 
   if (error) {
+    // Regras do gatilho `despesas_validar` (mesmo nº/série do fornecedor, data, chave)
+    if (error.hint === 'nota_invalida') return { ok: false, erro: error.message }
     if (error.code === '23505') return { ok: false, erro: 'Esta nota já foi lançada (mesma chave de acesso).' }
     return { ok: false, erro: error.message }
   }
