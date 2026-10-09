@@ -327,6 +327,18 @@ Hobby da Vercel não aceita cron horário.
   sai um e-mail de resumo para quem estiver em Configurações → Notificações → "Pendências de
   contas a pagar". Sem pendência, não sai nada.
 
+### Leitura de nota: conferência automática (09/10/2026)
+
+| Regra | Status |
+|---|---|
+| Chave de acesso válida corrige CNPJ/CPF, número, série e tipo lidos pela IA; divergência com a chave bloqueia o salvar (tela, servidor e gatilho `despesas_validar`) | ✅ |
+| Leitura rápida com erro provável (dígito de CNPJ/chave, soma ≠ total por mais de R$ 0,05, sem total ou sem itens) é relida uma vez, sozinha, pelo modelo preciso em esforço médio | ✅ |
+| Mesmo fornecedor + número + série já lançado é recusado no banco; mesmo fornecedor + data + valor pede confirmação | ✅ |
+| Emissão no futuro bloqueia; mais de 90 dias avisa | ✅ |
+| Comprador diferente do das notas anteriores (2+ notas) avisa — sem cadastro de CNPJ da empresa | ✅ |
+| `leitura_ia` + `versao_prompt` guardam a leitura original e o que a conferência mudou, para medir o acerto por modelo | ✅ |
+| Importar XML, ler QR code/código de barras e várias fotos num documento | a fazer |
+
 ### Limite de crédito só no portal (09/10/2026)
 
 | Regra | Status |

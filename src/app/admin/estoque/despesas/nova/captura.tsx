@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespesa } from '@/app/actions/despesas'
+import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespesa, type DuplicataProvavel } from '@/app/actions/despesas'
 import { criarSuprimento } from '@/app/actions/suprimentos'
 import CameraNota from './camera-nota'
 import { comprimir } from '@/lib/despesas/comprimir'
@@ -21,6 +21,9 @@ import { UNIDADES, type Unidade } from '@/lib/suprimentos/unidades'
 import { sugerirVinculo, parecidos, type VinculoAnterior } from '@/lib/suprimentos/sugerir-vinculo'
 import { paraNumeroBr } from '@/lib/numero'
 import { hojeBrasilia } from '@/lib/datas'
+import { divergenciasDaChave, corrigirPelaChave } from '@/lib/despesas/chave'
+import { avisoDaEmissao } from '@/lib/despesas/conferir'
+import { chaveAcessoValida } from '@/lib/despesas/validar'
 
 /**
  * Captura + conferência. Duas etapas:
@@ -77,6 +80,8 @@ type Form = {
   tipo: (typeof TIPOS_DOCUMENTO)[number]
   fornecedorNome: string
   fornecedorDoc: string
+  destinatarioNome: string
+  destinatarioDoc: string
   numero: string
   serie: string
   chaveAcesso: string
@@ -119,7 +124,7 @@ const itemVazio = (): ItemForm => ({ descricao: '', codigo: '', quantidade: '1',
 
 function formVazio(): Form {
   return {
-    tipo: 'outro', fornecedorNome: '', fornecedorDoc: '', numero: '', serie: '', chaveAcesso: '',
+    tipo: 'outro', fornecedorNome: '', fornecedorDoc: '', destinatarioNome: '', destinatarioDoc: '', numero: '', serie: '', chaveAcesso: '',
     emissao: hojeBrasilia(), formaPagamento: '', condicao: '', parcelas: [], subtotal: '', desconto: '', frete: '', impostos: '', total: '',
     observacoes: '', itens: [itemVazio()],
   }
@@ -129,10 +134,13 @@ export default function Captura({
   categorias,
   suprimentos: suprimentosIniciais,
   historico,
+  destinatarios,
 }: {
   categorias: Categoria[]
   suprimentos: Suprimento[]
   historico: VinculoAnterior[]
+  /** CNPJ/CPF que já apareceram como comprador em notas salvas — a empresa. */
+  destinatarios: string[]
 }) {
   const router = useRouter()
   const [suprimentos, setSuprimentos] = useState<Suprimento[]>(suprimentosIniciais)
@@ -157,6 +165,8 @@ export default function Captura({
   const inputAnexo = useRef<HTMLInputElement>(null)
   const [anexando, setAnexando] = useState(false)
   const [confirmarSemArquivo, setConfirmarSemArquivo] = useState(false)
+  /** Nota parecida já lançada: pop-up antes de salvar de novo. */
+  const [duplicata, setDuplicata] = useState<DuplicataProvavel | null>(null)
 
   async function escolher(f: File | undefined, de: 'camera' | 'upload') {
     if (!f) return
@@ -180,6 +190,8 @@ export default function Captura({
         tipo: d.tipo,
         fornecedorNome: d.fornecedor_nome ?? '',
         fornecedorDoc: d.fornecedor_doc ?? '',
+        destinatarioNome: d.destinatario_nome ?? '',
+        destinatarioDoc: d.destinatario_doc ?? '',
         numero: d.numero ?? '',
         serie: d.serie ?? '',
         chaveAcesso: d.chave_acesso ?? '',
@@ -391,8 +403,12 @@ export default function Captura({
     })
   }
 
-  function salvar(semArquivoConfirmado = false) {
+  function salvar(semArquivoConfirmado = false, duplicadaConfirmada = false) {
     setErro('')
+    if (bloqueio) {
+      setErro(bloqueio)
+      return
+    }
     if (!form.condicao) {
       setErro('Escolha como a nota foi paga (seção Pagamento).')
       return
@@ -407,6 +423,7 @@ export default function Captura({
       return
     }
     setConfirmarSemArquivo(false)
+    setDuplicata(null)
     const dados: DadosDespesa = {
       arquivoPath: rascunho?.arquivoPath ?? null,
       origem: rascunho?.origem ?? origem,
@@ -415,6 +432,8 @@ export default function Captura({
       tipo: form.tipo,
       fornecedorNome: form.fornecedorNome || null,
       fornecedorDoc: form.fornecedorDoc || null,
+      destinatarioNome: form.destinatarioNome || null,
+      destinatarioDoc: form.destinatarioDoc || null,
       numero: form.numero || null,
       serie: form.serie || null,
       chaveAcesso: form.chaveAcesso || null,
@@ -442,11 +461,17 @@ export default function Captura({
           suprimentoId: i.suprimentoId || null,
           confianca: i.confianca,
         })),
+      leituraIa:
+        rascunho?.modo === 'ia' && rascunho.leituraOriginal
+          ? { documento: rascunho.leituraOriginal as unknown as Record<string, unknown>, releitura: rascunho.releitura ?? null }
+          : null,
+      confirmarDuplicada: duplicadaConfirmada,
     }
     iniciar(async () => {
       const r = await salvarDespesa(dados)
       if (!r.ok) {
-        setErro(r.erro)
+        if ('duplicata' in r) setDuplicata(r.duplicata)
+        else setErro(r.erro)
         return
       }
       router.push('/admin/estoque/despesas')
@@ -460,6 +485,21 @@ export default function Captura({
   )
 
   const cls = (chave: string) => campo + ' ' + ((confianca[chave] ?? 1) < LIMIAR ? duvida : normal)
+
+  // Conferências ao vivo — as mesmas que o servidor e o banco fazem ao salvar
+  const chaveDigitos = form.chaveAcesso.replace(/\D/g, '')
+  const chaveErrada = chaveDigitos.length > 0 && !chaveAcessoValida(chaveDigitos)
+  const divergencias = divergenciasDaChave(form, form.chaveAcesso)
+  const avisoEmissao = avisoDaEmissao(form.emissao, hoje())
+  const destDoc = form.destinatarioDoc.replace(/\D/g, '')
+  const outraEmpresa = !!destDoc && destinatarios.length > 0 && !destinatarios.includes(destDoc)
+  const bloqueio = chaveErrada
+    ? 'A chave de acesso tem dígito errado: confira os 44 números ou apague o campo.'
+    : divergencias.length
+      ? `Não bate com a chave de acesso: ${divergencias.join('; ')}.`
+      : avisoEmissao?.bloqueia
+        ? avisoEmissao.texto
+        : ''
 
   /* ------------------------------ etapa 1 ------------------------------ */
   if (etapa === 'captura') {
@@ -503,7 +543,7 @@ export default function Captura({
             <p className="text-[11px] text-[#9B9A93] text-center mt-2">{(arquivo.size / 1024).toFixed(0)} KB · {arquivo.type}</p>
             <div className="flex flex-col sm:flex-row gap-2 mt-3">
               <button onClick={() => enviar(true)} disabled={lendo} className={botao + ' flex-1 bg-[#D8007A] text-white'}>
-                {lendo ? 'LENDO A NOTA… (até 30 s)' : 'LER COM IA E CONFERIR'}
+                {lendo ? 'LENDO A NOTA… (até 1 minuto)' : 'LER COM IA E CONFERIR'}
               </button>
               <button onClick={() => enviar(false)} disabled={lendo} className={botao + ' flex-1 border border-[#131A2E] bg-white'}>
                 PREENCHER À MÃO
@@ -541,6 +581,17 @@ export default function Captura({
               </button>
             )}
           </div>
+        )}
+        {rascunho?.modo === 'ia' && !!rascunho.releitura?.length && (
+          <p className="text-xs text-[#6B5320] bg-[#FFFBEE] border border-[#C79600] rounded-sm px-3 py-2 mb-3">
+            A leitura rápida veio com problema ({rascunho.releitura.join('; ')}), então o modelo preciso releu sozinho
+            {rascunho.modelo === 'preciso' ? '.' : ', mas não fez melhor — ficou a leitura rápida.'} Confira com atenção.
+          </p>
+        )}
+        {rascunho?.modo === 'ia' && !!rascunho.ajustes?.length && (
+          <p className="text-xs text-[#2E7D4F] bg-[#E3F0E8] border border-[#2E7D4F] rounded-sm px-3 py-2 mb-3">
+            ✓ Corrigido pela chave de acesso: {rascunho.ajustes.join(', ')}. A chave tem dígito verificador, então ela vale mais que a leitura da imagem.
+          </p>
         )}
         {rascunho?.modo === 'manual' && rascunho.arquivoPath && (
           <div className="text-xs text-[#6E6E68] bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm px-3 py-2 mb-3 flex flex-wrap items-center gap-2">
@@ -583,8 +634,38 @@ export default function Captura({
             <input value={form.fornecedorDoc} onChange={(e) => setForm({ ...form, fornecedorDoc: e.target.value })} inputMode="numeric" className={cls('fornecedor')} />
           </label>
           <label className={rotulo + ' col-span-2 sm:col-span-3'}>CHAVE DE ACESSO (44 dígitos)
-            <input value={form.chaveAcesso} onChange={(e) => setForm({ ...form, chaveAcesso: e.target.value })} inputMode="numeric" className={campo + ' ' + normal + ' font-mono text-xs'} />
+            <input value={form.chaveAcesso} onChange={(e) => setForm({ ...form, chaveAcesso: e.target.value })} inputMode="numeric" className={campo + ' ' + (chaveErrada || divergencias.length ? duvida : normal) + ' font-mono text-xs'} />
           </label>
+          <label className={rotulo + ' col-span-2 sm:col-span-3'}>COMPRADOR (DESTINATÁRIO)
+            <input value={form.destinatarioNome} onChange={(e) => setForm({ ...form, destinatarioNome: e.target.value })} className={campo + ' ' + (outraEmpresa ? duvida : normal)} placeholder="quem aparece como comprador na nota" />
+          </label>
+          <label className={rotulo}>CNPJ / CPF DO COMPRADOR
+            <input value={form.destinatarioDoc} onChange={(e) => setForm({ ...form, destinatarioDoc: e.target.value })} inputMode="numeric" className={campo + ' ' + (outraEmpresa ? duvida : normal)} />
+          </label>
+          {chaveErrada && (
+            <p className="col-span-2 sm:col-span-4 text-xs text-[#B00063]">A chave de acesso tem dígito errado: confira os 44 números com o documento, ou apague o campo.</p>
+          )}
+          {divergencias.length > 0 && (
+            <p className="col-span-2 sm:col-span-4 text-xs text-[#B00063]">
+              Não bate com a chave de acesso: {divergencias.join('; ')}.{' '}
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, ...corrigirPelaChave(f, f.chaveAcesso).campos, tipo: corrigirPelaChave(f, f.chaveAcesso).campos.tipo as Form['tipo'] }))}
+                className="underline font-semibold"
+              >
+                usar o que a chave diz
+              </button>{' '}
+              (a data só se corrige à mão) ou confira a chave.
+            </p>
+          )}
+          {avisoEmissao && (
+            <p className={'col-span-2 sm:col-span-4 text-xs ' + (avisoEmissao.bloqueia ? 'text-[#B00063]' : 'text-[#8A6100]')}>{avisoEmissao.texto}</p>
+          )}
+          {outraEmpresa && (
+            <p className="col-span-2 sm:col-span-4 text-xs text-[#8A6100]">
+              O comprador desta nota não é o das notas anteriores. Confira se é mesmo uma compra da empresa (e não uma nota pessoal ou de outra empresa).
+            </p>
+          )}
         </div>
 
         <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-5 mb-2 flex items-center gap-2">
@@ -815,7 +896,7 @@ export default function Captura({
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 mt-4">
-          <button onClick={() => salvar()} disabled={pendente || totalInformado <= 0} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
+          <button onClick={() => salvar()} disabled={pendente || totalInformado <= 0 || !!bloqueio} title={bloqueio || undefined} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
             {pendente ? 'SALVANDO…' : 'SALVAR DESPESA'}
           </button>
           <button onClick={() => { setEtapa('captura'); setErro('') }} disabled={pendente} className={botao + ' border border-[#131A2E] bg-white'}>
@@ -851,6 +932,31 @@ export default function Captura({
               </button>
             </div>
             <button onClick={() => setConfirmarSemArquivo(false)} className="w-full text-xs text-[#6E6E68] underline mt-3">
+              voltar para a nota
+            </button>
+          </div>
+        </div>
+      )}
+
+      {duplicata && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Nota parecida já lançada">
+          <div className="bg-white rounded-sm w-full max-w-md p-5 shadow-xl">
+            <p className="font-semibold tracking-tight text-[#131A2E]">Esta nota parece já ter sido lançada</p>
+            <p className="text-sm text-[#6E6E68] mt-2 leading-relaxed">
+              Já existe uma nota de <strong>{duplicata.fornecedor}</strong>
+              {duplicata.numero ? <> (nº {duplicata.numero})</> : null} emitida em{' '}
+              <strong>{duplicata.emissao.split('-').reverse().join('/')}</strong> no valor de <strong>R$ {brl(duplicata.total)}</strong>.
+              Lançar de novo duplica a despesa, o estoque e a conta a pagar.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 mt-5">
+              <button onClick={() => router.push('/admin/estoque/despesas')} disabled={pendente} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
+                NÃO SALVAR — VER AS NOTAS
+              </button>
+              <button onClick={() => salvar(true, true)} disabled={pendente} className={botao + ' flex-1 border border-[#131A2E] bg-white'}>
+                {pendente ? 'SALVANDO…' : 'É OUTRA COMPRA — SALVAR'}
+              </button>
+            </div>
+            <button onClick={() => setDuplicata(null)} className="w-full text-xs text-[#6E6E68] underline mt-3">
               voltar para a nota
             </button>
           </div>
