@@ -1,5 +1,31 @@
--- Desfaz 20261009130000_agrupar_sem_preco_medio.sql: volta a função de
--- 20261008160000 (preço médio em todos os itens do agrupador)
+-- Desfaz 20261009130000_agrupar_sem_preco_medio.sql: volta a chave única
+-- (pedido, arte) e a função de 20261008160000 (preço médio nos itens do
+-- agrupador). Se algum agrupador já tiver a mesma arte em duas linhas (preços
+-- diferentes), a chave antiga não volta: desagrupe esses pedidos antes.
+
+do $$
+declare
+  v_pedidos text;
+begin
+  select string_agg(distinct '#' || p.numero, ', ')
+    into v_pedidos
+    from public.pedido_itens i
+    join public.pedidos p on p.id = i.pedido_id
+   where (i.pedido_id, i.produto_id) in (
+           select pedido_id, produto_id from public.pedido_itens
+            group by pedido_id, produto_id having count(*) > 1);
+  if v_pedidos is not null then
+    raise exception 'Pedidos com a mesma arte em mais de uma linha: %. Desagrupe-os antes de desfazer.', v_pedidos;
+  end if;
+end;
+$$;
+
+alter table public.pedido_itens
+  drop constraint pedido_itens_pedido_produto_preco_key;
+
+alter table public.pedido_itens
+  add constraint pedido_itens_pedido_id_produto_id_key
+  unique (pedido_id, produto_id);
 
 create or replace function public.agrupar_pedidos(p_pedido_ids uuid[], p_notas text default null)
 returns uuid

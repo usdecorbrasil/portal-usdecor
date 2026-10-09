@@ -4,13 +4,42 @@
 -- Antes, o agrupador recebia em todos os itens o preço médio do metro
 -- (soma dos valores ÷ soma das metragens). Agora:
 --   - cada arte leva o preço do metro do pedido original de onde veio;
---   - a mesma arte em pedidos com preços diferentes recusa o agrupamento,
---     dizendo qual arte e quais preços (não cabe numa linha só);
+--   - a mesma arte pode ter preços diferentes: vira uma linha por preço.
+--     Para isso a chave única de pedido_itens passa de (pedido, arte) para
+--     (pedido, arte, preço). Num pedido comum todos os itens têm o mesmo
+--     preço (o do cliente, congelado), então lá nada muda: a mesma arte
+--     continua não podendo entrar duas vezes;
 --   - o total do agrupador é a soma exata dos originais;
 --   - o histórico deixa de citar "preço médio".
 -- No Bling o agrupador já vai com uma linha por pedido original.
 -- O resto da função é igual a 20261008160000.
 -- ============================================================================
+
+-- Trava: nenhuma função do banco pode depender da chave antiga num
+-- ON CONFLICT — sem a restrição, ela quebraria na hora de rodar
+do $$
+declare
+  v_funcoes text;
+begin
+  select string_agg(p.proname, ', ')
+    into v_funcoes
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.prosrc ilike '%pedido_itens%'
+     and p.prosrc ~* 'on\s+conflict\s*\(\s*pedido_id\s*,\s*produto_id\s*\)';
+  if v_funcoes is not null then
+    raise exception 'Funções usam ON CONFLICT (pedido_id, produto_id) em pedido_itens: %', v_funcoes;
+  end if;
+end;
+$$;
+
+alter table public.pedido_itens
+  drop constraint pedido_itens_pedido_id_produto_id_key;
+
+alter table public.pedido_itens
+  add constraint pedido_itens_pedido_produto_preco_key
+  unique (pedido_id, produto_id, preco_unitario);
 
 create or replace function public.agrupar_pedidos(p_pedido_ids uuid[], p_notas text default null)
 returns uuid
@@ -23,7 +52,6 @@ declare
   v_clientes    integer;
   v_cliente     uuid;
   v_valor       numeric(12,2);
-  v_conflito    text;
   v_metragem    numeric;
   v_novo        uuid;
   v_numero      bigint;
@@ -94,25 +122,6 @@ begin
     raise exception 'Pedidos sem valor não podem ser agrupados';
   end if;
 
-  -- Sem preço médio: cada arte leva o preço do metro do pedido de onde veio.
-  -- A mesma arte em dois pedidos com preços diferentes não cabe numa linha
-  -- (chave única pedido_id + produto_id), então esses não se agrupam
-  select string_agg(x.sku || ' (' || x.precos || ')', '; ' order by x.sku)
-    into v_conflito
-    from (
-      select min(i.sku) as sku,
-             string_agg(distinct '#' || p.numero || ' R$ ' || to_char(i.preco_unitario, 'FM999G990D00') || '/m', ', ') as precos
-        from public.pedido_itens i
-        join public.pedidos p on p.id = i.pedido_id
-       where i.pedido_id = any(p_pedido_ids)
-       group by i.produto_id
-      having count(distinct i.preco_unitario) > 1
-    ) x;
-
-  if v_conflito is not null then
-    raise exception 'Não dá para agrupar: a mesma arte está em pedidos com preço do metro diferente — %. Fature esses pedidos separadamente.', v_conflito;
-  end if;
-
   select * into v_ref from public.pedidos where id = p_pedido_ids[1];
 
   select string_agg('#' || numero, ', ' order by numero) into v_lista
@@ -135,18 +144,18 @@ begin
   from public.pedidos p where p.id = any(p_pedido_ids)
   returning id, numero into v_novo, v_numero;
 
-  -- Uma linha por arte: a mesma arte em dois pedidos vira quantidade somada
-  -- (pedido_itens tem chave única pedido_id + produto_id), com o preço do
-  -- pedido de origem — o mesmo em todos, conferido acima
+  -- Uma linha por arte e preço: cada arte leva o preço do metro do pedido de
+  -- onde veio. A mesma arte em dois pedidos com o mesmo preço vira quantidade
+  -- somada; com preços diferentes, uma linha para cada preço
   insert into public.pedido_itens
     (pedido_id, produto_id, sku, nome, preco_unitario,
      quantidade_pedida, quantidade_faturada, metros_por_unidade)
   select v_novo, i.produto_id,
-         min(i.sku), min(i.nome), min(i.preco_unitario),
+         min(i.sku), min(i.nome), i.preco_unitario,
          sum(i.quantidade_pedida), sum(i.quantidade_faturada), max(i.metros_por_unidade)
     from public.pedido_itens i
    where i.pedido_id = any(p_pedido_ids)
-   group by i.produto_id;
+   group by i.produto_id, i.preco_unitario;
 
   -- O valor é a soma exata dos originais, cada um com o seu preço — nunca
   -- metragem × um preço médio
