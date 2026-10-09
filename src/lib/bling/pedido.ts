@@ -2,6 +2,7 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { chamarBling } from './cliente'
 import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
+import { hojeBrasilia } from '@/lib/datas'
 
 /**
  * Cria o pedido de venda no Bling ao faturar.
@@ -328,7 +329,7 @@ export async function criarPedidoNoBling(
     parcelas.length || 1
   )
 
-  const hoje = new Date().toISOString().slice(0, 10)
+  const hoje = hojeBrasilia()
 
   // As notas do agrupador já trazem o rastreio longo (metragem e valor de
   // cada original); nos demais, são as notas do cliente

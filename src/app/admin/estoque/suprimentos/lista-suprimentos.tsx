@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { criarSuprimento, editarSuprimento, movimentarSuprimento } from '@/app/actions/suprimentos'
 import { UNIDADES } from '@/lib/suprimentos/unidades'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
+import { paraNumeroBr } from '@/lib/numero'
 
 export type SuprimentoLinha = {
   id: string
@@ -72,7 +73,7 @@ export default function ListaSuprimentos({
   const [movendo, setMovendo] = useState<string | null>(null)
   const [mov, setMov] = useState<{ tipo: 'consumo' | 'ajuste'; quantidade: string; observacao: string }>({ tipo: 'consumo', quantidade: '', observacao: '' })
 
-  const num = (s: string) => Number(String(s).replace(',', '.'))
+  const num = (s: string) => paraNumeroBr(s)
 
   function depois(r: { ok: boolean; erro?: string }) {
     if (!r.ok) {

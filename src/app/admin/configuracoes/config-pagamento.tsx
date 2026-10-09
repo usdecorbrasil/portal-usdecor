@@ -11,6 +11,7 @@ import {
   type ConfigPagamento,
   type Forma,
 } from '@/lib/pagamento/config'
+import { paraNumeroBr } from '@/lib/numero'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -317,7 +318,7 @@ function Campo({
             setTexto(e.target.value)
             const n = inteiro
               ? parseInt(e.target.value, 10)
-              : Number(e.target.value.replace(',', '.'))
+              : paraNumeroBr(e.target.value)
             if (Number.isFinite(n) && n >= 0) onChange(n)
           }}
           onBlur={() => setTexto(String(valor))}

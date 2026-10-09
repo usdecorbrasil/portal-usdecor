@@ -4,11 +4,12 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { paraNumeroBr } from '@/lib/numero'
 
 /** Medida opcional, só referência — não entra em nenhum cálculo de valor */
 const medidaBr = (campo: string) =>
   z.string().trim()
-    .transform((v) => (v === '' ? null : Number(v.replace(',', '.'))))
+    .transform((v) => (v === '' ? null : paraNumeroBr(v)))
     .refine(
       (v) => v === null || (!isNaN(v) && v > 0 && v <= 1000),
       `${campo} inválida`

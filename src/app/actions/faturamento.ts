@@ -17,6 +17,7 @@ import { urlDoSite } from '@/lib/site'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateBloqueioCredito } from '@/lib/resend/templates/bloqueio-credito'
 import { registrar } from '@/lib/auditoria'
+import { hojeBrasilia } from '@/lib/datas'
 
 /**
  * Faturamento a partir de "Pedido pronto".
@@ -452,7 +453,7 @@ async function lancarContasCartao(p: Pedido): Promise<Resultado> {
   const esperados =
     parcelas.length > 0
       ? parcelas.map((x) => ({ valor: Number(x.valor), vencimento: String(x.vencimento).slice(0, 10) }))
-      : [{ valor: totalCobrado, vencimento: p.vencimento_avista ?? new Date().toISOString().slice(0, 10) }]
+      : [{ valor: totalCobrado, vencimento: p.vencimento_avista ?? hojeBrasilia() }]
 
   const r = await lancarEObterContas(contatoId, Number(p.bling_pedido_id), esperados)
   if (!r.ok) return { ok: false, erro: r.erro }
@@ -645,7 +646,7 @@ async function gerarCobrancaInterno(p: Pedido): Promise<Resultado> {
   const esperados =
     parcelas.length > 0
       ? parcelas.map((x) => ({ valor: Number(x.valor), vencimento: String(x.vencimento).slice(0, 10) }))
-      : [{ valor: totalCobrado, vencimento: p.vencimento_avista ?? new Date().toISOString().slice(0, 10) }]
+      : [{ valor: totalCobrado, vencimento: p.vencimento_avista ?? hojeBrasilia() }]
 
   const r = await gerarEObterCobrancas(contatoId, Number(p.bling_pedido_id), esperados)
   if (!r.ok) return { ok: false, erro: r.erro }

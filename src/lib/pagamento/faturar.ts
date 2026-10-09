@@ -16,6 +16,7 @@ import {
   type ConfigPagamento,
   type Forma,
 } from './config'
+import { hojeBrasilia } from '@/lib/datas'
 
 export const FORMAS_FATURA = [
   'boleto_avista',
@@ -47,12 +48,9 @@ export function configDaForma(config: ConfigPagamento, forma: string): ConfigFor
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-/** Hoje em AAAA-MM-DD, no fuso de quem está na tela. */
+/** Hoje em AAAA-MM-DD, no fuso de Brasília (o mesmo que o banco usa). */
 export function hojeIso(): string {
-  const d = new Date()
-  const mes = String(d.getMonth() + 1).padStart(2, '0')
-  const dia = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mes}-${dia}`
+  return hojeBrasilia()
 }
 
 /** Soma dias a uma data AAAA-MM-DD, sem fuso. */

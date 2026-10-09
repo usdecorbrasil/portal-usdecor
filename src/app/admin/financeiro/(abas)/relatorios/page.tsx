@@ -4,6 +4,7 @@ import { gerarRelatorio, relatorioEstampa } from '@/app/actions/relatorios'
 import FiltrosRelatorio from './filtros'
 import Exportar from './exportar'
 import SeletorTipo, { type TipoRelatorio } from './seletor-tipo'
+import { hojeBrasilia } from '@/lib/datas'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -14,7 +15,7 @@ function inicioDoMes() {
 }
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10)
+  return hojeBrasilia()
 }
 
 export default async function RelatoriosPage({

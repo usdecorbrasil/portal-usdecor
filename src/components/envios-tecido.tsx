@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { anexarNf, conferirEnvio, recusarEnvio } from '@/app/actions/envio-tecido'
 import { ROTULO_SITUACAO_ENVIO, type SituacaoEnvio } from '@/lib/estoque/tipos'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
+import { paraNumeroBr } from '@/lib/numero'
 
 const m = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
@@ -157,7 +158,7 @@ function Conferencia({ envio: e }: { envio: EnvioLinha }) {
 
   function confirmar() {
     setErro('')
-    const n = Number(metros.replace(',', '.'))
+    const n = paraNumeroBr(metros)
     if (!Number.isFinite(n) || n <= 0) return setErro('Informe a metragem conferida.')
     iniciar(async () => {
       const r = await conferirEnvio(e.id, n, obs.trim() || undefined)

@@ -865,6 +865,15 @@ Supabase Pro (~US$25) + Vercel Pro (~US$20) + Resend (grátis até 3.000 e-mails
   pedidos (via `confirmarRomaneio`), e no topo fazia a rota `/admin/pedidos` carregar o
   binário a cada início frio.
 
+## Datas e números (09/10/2026)
+
+- **"Hoje" é sempre o de Brasília**: `hojeBrasilia()` em `src/lib/datas.ts` no app e
+  `public.hoje_brasilia()` no banco (migration `20261009110000`). Servidor e banco rodam em
+  UTC; `new Date().toISOString().slice(0, 10)` e `current_date` viram o dia às 21h.
+  As validações do Faturar (vencimento) e da baixa de conta a pagar já usam a função.
+- **Número digitado**: `paraNumeroBr()` em `src/lib/numero.ts` ("1.234,56", "10.000",
+  "1,5" e "1.5" saem certos; inválido = NaN). Não usar `Number(x.replace(',', '.'))`.
+
 ## Convenções
 
 - Nomes de tabelas/colunas em português, snake_case.

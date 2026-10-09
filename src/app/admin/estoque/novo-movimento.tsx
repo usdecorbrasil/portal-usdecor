@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { registrarMovimento } from '@/app/actions/estoque'
 import type { TipoMovimento } from '@/lib/estoque/tipos'
+import { paraNumeroBr } from '@/lib/numero'
 
 const TIPOS: { chave: TipoMovimento; rotulo: string; dica: string }[] = [
   { chave: 'entrada', rotulo: 'Entrada', dica: 'Tecido que chegou do cliente, já conferido' },
@@ -36,7 +37,7 @@ export default function NovoMovimento({
   function salvar() {
     setErro('')
     setFeito('')
-    const n = Number(metros.replace(',', '.'))
+    const n = paraNumeroBr(metros)
     if (!clienteId) return setErro('Escolha o cliente.')
     if (!tecidoId) return setErro('Escolha o tecido.')
     if (!Number.isFinite(n) || (tipo === 'ajuste' ? n === 0 : n <= 0)) {

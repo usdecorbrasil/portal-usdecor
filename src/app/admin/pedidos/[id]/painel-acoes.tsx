@@ -38,6 +38,7 @@ import {
   ModalConfirmarStatus,
   type Item,
 } from '../modais-status'
+import { paraNumeroBr } from '@/lib/numero'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1650,7 +1651,7 @@ function TelaPreco({
   const [motivo, setMotivo] = useState('')
   const [aviso, setAviso] = useState('')
 
-  const novo = Number(valor.replace(',', '.'))
+  const novo = paraNumeroBr(valor)
   const valido = !isNaN(novo) && novo > 0
 
   // O valor do pedido só existe depois que a metragem real é informada
@@ -2243,7 +2244,7 @@ function TelaReimpressao({
   const [aviso, setAviso] = useState('')
   const [confirmando, setConfirmando] = useState(false)
 
-  const metrosNum = Number(metrosTecido.replace(',', '.'))
+  const metrosNum = paraNumeroBr(metrosTecido)
 
   function seguir() {
     if (motivo.trim().length < 10) {
@@ -2672,7 +2673,7 @@ function TelaMetragem({
   const [motivo, setMotivo] = useState('')
   const [aviso, setAviso] = useState('')
 
-  const nova = Number(valor.replace(',', '.'))
+  const nova = paraNumeroBr(valor)
   const valida = Number.isFinite(nova) && nova > 0
 
   function salvar() {
