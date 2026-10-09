@@ -1,6 +1,8 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { chamarBling } from './cliente'
+import { liberarLimiteNoBling } from './contato'
+import { registrar } from '@/lib/auditoria'
 import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
 import { hojeBrasilia } from '@/lib/datas'
 
@@ -204,7 +206,7 @@ export async function criarPedidoNoBling(
       numero, total, metragem_impressa, forma_pagamento, notas, emitir_nf,
       taxa_pagamento_percentual, taxa_pagamento_fixa,
       bling_pedido_id, vencimento_avista,
-      clientes(razao_social, cnpj),
+      cliente_id, clientes(razao_social, cnpj),
       pedido_itens(preco_unitario),
       pedido_parcelas(numero, valor, vencimento)
     `)
@@ -224,6 +226,7 @@ export async function criarPedidoNoBling(
     taxa_pagamento_percentual: number | string | null
     taxa_pagamento_fixa: number | string | null
     bling_pedido_id: number | null
+    cliente_id: string
     clientes: { razao_social: string; cnpj: string } | null
     pedido_itens: { preco_unitario: number | string | null }[]
     pedido_parcelas: {
@@ -478,10 +481,45 @@ export async function criarPedidoNoBling(
 
   await pausa()
 
-  const rCriar = await chamarBling('/pedidos/vendas', {
+  let rCriar = await chamarBling('/pedidos/vendas', {
     method: 'POST',
     body: JSON.stringify(corpo),
   })
+
+  // Limite de crédito é só do portal, que já aprovou no Faturar. Se o
+  // cadastro do cliente no Bling tem limite próprio e barrou, tira o limite
+  // de lá e tenta uma vez de novo
+  if (!rCriar.ok && /limite de cr[eé]dito/i.test(rCriar.erro)) {
+    await pausa()
+    const liberado = await liberarLimiteNoBling(Number(contato.id))
+    if (!liberado.ok) {
+      return {
+        ok: false,
+        erro: `O Bling barrou pelo limite de crédito do cadastro do cliente lá, e o portal não conseguiu tirá-lo (${liberado.erro}). No Bling: Contatos → ${p.clientes?.razao_social ?? 'cliente'} → Limite de crédito → "Limite ilimitado". O controle de crédito é do portal.`.slice(0, 500),
+      }
+    }
+    if (liberado.alterado) await registrar({
+      entidade: 'cliente',
+      entidadeId: p.cliente_id,
+      acao: 'editou',
+      campos: [
+        {
+          campo: 'Limite de crédito no Bling',
+          de: liberado.antes != null ? `R$ ${liberado.antes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'definido no Bling',
+          para: 'sem limite (o controle é do portal)',
+        },
+      ],
+      motivo: `O Bling recusou o pedido #${p.numero} pelo limite do cadastro de lá; o limite vale só no portal.`,
+    })
+    await pausa()
+    rCriar = await chamarBling('/pedidos/vendas', { method: 'POST', body: JSON.stringify(corpo) })
+    if (!rCriar.ok && /limite de cr[eé]dito/i.test(rCriar.erro)) {
+      return {
+        ok: false,
+        erro: `O Bling continua barrando pelo limite de crédito do cadastro do cliente lá. No Bling: Contatos → ${p.clientes?.razao_social ?? 'cliente'} → Limite de crédito → marque "Limite ilimitado" e clique em Faturar de novo. O controle de crédito é do portal.`.slice(0, 500),
+      }
+    }
+  }
 
   if (!rCriar.ok) {
     return { ok: false, erro: `O Bling recusou o pedido de venda: ${rCriar.erro}`.slice(0, 500) }

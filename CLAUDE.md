@@ -246,6 +246,19 @@ ali a imagem é o conteúdo.
   - Os 4 clientes reais tiveram os dados fiscais **importados do Bling em 12/09/2026**
     (IE, indicador, endereço completo) e já estão vinculados por `bling_contato_id`.
     Foi uma importação pontual, feita por script; não existe tela para isso.
+- **Limite de crédito só no portal** (decisão do dono, 09/10/2026). O contato no Bling tem
+  limite próprio, que soma tudo o que o Bling tem em aberto para o cliente (inclusive
+  contas que o portal não conhece) e recusou o pedido #1025 ("O limite de crédito do
+  cliente não permite a inclusão deste pedido"). Quando o Bling recusa por limite,
+  `criarPedidoNoBling` chama `liberarLimiteNoBling` (`src/lib/bling/contato.ts`: GET,
+  mescla e PUT com `financeiro.limiteCredito = 0`), registra em `auditoria` e tenta o
+  pedido uma vez de novo. Se ainda barrar, a mensagem manda marcar "Limite ilimitado" no
+  contato do Bling. Para limpar de uma vez, Configurações → Bling → "Tirar o limite do
+  Bling de todos os clientes" (`tirarLimitesNoBling` em `actions/bling.ts`): passa por
+  todos os clientes (vínculo gravado ou busca por CNPJ), pula quem já está sem limite e
+  registra cada mudança na auditoria do cliente. Cliente novo ou editado no portal já vai
+  ao Bling com `financeiro.limiteCredito = 0` (`corpoDoContato`, com o bloco `financeiro`
+  mesclado como o `endereco`).
 - **Limite de crédito não é alterável por fora.** Há trava no banco exigindo
   `atualizar_limite_credito()`, e a função identifica quem chama pela sessão — chave de
   serviço não passa. Só pelo portal, logado como admin/financeiro, e com motivo, que vai

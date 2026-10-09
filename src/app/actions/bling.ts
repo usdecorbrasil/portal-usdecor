@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { chamarBling } from '@/lib/bling/cliente'
 import { sincronizarPedidoComBling } from '@/lib/bling/pedido'
+import { liberarLimiteNoBling, idDoContatoNoBling } from '@/lib/bling/contato'
+import { registrar } from '@/lib/auditoria'
 import { enviarCobrancaPedido } from '@/lib/cobranca/enviar'
 
 type Resultado =
@@ -88,3 +90,59 @@ export async function reenviarPedidoAoBling(
 
   return { ok: false, erro: data?.bling_erro ?? 'Não foi possível enviar ao Bling.' }
 }
+
+export type LimiteBlingCliente = {
+  cliente: string
+  situacao: 'tirado' | 'ja_sem_limite' | 'fora_do_bling' | 'erro'
+  detalhe: string | null
+}
+
+/**
+ * Tira o limite de crédito do cadastro de TODOS os clientes no Bling — o
+ * limite vale só no portal (decisão do dono, 09/10/2026). Contato já sem
+ * limite não é regravado; cada um que muda fica na auditoria do cliente.
+ * Uma chamada por vez, com a pausa do limite de 3 requisições por segundo.
+ */
+export async function tirarLimitesNoBling(): Promise<{ ok: true; resultado: LimiteBlingCliente[] } | { ok: false; erro: string }> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+
+  const { data: clientes, error } = await createAdminClient()
+    .from('clientes')
+    .select('id, razao_social, cnpj, bling_contato_id')
+    .order('razao_social')
+  if (error) return { ok: false, erro: error.message }
+
+  const pausa = () => new Promise((r) => setTimeout(r, 400))
+  const resultado: LimiteBlingCliente[] = []
+
+  for (const c of clientes ?? []) {
+    const nome = String(c.razao_social ?? 'cliente')
+    const id = await idDoContatoNoBling(c)
+    if (!id) {
+      resultado.push({ cliente: nome, situacao: 'fora_do_bling', detalhe: null })
+      continue
+    }
+    await pausa()
+    const r = await liberarLimiteNoBling(id)
+    if (!r.ok) {
+      resultado.push({ cliente: nome, situacao: 'erro', detalhe: r.erro })
+    } else if (!r.alterado) {
+      resultado.push({ cliente: nome, situacao: 'ja_sem_limite', detalhe: null })
+    } else {
+      const antes = `R$ ${(r.antes ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+      resultado.push({ cliente: nome, situacao: 'tirado', detalhe: antes })
+      await registrar({
+        entidade: 'cliente',
+        entidadeId: String(c.id),
+        acao: 'editou',
+        campos: [{ campo: 'Limite de crédito no Bling', de: antes, para: 'sem limite (o controle é do portal)' }],
+        motivo: 'Limite de crédito tirado do Bling para todos os clientes: o limite vale só no portal.',
+      })
+    }
+    await pausa()
+  }
+
+  revalidatePath('/admin/clientes')
+  return { ok: true, resultado }
+}
+
