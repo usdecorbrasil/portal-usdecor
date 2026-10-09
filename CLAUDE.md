@@ -253,7 +253,10 @@ ali a imagem é o conteúdo.
   `criarPedidoNoBling` chama `liberarLimiteNoBling` (`src/lib/bling/contato.ts`: GET,
   mescla e PUT com `financeiro.limiteCredito = 0`), registra em `auditoria` e tenta o
   pedido uma vez de novo. Se ainda barrar, a mensagem manda marcar "Limite ilimitado" no
-  contato do Bling. Cliente que fatura normalmente não é tocado.
+  contato do Bling. Para limpar de uma vez, Configurações → Bling → "Tirar o limite do
+  Bling de todos os clientes" (`tirarLimitesNoBling` em `actions/bling.ts`): passa por
+  todos os clientes (vínculo gravado ou busca por CNPJ), pula quem já está sem limite e
+  registra cada mudança na auditoria do cliente.
 - **Limite de crédito não é alterável por fora.** Há trava no banco exigindo
   `atualizar_limite_credito()`, e a função identifica quem chama pela sessão — chave de
   serviço não passa. Só pelo portal, logado como admin/financeiro, e com motivo, que vai

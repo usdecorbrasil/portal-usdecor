@@ -244,13 +244,15 @@ export async function tentarSincronizarContato(
  */
 export async function liberarLimiteNoBling(
   contatoId: number
-): Promise<{ ok: true; antes: number | null } | { ok: false; erro: string }> {
+): Promise<{ ok: true; antes: number | null; alterado: boolean } | { ok: false; erro: string }> {
   const rAtual = await chamarBling(`/contatos/${contatoId}`)
   if (!rAtual.ok) return { ok: false, erro: `Falha ao ler contato no Bling: ${rAtual.erro.slice(0, 200)}` }
 
   const atual = ((rAtual.dados as { data?: Record<string, unknown> })?.data ?? {}) as Record<string, unknown>
   const financeiro = (atual.financeiro as Record<string, unknown> | undefined) ?? {}
   const antes = typeof financeiro.limiteCredito === 'number' ? financeiro.limiteCredito : null
+  // Já sem limite: não regrava o contato à toa
+  if (!antes) return { ok: true, antes, alterado: false }
 
   const mesclado: Record<string, unknown> = { ...atual, financeiro: { ...financeiro, limiteCredito: 0 } }
   delete mesclado.id
@@ -259,6 +261,17 @@ export async function liberarLimiteNoBling(
   const rPut = await chamarBling(`/contatos/${contatoId}`, { method: 'PUT', body: JSON.stringify(mesclado) })
   if (!rPut.ok) return { ok: false, erro: `Falha ao tirar o limite do contato no Bling: ${rPut.erro.slice(0, 300)}` }
 
-  return { ok: true, antes }
+  return { ok: true, antes, alterado: true }
+}
+
+/** Id do contato no Bling: o vínculo gravado, ou a busca pelo CNPJ/CPF. */
+export async function idDoContatoNoBling(cliente: { bling_contato_id: number | string | null; cnpj: string | null }): Promise<number | null> {
+  if (cliente.bling_contato_id) return Number(cliente.bling_contato_id)
+  const doc = String(cliente.cnpj ?? '').replace(/\D/g, '')
+  if (!doc) return null
+  const r = await chamarBling(`/contatos?numeroDocumento=${encodeURIComponent(doc)}`)
+  if (!r.ok) return null
+  const achado = primeiro(r.dados)
+  return achado?.id ? Number(achado.id) : null
 }
 

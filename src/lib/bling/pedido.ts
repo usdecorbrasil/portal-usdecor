@@ -498,7 +498,7 @@ export async function criarPedidoNoBling(
         erro: `O Bling barrou pelo limite de crédito do cadastro do cliente lá, e o portal não conseguiu tirá-lo (${liberado.erro}). No Bling: Contatos → ${p.clientes?.razao_social ?? 'cliente'} → Limite de crédito → "Limite ilimitado". O controle de crédito é do portal.`.slice(0, 500),
       }
     }
-    await registrar({
+    if (liberado.alterado) await registrar({
       entidade: 'cliente',
       entidadeId: p.cliente_id,
       acao: 'editou',

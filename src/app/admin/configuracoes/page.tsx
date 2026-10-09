@@ -13,6 +13,9 @@ import {
 import { lerEstadoBling } from '@/lib/bling/cliente'
 import HistoricoAlteracoes from '@/components/historico-alteracoes'
 
+// "Tirar o limite do Bling de todos" passa cliente por cliente, ~1 s cada
+export const maxDuration = 120
+
 export default async function ConfiguracoesPage() {
   const perfil = await lerPerfil()
 
