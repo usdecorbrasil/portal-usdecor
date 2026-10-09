@@ -1,10 +1,12 @@
 name: Avisos diários
 
 # Chama a rota de avisos diários do portal uma vez por dia, de manhã
-# (07:47 em Brasília = 10:47 UTC). Hoje manda o resumo de pendências de
-# contas a pagar para quem estiver em Configurações → Notificações. A rota
-# só envia uma vez por dia, então rodar à mão (workflow_dispatch) no mesmo
-# dia não duplica. Usa os mesmos secrets da baixa de pagamentos.
+# (07:47 em Brasília = 10:47 UTC):
+#   1. resumo de pendências de contas a pagar para quem estiver em
+#      Configurações → Notificações (uma vez por dia; rodar à mão no mesmo
+#      dia não duplica);
+#   2. limpeza do armazenamento: artes vencidas e fotos de nota não salvas.
+# Usa os mesmos secrets da baixa de pagamentos.
 
 on:
   schedule:
@@ -32,5 +34,22 @@ jobs:
           cat resposta.json 2>/dev/null; echo
           if [ "$http" != "200" ]; then
             echo "A rota não respondeu 200. 401 = CRON_SECRET diferente entre GitHub e Vercel; 3xx = redirecionamento; 5xx = erro na rota." >&2
+            exit 1
+          fi
+
+      - name: Chamar /api/cron/limpeza
+        if: always()
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          http=$(curl --silent --show-error --max-time 90 \
+            -o resposta.json -w '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${SITE_URL%/}/api/cron/limpeza")
+          echo "HTTP $http"
+          cat resposta.json 2>/dev/null; echo
+          if [ "$http" != "200" ]; then
+            echo "A limpeza não respondeu 200 (veja o resumo acima)." >&2
             exit 1
           fi
