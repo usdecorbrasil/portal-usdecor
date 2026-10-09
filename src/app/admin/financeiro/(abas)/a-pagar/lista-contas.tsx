@@ -15,11 +15,12 @@ import {
   type ContaPagar,
   type FiltroContas,
 } from '@/app/actions/contas-pagar'
+import { paraNumeroBr } from '@/lib/numero'
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const dataBr = (iso: string) => iso.split('-').reverse().join('/')
 const num = (s: string) => {
-  const n = Number(String(s).replace(/\./g, '').replace(',', '.'))
+  const n = paraNumeroBr(s)
   return Number.isFinite(n) ? n : 0
 }
 const txt = (v: number) => v.toFixed(2).replace('.', ',')

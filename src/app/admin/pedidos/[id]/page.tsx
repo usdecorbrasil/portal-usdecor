@@ -22,6 +22,7 @@ import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
 import InstrucoesInternas from './instrucoes-internas'
 import LiberarAtraso from '@/app/admin/clientes/[id]/liberar-atraso'
+import { hojeBrasilia } from '@/lib/datas'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -142,7 +143,7 @@ export default async function PedidoAdminPage({
     `
 
   // As configurações não dependem do pedido: buscar em paralelo
-  const hojeIso = new Date().toISOString().slice(0, 10)
+  const hojeIso = hojeBrasilia()
   const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto, configPagamento, { data: agrupamento }, { data: vencAvista }] =
     await Promise.all([
       supabase.from('pedidos').select(campos).eq('id', id).single(),
@@ -501,6 +502,20 @@ export default async function PedidoAdminPage({
           e "pendente" depois de faturado é falha também: o envio morreu no meio */}
       {dono && !cancelado && usados.includes('faturado') && !agrupador && p.bling_sync_status !== 'enviado' && (
         <ReenviarBling pedidoId={p.id} erro={p.bling_erro ?? null} />
+      )}
+
+      {/* Faturar tentou e o Bling recusou: o pedido continua em "pronto" e o
+          motivo precisa ficar à vista — refazer é pelo próprio Faturar */}
+      {dono && !cancelado && !usados.includes('faturado') && !agrupador && !p.bling_pedido_id && p.bling_sync_status === 'erro' && p.bling_erro && (
+        <div className="bg-[#FFF6FA] border border-[#B00063] rounded-sm px-3 py-2.5 mt-3">
+          <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#B00063]">
+            O Bling recusou o pedido de venda
+          </p>
+          <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">{p.bling_erro}</p>
+          <p className="text-[11px] text-[#6E6E68] mt-1.5">
+            Nada foi faturado. Corrija o que falta e clique em Faturar de novo.
+          </p>
+        </div>
       )}
 
       {dono && p.bling_pedido_id && !mostrarFaturamento && (

@@ -5,6 +5,7 @@ import { COR_CLASSE, ROTULO_ACAO, ROTULO_CLASSE } from '@/lib/credito/score'
 import { ETIQUETA, NUM } from '@/components/estilo-lista'
 import HistoricoBoletos from './historico-boletos'
 import AjustarLimite from './ajustar-limite'
+import { hojeBrasilia } from '@/lib/datas'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -136,7 +137,7 @@ export default async function FichaCreditoPage({
         )}
       </div>
 
-      <HistoricoBoletos cliente={f.cliente} boletos={f.boletos} previstos={f.previstos} hoje={new Date().toISOString().slice(0, 10)} />
+      <HistoricoBoletos cliente={f.cliente} boletos={f.boletos} previstos={f.previstos} hoje={hojeBrasilia()} />
     </div>
   )
 }

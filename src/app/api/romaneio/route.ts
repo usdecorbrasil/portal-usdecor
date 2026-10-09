@@ -2,12 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { buscarDadosRomaneio } from '@/app/actions/romaneio'
 import { RomaneioDocumento, type DadosRomaneio } from '@/lib/pdf/romaneio'
+import { lerPerfil } from '@/lib/auth/perfil'
+
+const MAX_PEDIDOS = 30
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(request: NextRequest) {
+  // Romaneio é documento interno da produção: cliente não acessa
+  const perfil = await lerPerfil()
+  if (!perfil || perfil.papel === 'cliente') {
+    return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 })
+  }
   const ids = (request.nextUrl.searchParams.get('ids') ?? '')
     .split(',')
     .map((id) => id.trim())
     .filter(Boolean)
+
+  if (ids.length > MAX_PEDIDOS) {
+    return NextResponse.json({ erro: `Selecione no máximo ${MAX_PEDIDOS} pedidos por vez.` }, { status: 400 })
+  }
+  if (ids.some((id) => !UUID.test(id))) {
+    return NextResponse.json({ erro: 'Pedido inválido.' }, { status: 400 })
+  }
 
   if (ids.length === 0) {
     return NextResponse.json({ erro: 'Nenhum pedido selecionado.' }, { status: 400 })

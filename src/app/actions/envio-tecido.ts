@@ -8,6 +8,7 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateInterno } from '@/lib/resend/templates/interno'
 import { urlDoSite } from '@/lib/site'
+import { paraNumeroBr } from '@/lib/numero'
 
 /**
  * Envio de tecido — separado do pedido.
@@ -50,7 +51,7 @@ async function subirNf(clienteId: string, envioId: string, arquivo: File): Promi
 }
 
 function metrosDe(v: FormDataEntryValue | null): number {
-  return Number(String(v ?? '').replace(',', '.'))
+  return paraNumeroBr(typeof v === 'string' ? v : '')
 }
 
 /**

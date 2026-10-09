@@ -7,6 +7,7 @@ import AbasEstoque from '../abas-estoque'
 import { listarDespesas } from '@/app/actions/despesas'
 import FiltrosDespesas from './filtros-despesas'
 import ListaDespesas from './lista-despesas'
+import { hojeBrasilia } from '@/lib/datas'
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -14,7 +15,7 @@ function inicioDoMes() {
   const d = new Date()
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
 }
-const hoje = () => new Date().toISOString().slice(0, 10)
+const hoje = () => hojeBrasilia()
 
 /**
  * Despesas por documento: controle de gastos por tipo. Só quem vê valores.

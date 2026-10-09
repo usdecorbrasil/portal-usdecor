@@ -5,6 +5,7 @@ import { lerPerfil } from '@/lib/auth/perfil'
 import FiltroPeriodo from './filtro-periodo'
 import Avisos, { type Aviso } from './avisos'
 import { PRAZO_COMPROVANTE_DIAS } from '@/lib/contas-pagar/condicoes'
+import { hojeBrasilia } from '@/lib/datas'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -113,7 +114,7 @@ export default async function DashboardPage({
 
   // A contagem de clientes não depende dos pedidos: busca junto
   // Contas a pagar vencidas, para o atalho (data de hoje em Brasília)
-  const hojeBr = new Date(hoje.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const hojeBr = hojeBrasilia(hoje)
   // Notas lançadas sem foto/PDF há mais do prazo: aviso vermelho até anexarem
   const limiteComprovante = new Date(hoje.getTime() - PRAZO_COMPROVANTE_DIAS * 24 * 60 * 60 * 1000).toISOString()
   const [{ data: pedidos }, { count: clientesAtivos }, { data: travados }, { data: contasVencidas }, { data: notasSemArquivo }] = await Promise.all([

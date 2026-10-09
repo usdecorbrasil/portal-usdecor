@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { apurarPeriodo } from '@/app/actions/custos'
 import FiltroData from '@/app/admin/pedidos/filtro-data'
+import { hojeBrasilia } from '@/lib/datas'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -11,7 +12,7 @@ function inicioDoMes() {
 }
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10)
+  return hojeBrasilia()
 }
 
 export default async function ApuracaoPage({

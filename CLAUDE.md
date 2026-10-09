@@ -355,11 +355,14 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 - Definir prazo padrão de vencimento do boleto.
 - Criar produto genérico de estampa no Bling.
 - Definir gateway de pagamento para cartão de crédito/débito.
-- **Limpeza dos anexos de envio de arte não existe.** O campo
-  `envios_arte.arquivos_expiram_em` já é preenchido com hoje + 25 dias ao marcar como
-  cadastrado, mas nada apaga os arquivos do bucket `envios-arte` depois disso. Falta uma
-  rotina agendada (Vercel Cron → rota protegida por segredo, diária). Sem ela o
-  armazenamento cresce indefinidamente.
+- ~~Limpeza dos anexos de envio de arte não existe~~ — **feito em 09/10/2026**:
+  `/api/cron/limpeza`, chamada todo dia pelo workflow `avisos-diarios.yml`. Apaga do
+  bucket `envios-arte` o **original** enviado pelo cliente 25 dias depois de o envio ser
+  marcado como cadastrado (`arquivos_expiram_em`; nunca antes de 15 dias, e envio em
+  análise ou rejeitado nunca sai) — o catálogo guarda só a miniatura de até 500 KB no
+  bucket `artes`, que a limpeza não toca; a equipe precisa guardar o original antes do
+  prazo (decisão do dono, 09/10/2026). Do bucket `despesas`, apaga as fotos/PDFs com mais
+  de 15 dias que nenhuma nota usa. Registros ficam para o histórico. `?simular=1` só conta.
 - ~~Integração com o Bling existe só no OAuth~~ — **superado**: o Faturar cria o pedido
   de venda, a cobrança e a NF; a baixa de pagamento vem de hora em hora
   (`/api/cron/pagamentos`); "Pedido fechado" se lança no painel. Expedido/Entregue
@@ -487,6 +490,10 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   dobro (1 L × 5 L). Certeza alta vincula sozinho com o aviso verde "vinculado sozinho…
   confira"; média mostra "Parece ser X · vincular · não é este". Empate entre dois
   candidatos não sugere. O cadastro rápido avisa "já existe parecido" antes de duplicar.
+- **Quem lê o quê** (migration `20261009100000`): `suprimento_movimentos` é só de
+  admin/financeiro (tem `custo_total`); a produção lê `suprimento_movimentos_producao`
+  (view sem custo, com `pedido_numero`). `suprimento_saldos` só responde para a equipe
+  interna. `saldo_tecido()` não é chamável pela API — só pelas funções do banco.
 - **Item de nota com suprimento vira entrada no estoque** (gatilho
   `despesa_item_entrada_suprimento`, com o custo). Excluir a nota lança o ajuste inverso.
 - **Custos pelas compras** (08/10/2026): Financeiro → Custos mostra a média
@@ -866,6 +873,15 @@ Supabase Pro (~US$25) + Vercel Pro (~US$20) + Resend (grátis até 3.000 e-mails
   pedidos (via `confirmarRomaneio`), e no topo fazia a rota `/admin/pedidos` carregar o
   binário a cada início frio.
 
+## Datas e números (09/10/2026)
+
+- **"Hoje" é sempre o de Brasília**: `hojeBrasilia()` em `src/lib/datas.ts` no app e
+  `public.hoje_brasilia()` no banco (migration `20261009110000`). Servidor e banco rodam em
+  UTC; `new Date().toISOString().slice(0, 10)` e `current_date` viram o dia às 21h.
+  As validações do Faturar (vencimento) e da baixa de conta a pagar já usam a função.
+- **Número digitado**: `paraNumeroBr()` em `src/lib/numero.ts` ("1.234,56", "10.000",
+  "1,5" e "1.5" saem certos; inválido = NaN). Não usar `Number(x.replace(',', '.'))`.
+
 ## Convenções
 
 - Nomes de tabelas/colunas em português, snake_case.
@@ -919,8 +935,9 @@ commits, PRs e comentários **em português do Brasil**.
 
 ## Fluxo de status
 aguardando → recebido → impressao → estampando → pronto → faturado →
-nf_emitida → expedido → entregue → fechado. (`corte_costura` existe no enum só
-pelo histórico; o banco recusa lançá-la desde 08/10/2026.)
+nf_emitida → expedido → entregue → fechado. O estágio Corte/costura foi
+eliminado em 08/10/2026: o banco recusa lançá-lo e o valor `corte_costura` ficou no
+enum só para não quebrar o histórico de pedidos antigos.
 O envio ao Bling, a cobrança e a NF acontecem **só** no botão Faturar
 (`faturarPedido` em `src/app/actions/faturamento.ts`), na transição
 pronto → faturado. Pedidos agrupados: só o agrupador vai ao Bling.

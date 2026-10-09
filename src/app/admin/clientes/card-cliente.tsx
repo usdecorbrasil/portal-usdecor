@@ -8,6 +8,7 @@ import {
   atualizarLimiteCredito,
   buscarHistoricoPagamentos,
 } from '@/app/actions/clientes'
+import { paraNumeroBr } from '@/lib/numero'
 
 type Cliente = {
   id: string
@@ -418,7 +419,7 @@ function ModalLimiteCredito({
   function salvar() {
     setErro('')
 
-    const valor = Number(novoLimite.replace(',', '.'))
+    const valor = paraNumeroBr(novoLimite)
     if (isNaN(valor) || valor < 0) {
       setErro('Informe um valor válido')
       return
