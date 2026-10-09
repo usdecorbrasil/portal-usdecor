@@ -2,6 +2,7 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { chamarBling } from './cliente'
 import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
+import { hojeBrasilia } from '@/lib/datas'
 
 /**
  * Cria o pedido de venda no Bling ao faturar.
@@ -330,7 +331,7 @@ export async function criarPedidoNoBling(
   )
 
   // Data de Brasília: em UTC, depois das 21h o pedido nasceria "amanhã"
-  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+  const hoje = hojeBrasilia()
 
   // O Bling recusa o pedido quando a soma das parcelas não fecha com itens +
   // outras despesas − desconto. O item vai com o preço por metro (é o que sai

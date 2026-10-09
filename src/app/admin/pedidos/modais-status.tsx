@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { saldosDoCliente, type SaldoTecido } from '@/app/actions/estoque'
+import { paraNumeroBr } from '@/lib/numero'
 
 /**
  * Modais de mudança de status, compartilhados entre o painel do pedido
@@ -99,7 +100,7 @@ export function ModalRomaneio({
   }, [onCancelar, pendente])
 
   function confirmar() {
-    const metragemNum = Number(metragem.replace(',', '.'))
+    const metragemNum = paraNumeroBr(metragem)
 
     if (isNaN(metragemNum) || metragemNum <= 0) {
       return setAviso('Informe a metragem total impressa.')

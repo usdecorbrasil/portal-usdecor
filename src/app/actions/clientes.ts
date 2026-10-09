@@ -14,9 +14,10 @@ import {
   diferencas,
   ROTULOS_CLIENTE,
 } from '@/lib/auditoria'
+import { paraNumeroBr } from '@/lib/numero'
 
 const precoBr = z.string()
-  .transform((v) => Number(String(v).replace(',', '.')))
+  .transform((v) => paraNumeroBr(v))
   .refine((v) => !isNaN(v) && v > 0, 'Preço por metro inválido')
 
 const camposBase = {

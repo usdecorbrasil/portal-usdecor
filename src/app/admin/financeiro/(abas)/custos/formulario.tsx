@@ -6,11 +6,12 @@ import { atualizarCustos, atualizarConfigCustosAutomaticos } from '@/app/actions
 import { custoTintaPorMetro, type Custos } from '@/lib/custos/calculo'
 import type { SugestaoCustos } from '@/lib/custos/sugestao'
 import type { ConfigCustosAutomaticos } from '@/lib/custos/compras'
+import { paraNumeroBr } from '@/lib/numero'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const paraNumero = (v: string) => Number(v.replace(',', '.'))
+const paraNumero = (v: string) => paraNumeroBr(v)
 const paraTexto = (v: number, casas = 2) => v.toFixed(casas).replace('.', ',')
 
 const JANELAS = [30, 60, 90] as const

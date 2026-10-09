@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { registrar } from '@/lib/auditoria'
 import type { Condicao } from '@/lib/contas-pagar/condicoes'
+import { hojeBrasilia } from '@/lib/datas'
 
 /**
  * Contas a pagar — só admin/financeiro.
@@ -106,8 +107,7 @@ export type ResumoContas = {
 
 const hojeIso = () => {
   // Data de hoje no horário de Brasília (o servidor roda em UTC)
-  const agora = new Date(Date.now() - 3 * 60 * 60 * 1000)
-  return agora.toISOString().slice(0, 10)
+  return hojeBrasilia()
 }
 
 export async function listarContasPagar(filtro: FiltroContas): Promise<{ contas: ContaPagar[]; resumo: ResumoContas; hoje: string } | null> {

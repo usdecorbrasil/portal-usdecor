@@ -19,6 +19,8 @@ import {
 } from '@/lib/contas-pagar/condicoes'
 import { UNIDADES, type Unidade } from '@/lib/suprimentos/unidades'
 import { sugerirVinculo, parecidos, type VinculoAnterior } from '@/lib/suprimentos/sugerir-vinculo'
+import { paraNumeroBr } from '@/lib/numero'
+import { hojeBrasilia } from '@/lib/datas'
 
 /**
  * Captura + conferência. Duas etapas:
@@ -105,20 +107,20 @@ const rotulo = 'block text-[10px] font-mono tracking-wider text-[#6E6E68]'
 const botao = 'rounded-sm px-4 py-2.5 text-xs font-bold tracking-wide disabled:opacity-50'
 
 const num = (s: string) => {
-  const n = Number(String(s).replace(/\./g, '').replace(',', '.'))
+  const n = paraNumeroBr(s)
   return Number.isFinite(n) ? n : 0
 }
 const txt = (v: number | null | undefined) => (v == null ? '' : String(v).replace('.', ','))
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const hoje = () => new Date().toISOString().slice(0, 10)
+const hoje = () => hojeBrasilia()
 
 const itemVazio = (): ItemForm => ({ descricao: '', codigo: '', quantidade: '1', unidade: 'un', valorUnitario: '', valorTotal: '', categoriaId: '', suprimentoId: '', confianca: null, origemVinculo: '', semSugestao: false })
 
 function formVazio(): Form {
   return {
     tipo: 'outro', fornecedorNome: '', fornecedorDoc: '', numero: '', serie: '', chaveAcesso: '',
-    emissao: new Date().toISOString().slice(0, 10), formaPagamento: '', condicao: '', parcelas: [], subtotal: '', desconto: '', frete: '', impostos: '', total: '',
+    emissao: hojeBrasilia(), formaPagamento: '', condicao: '', parcelas: [], subtotal: '', desconto: '', frete: '', impostos: '', total: '',
     observacoes: '', itens: [itemVazio()],
   }
 }
@@ -181,7 +183,7 @@ export default function Captura({
         numero: d.numero ?? '',
         serie: d.serie ?? '',
         chaveAcesso: d.chave_acesso ?? '',
-        emissao: d.emissao ?? new Date().toISOString().slice(0, 10),
+        emissao: d.emissao ?? hojeBrasilia(),
         formaPagamento: d.forma_pagamento ?? '',
         // Duplicatas impressas na nota viram as parcelas; sem elas, a condição
         // escolhida gera um vencimento padrão

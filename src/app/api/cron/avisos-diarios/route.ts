@@ -4,6 +4,7 @@ import { notificarEquipe } from '@/lib/notificacoes/enviar'
 import { templateInterno } from '@/lib/resend/templates/interno'
 import { urlDoSite } from '@/lib/site'
 import { PRAZO_COMPROVANTE_DIAS } from '@/lib/contas-pagar/condicoes'
+import { hojeBrasilia } from '@/lib/datas'
 
 /**
  * Resumo diário de pendências de contas a pagar, por e-mail.
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient()
   // Data de hoje em Brasília (o servidor roda em UTC)
   const agora = Date.now()
-  const hoje = new Date(agora - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const hoje = hojeBrasilia(new Date(agora))
   const forcar = request.nextUrl.searchParams.get('forcar') === '1'
 
   const { data: cfg } = await admin.from('configuracoes').select('valor').eq('chave', CHAVE).maybeSingle()

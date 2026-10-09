@@ -8,6 +8,7 @@ import {
   type BoletoHistorico,
   type ResultadoScore,
 } from '@/lib/credito/score'
+import { hojeBrasilia } from '@/lib/datas'
 
 /**
  * Painel de crédito (Financeiro → Crédito): por cliente, limite, crédito em
@@ -79,7 +80,7 @@ async function exigirAdmin() {
 }
 
 function hojeIso() {
-  return new Date().toISOString().slice(0, 10)
+  return hojeBrasilia()
 }
 
 function inicioPeriodo(meses: number) {

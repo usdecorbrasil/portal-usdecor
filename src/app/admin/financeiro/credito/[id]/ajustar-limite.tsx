@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { atualizarLimiteCredito } from '@/app/actions/clientes'
 import type { Sugestao } from '@/lib/credito/score'
+import { paraNumeroBr } from '@/lib/numero'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -45,7 +46,7 @@ export default function AjustarLimite({
 
   function salvar() {
     setErro('')
-    const n = Number(limite.replace(/\./g, '').replace(',', '.'))
+    const n = paraNumeroBr(limite)
     if (!Number.isFinite(n) || n < 0) return setErro('Informe um limite válido.')
     if (n === limiteAtual) return setErro('O limite informado é igual ao atual.')
     if (motivo.trim().length < 10) return setErro('Descreva o motivo com pelo menos 10 caracteres.')

@@ -22,6 +22,7 @@ import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
 import NotaFiscal from './nota-fiscal'
 import InstrucoesInternas from './instrucoes-internas'
 import LiberarAtraso from '@/app/admin/clientes/[id]/liberar-atraso'
+import { hojeBrasilia } from '@/lib/datas'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -142,7 +143,7 @@ export default async function PedidoAdminPage({
     `
 
   // As configurações não dependem do pedido: buscar em paralelo
-  const hojeIso = new Date().toISOString().slice(0, 10)
+  const hojeIso = hojeBrasilia()
   const [{ data: pedido, error }, maxParcelas, valorMinimoBoleto, configPagamento, { data: agrupamento }, { data: vencAvista }] =
     await Promise.all([
       supabase.from('pedidos').select(campos).eq('id', id).single(),

@@ -13,6 +13,7 @@ import {
 } from '@/app/actions/clientes'
 import LiberarAtraso from './liberar-atraso'
 import FormasPagamentoCliente, { ROTULOS_FORMA_CLIENTE, FORMAS_CLIENTE } from '@/components/formas-pagamento-cliente'
+import { paraNumeroBr } from '@/lib/numero'
 
 type Cliente = {
   id: string
@@ -854,8 +855,8 @@ function ModalComercial({
   const [pendente, iniciar] = useTransition()
   const router = useRouter()
 
-  const precoNum = Number(preco.replace(',', '.'))
-  const limiteNum = Number(limite.replace(',', '.'))
+  const precoNum = paraNumeroBr(preco)
+  const limiteNum = paraNumeroBr(limite)
 
   const mudouPreco =
     Number.isFinite(precoNum) && precoNum !== cliente.preco_metro
