@@ -504,6 +504,20 @@ export default async function PedidoAdminPage({
         <ReenviarBling pedidoId={p.id} erro={p.bling_erro ?? null} />
       )}
 
+      {/* Faturar tentou e o Bling recusou: o pedido continua em "pronto" e o
+          motivo precisa ficar à vista — refazer é pelo próprio Faturar */}
+      {dono && !cancelado && !usados.includes('faturado') && !agrupador && !p.bling_pedido_id && p.bling_sync_status === 'erro' && p.bling_erro && (
+        <div className="bg-[#FFF6FA] border border-[#B00063] rounded-sm px-3 py-2.5 mt-3">
+          <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#B00063]">
+            O Bling recusou o pedido de venda
+          </p>
+          <p className="text-xs text-[#131A2E] mt-1 leading-relaxed">{p.bling_erro}</p>
+          <p className="text-[11px] text-[#6E6E68] mt-1.5">
+            Nada foi faturado. Corrija o que falta e clique em Faturar de novo.
+          </p>
+        </div>
+      )}
+
       {dono && p.bling_pedido_id && !mostrarFaturamento && (
         <p className="text-[11px] font-mono text-[#6E6E68] mt-2">
           Bling: pedido {p.bling_numero ? '#' + p.bling_numero : p.bling_pedido_id}

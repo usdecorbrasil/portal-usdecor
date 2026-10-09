@@ -231,7 +231,20 @@ export async function faturarPedido(
     await sincronizarPedidoComBling(p.id)
     p = (await carregar(p.id)) ?? p
     if (!p.bling_pedido_id) {
-      return { ok: false, erro: 'O Bling não aceitou o pedido de venda. Veja o erro no topo da tela e tente de novo.' }
+      // O motivo vai direto para o pop-up: antes a mensagem mandava olhar "o
+      // topo da tela", onde nada aparecia enquanto o pedido estava em "pronto"
+      const { data: falha } = await createAdminClient()
+        .from('pedidos')
+        .select('bling_erro')
+        .eq('id', p.id)
+        .maybeSingle()
+      revalidatePath(`/admin/pedidos/${p.id}`)
+      return {
+        ok: false,
+        erro: falha?.bling_erro
+          ? `${falha.bling_erro} Corrija e clique em Faturar de novo.`
+          : 'O Bling não aceitou o pedido de venda. Tente de novo em instantes.',
+      }
     }
     feito.push('pedido no Bling')
   }

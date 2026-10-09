@@ -28,6 +28,10 @@ export const lerPerfil = cache(async (): Promise<Perfil | null> => {
   } = await supabase.auth.getUser()
 
   if (!user) return null
+  // Senha provisória do convite: sem papel até criar a própria senha. O proxy
+  // já desvia as telas; isto fecha as server actions, que chegam por POST e
+  // não passam pelo desvio.
+  if (user.app_metadata?.senha_provisoria === true) return null
 
   const { data } = await supabase
     .from('profiles')
