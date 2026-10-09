@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { buscarDadosRomaneio } from '@/app/actions/romaneio'
 import { RomaneioDocumento, type DadosRomaneio } from '@/lib/pdf/romaneio'
+import { lerPerfil } from '@/lib/auth/perfil'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  // Romaneio é documento interno da produção: cliente não acessa
+  const perfil = await lerPerfil()
+  if (!perfil || perfil.papel === 'cliente') {
+    return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 })
+  }
 
   const dados = await buscarDadosRomaneio(id)
 

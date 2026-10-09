@@ -3,6 +3,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
 
+/**
+ * O termo entra no filtro `.or()` do PostgREST, onde vírgula e parênteses
+ * separam condições e aspas/barra mudam a leitura: sem limpar, quem digita
+ * "x,preco_unitario.gt.0" acrescenta um filtro próprio. Tira esses
+ * caracteres e limita o tamanho.
+ */
+function limparTermo(termo: string): string {
+  return termo.replace(/[,()"\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
+}
+
 const ROTULOS_STATUS: Record<string, string> = {
   aguardando: 'Aguardando confirmação',
   recebido: 'Pedido confirmado',
@@ -69,7 +79,7 @@ export async function buscarGeral(
 
   if (!perfil || perfil.papel === 'cliente') return vazio
 
-  const termoLimpo = termo.trim()
+  const termoLimpo = limparTermo(termo)
   if (termoLimpo.length < 2) return vazio
 
   const supabase = await createClient()
@@ -209,7 +219,7 @@ export async function buscarGeralCliente(termo: string): Promise<ResultadoBuscaC
 
   if (!perfil || perfil.papel !== 'cliente' || !perfil.clienteId) return vazio
 
-  const termoLimpo = termo.trim()
+  const termoLimpo = limparTermo(termo)
   if (termoLimpo.length < 2) return vazio
 
   const supabase = await createClient()
