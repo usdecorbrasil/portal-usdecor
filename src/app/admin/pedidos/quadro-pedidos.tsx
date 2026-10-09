@@ -875,7 +875,6 @@ function ModalAgrupar({
 }) {
   const total = pedidos.reduce((s, p) => s + p.total, 0)
   const metros = pedidos.reduce((s, p) => s + (p.metragemImpressa ?? 0), 0)
-  const precoMedio = metros > 0 ? total / metros : 0
   const numeros = pedidos.map((p) => '#' + p.numero).join(', ')
 
   return (
@@ -894,10 +893,18 @@ function ModalAgrupar({
             <dt>Metragem</dt>
             <dd className="font-mono text-[#131A2E]">{brl(metros)} m</dd>
           </div>
-          <div className="flex justify-between">
-            <dt>Preço médio</dt>
-            <dd className="font-mono text-[#131A2E]">R$ {brl(precoMedio)}/m</dd>
-          </div>
+          {/* Cada pedido mantém o próprio preço do metro — não há preço médio */}
+          {pedidos.map((p) => (
+            <div key={p.id} className="flex justify-between gap-3">
+              <dt>#{p.numero}</dt>
+              <dd className="font-mono text-[#131A2E] text-right">
+                {p.metragemImpressa
+                  ? `${brl(p.metragemImpressa)} m × R$ ${brl(p.total / p.metragemImpressa)}/m = `
+                  : ''}
+                R$ {brl(p.total)}
+              </dd>
+            </div>
+          ))}
           <div className="flex justify-between">
             <dt>Total</dt>
             <dd className="font-mono font-bold text-[#131A2E]">R$ {brl(total)}</dd>
