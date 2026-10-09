@@ -328,7 +328,21 @@ export async function criarPedidoNoBling(
     parcelas.length || 1
   )
 
-  const hoje = new Date().toISOString().slice(0, 10)
+  // Data de Brasília: em UTC, depois das 21h o pedido nasceria "amanhã"
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+
+  // O Bling recusa o pedido quando a soma das parcelas não fecha com itens +
+  // outras despesas − desconto. O item vai com o preço por metro (é o que sai
+  // na nota) e a diferença de centavos do arredondamento de metragem × preço
+  // entra como despesa ou desconto — o total cobrado é o do portal, sempre
+  const centavos = (v: number) => Math.round(v * 100)
+  // Agrupador com originais de preços diferentes: o primeiro item não
+  // representa o pedido, então vai o preço médio do metro
+  let precoItem = precoMetro
+  if (Math.abs(valorMercadoria - metragem * precoItem) > Math.max(1, valorMercadoria * 0.01)) {
+    precoItem = Math.round((valorMercadoria / metragem) * 100) / 100
+  }
+  const diferenca = (centavos(valorMercadoria) - centavos(metragem * precoItem)) / 100
 
   // As notas do agrupador já trazem o rastreio longo (metragem e valor de
   // cada original); nos demais, são as notas do cliente
@@ -364,12 +378,13 @@ export async function criarPedidoNoBling(
         descricao: `Estampa sublimática — ${metragem.toLocaleString('pt-BR')} m — ${rastreio.curto}`.slice(0, 120),
         unidade: 'm',
         quantidade: metragem,
-        valor: precoMetro,
+        valor: precoItem,
         produto: { id: produto.id },
       },
     ],
     // Sem isto o total do Bling não fecharia com os boletos
-    outrasDespesas: taxa,
+    outrasDespesas: Math.round((taxa + Math.max(0, diferenca)) * 100) / 100,
+    ...(diferenca < 0 ? { desconto: { valor: -diferenca, unidade: 'REAL' } } : {}),
   }
 
   // É a forma de pagamento da parcela que faz o Bling gerar boleto ou Pix —
@@ -406,6 +421,16 @@ export async function criarPedidoNoBling(
     ]
   }
 
+  // Conferência final, antes de o Bling recusar com mensagem pior
+  const somaParcelas = ((corpo.parcelas as { valor: number }[]) ?? []).reduce((s, x) => s + centavos(x.valor), 0)
+  const totalVenda = centavos(valorMercadoria) + centavos(taxa)
+  if (Math.abs(somaParcelas - totalVenda) > 1) {
+    return {
+      ok: false,
+      erro: `As parcelas somam R$ ${(somaParcelas / 100).toFixed(2)}, mas o pedido vale R$ ${(totalVenda / 100).toFixed(2)}. Refaça a forma de pagamento no Faturar.`,
+    }
+  }
+
   await pausa()
 
   const rCriar = await chamarBling('/pedidos/vendas', {
@@ -414,7 +439,7 @@ export async function criarPedidoNoBling(
   })
 
   if (!rCriar.ok) {
-    return { ok: false, erro: `Falha ao criar pedido: ${rCriar.erro.slice(0, 400)}` }
+    return { ok: false, erro: `O Bling recusou o pedido de venda: ${rCriar.erro}`.slice(0, 500) }
   }
 
   const criado = (rCriar.dados as { data?: { id?: number; numero?: number } })?.data

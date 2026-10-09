@@ -1,5 +1,6 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { erroLegivel } from './erro'
 
 /**
  * São dois hosts distintos, e trocá-los quebra a integração:
@@ -155,10 +156,8 @@ export async function chamarBling(
     return {
       ok: false,
       status: resposta.status,
-      erro:
-        typeof dados === 'object' && dados !== null
-          ? JSON.stringify(dados)
-          : String(dados ?? resposta.statusText),
+      // O motivo de verdade vem em `error.fields`; JSON cru cortado o escondia
+      erro: erroLegivel(resposta.status, dados ?? resposta.statusText),
     }
   }
 
