@@ -6,12 +6,21 @@ name: Avisos diários
 #      Configurações → Notificações (uma vez por dia; rodar à mão no mesmo
 #      dia não duplica);
 #   2. limpeza do armazenamento: artes vencidas e fotos de nota não salvas.
+#      Só conta (?simular=1) até a variável do repositório LIMPEZA_ATIVA ser
+#      "1" (Settings → Secrets and variables → Actions → Variables). Rodando
+#      à mão dá para escolher simular ou apagar.
 # Usa os mesmos secrets da baixa de pagamentos.
 
 on:
   schedule:
     - cron: "47 10 * * *"
   workflow_dispatch:
+    inputs:
+      limpeza:
+        description: "Limpeza: simular (só conta) ou apagar"
+        type: choice
+        options: [simular, apagar]
+        default: simular
 
 jobs:
   chamar:
@@ -42,11 +51,18 @@ jobs:
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # Manual: o que foi escolhido. Agendado: apaga só com LIMPEZA_ATIVA=1
+          APAGAR: ${{ github.event_name == 'workflow_dispatch' && inputs.limpeza == 'apagar' || github.event_name == 'schedule' && vars.LIMPEZA_ATIVA == '1' }}
         run: |
+          parametro=""
+          if [ "$APAGAR" != "true" ]; then
+            parametro="?simular=1"
+            echo "Modo simulação: só conta, não apaga nada."
+          fi
           http=$(curl --silent --show-error --max-time 90 \
             -o resposta.json -w '%{http_code}' \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "${SITE_URL%/}/api/cron/limpeza")
+            "${SITE_URL%/}/api/cron/limpeza${parametro}")
           echo "HTTP $http"
           cat resposta.json 2>/dev/null; echo
           if [ "$http" != "200" ]; then
