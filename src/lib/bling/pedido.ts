@@ -12,7 +12,8 @@ import { taxaDoPedido, BOLETO_AVISTA_DIAS_UTEIS } from '@/lib/pagamento/config'
  *
  * O pedido vai com **uma linha de metragem**, não uma linha por arte: no
  * portal a quantidade de peças serve à produção, não ao preço, então somar
- * peças não fecharia com o total nem com os boletos.
+ * peças não fecharia com o total nem com os boletos. O agrupador vai com uma
+ * linha por pedido original, cada uma com o preço do metro daquele pedido.
  */
 
 /** O Bling recusa acima de 3 requisições por segundo. */
@@ -328,7 +329,66 @@ export async function criarPedidoNoBling(
     parcelas.length || 1
   )
 
-  const hoje = new Date().toISOString().slice(0, 10)
+  // Data de Brasília: em UTC, depois das 21h o pedido nasceria "amanhã"
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+
+  // O Bling recusa o pedido quando a soma das parcelas não fecha com itens +
+  // outras despesas − desconto. O item vai com o preço por metro (é o que sai
+  // na nota) e a diferença de centavos do arredondamento de metragem × preço
+  // entra como despesa ou desconto — o total cobrado é o do portal, sempre
+  const centavos = (v: number) => Math.round(v * 100)
+
+  // Uma linha por pedido do portal, cada uma com a metragem e o preço do
+  // metro dele. No agrupador são os originais: o preço vem de cada um, nunca
+  // um preço médio — é o que sai na nota e o que o cliente combinou
+  type Linha = { numero: number; metragem: number; preco: number; valor: number }
+  let linhas: Linha[] = [{ numero: p.numero, metragem, preco: precoMetro, valor: valorMercadoria }]
+
+  if (rastreio.agrupados.length) {
+    const { data: originais } = await admin
+      .from('pedidos')
+      .select('numero, metragem_impressa, total, pedido_itens(preco_unitario)')
+      .eq('agrupado_em', pedidoId)
+      .order('numero')
+    const lista = ((originais ?? []) as unknown as {
+      numero: number
+      metragem_impressa: number | string | null
+      total: number | string | null
+      pedido_itens: { preco_unitario: number | string | null }[]
+    }[]).map((o) => ({
+      numero: Number(o.numero),
+      metragem: Number(o.metragem_impressa ?? 0),
+      preco: Number(o.pedido_itens?.[0]?.preco_unitario ?? 0),
+      valor: Number(o.total ?? 0),
+    }))
+    const semDados = lista.filter((o) => !(o.metragem > 0) || !(o.preco > 0)).map((o) => '#' + o.numero)
+    if (!lista.length || semDados.length) {
+      return {
+        ok: false,
+        erro: lista.length
+          ? `Pedido agrupado com original sem metragem ou preço: ${semDados.join(', ')}.`
+          : 'Não encontrei os pedidos originais deste agrupamento.',
+      }
+    }
+    linhas = lista
+  }
+
+  // O Bling recusa o pedido quando a soma das parcelas não fecha com itens +
+  // outras despesas − desconto. Diferença de centavos do arredondamento de
+  // metragem × preço entra como despesa ou desconto — o total cobrado é o do
+  // portal, sempre. Diferença maior é dado errado: para aqui, sem inventar preço
+  const somaItens = linhas.reduce((t, l) => t + centavos(l.metragem * l.preco), 0)
+  const diferenca = (centavos(valorMercadoria) - somaItens) / 100
+  if (Math.abs(diferenca) > Math.max(0.05, linhas.length * 0.01)) {
+    const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const detalhe = linhas
+      .map((l) => `#${l.numero}: ${l.metragem.toLocaleString('pt-BR')} m × R$ ${brl(l.preco)}`)
+      .join('; ')
+    return {
+      ok: false,
+      erro: `O valor do pedido (R$ ${brl(valorMercadoria)}) não fecha com metragem × preço do metro (${detalhe} = R$ ${brl(somaItens / 100)}). Confira o romaneio antes de faturar.`,
+    }
+  }
 
   // As notas do agrupador já trazem o rastreio longo (metragem e valor de
   // cada original); nos demais, são as notas do cliente
@@ -357,19 +417,18 @@ export async function criarPedidoNoBling(
       .join(' | ')
       .slice(0, 500),
     observacoesInternas: rastreio.longo.slice(0, 500),
-    itens: [
-      {
-        codigo: config.produtoEstampaCodigo,
-        // A descrição do item vai para a NF: é o rastreio que o cliente vê
-        descricao: `Estampa sublimática — ${metragem.toLocaleString('pt-BR')} m — ${rastreio.curto}`.slice(0, 120),
-        unidade: 'm',
-        quantidade: metragem,
-        valor: precoMetro,
-        produto: { id: produto.id },
-      },
-    ],
+    itens: linhas.map((l) => ({
+      codigo: config.produtoEstampaCodigo,
+      // A descrição do item vai para a NF: é o rastreio que o cliente vê
+      descricao: `Estampa sublimática — ${l.metragem.toLocaleString('pt-BR')} m — Portal #${l.numero}`.slice(0, 120),
+      unidade: 'm',
+      quantidade: l.metragem,
+      valor: l.preco,
+      produto: { id: produto.id },
+    })),
     // Sem isto o total do Bling não fecharia com os boletos
-    outrasDespesas: taxa,
+    outrasDespesas: Math.round((taxa + Math.max(0, diferenca)) * 100) / 100,
+    ...(diferenca < 0 ? { desconto: { valor: -diferenca, unidade: 'REAL' } } : {}),
   }
 
   // É a forma de pagamento da parcela que faz o Bling gerar boleto ou Pix —
@@ -406,6 +465,16 @@ export async function criarPedidoNoBling(
     ]
   }
 
+  // Conferência final, antes de o Bling recusar com mensagem pior
+  const somaParcelas = ((corpo.parcelas as { valor: number }[]) ?? []).reduce((s, x) => s + centavos(x.valor), 0)
+  const totalVenda = centavos(valorMercadoria) + centavos(taxa)
+  if (Math.abs(somaParcelas - totalVenda) > 1) {
+    return {
+      ok: false,
+      erro: `As parcelas somam R$ ${(somaParcelas / 100).toFixed(2)}, mas o pedido vale R$ ${(totalVenda / 100).toFixed(2)}. Refaça a forma de pagamento no Faturar.`,
+    }
+  }
+
   await pausa()
 
   const rCriar = await chamarBling('/pedidos/vendas', {
@@ -414,7 +483,7 @@ export async function criarPedidoNoBling(
   })
 
   if (!rCriar.ok) {
-    return { ok: false, erro: `Falha ao criar pedido: ${rCriar.erro.slice(0, 400)}` }
+    return { ok: false, erro: `O Bling recusou o pedido de venda: ${rCriar.erro}`.slice(0, 500) }
   }
 
   const criado = (rCriar.dados as { data?: { id?: number; numero?: number } })?.data
