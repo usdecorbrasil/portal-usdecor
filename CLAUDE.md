@@ -473,6 +473,9 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   longa de propósito: emitente × destinatário, vírgula decimal, desconto/frete em linha
   própria, nº × COO, impostos inclusos × destacados, regras de categoria para
   suprimentos de sublimação. Exige `ANTHROPIC_API_KEY`; sem ela a tela só aceita à mão.
+  Configurações → Integrações → **Leitura de notas por IA** (`integracao-ia.tsx`) mostra se
+  a chave existe, explica como ligar e testa com `testarChaveIa()` (pergunta mínima ao
+  modelo rápido, fração de centavo).
   `src/lib/despesas/validar.ts` confere dígito verificador de CNPJ/CPF e da chave de
   acesso antes de gravar. **A IA nunca grava**: `lerDespesa` guarda o arquivo no bucket
   `despesas` e devolve um rascunho; a tela de conferência (`despesas/nova/captura.tsx`)

@@ -227,3 +227,29 @@ export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLe
     return { ok: false, erro: e instanceof Error ? e.message : 'Falha na leitura.' }
   }
 }
+
+/**
+ * Confere se a chave da IA funciona, com uma pergunta mínima ao modelo rápido
+ * (custo de fração de centavo). Usado pelo botão de teste em Configurações.
+ */
+export async function testarChaveIa(): Promise<{ ok: true; detalhe: string } | { ok: false; erro: string }> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, erro: 'Falta a variável ANTHROPIC_API_KEY na Vercel.' }
+  }
+  try {
+    const resposta = await new Anthropic().messages.create({
+      model: MODELOS.rapido.id,
+      max_tokens: 64,
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: 'Responda apenas: OK' }],
+    })
+    return { ok: true, detalhe: `Chave aceita. O modelo rápido (${resposta.model}) respondeu.` }
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) return { ok: false, erro: 'A chave foi recusada: confira se foi colada inteira e se não foi revogada.' }
+    if (e instanceof Anthropic.PermissionDeniedError) return { ok: false, erro: 'A chave não tem permissão para usar o modelo. Confira a conta na Anthropic.' }
+    if (e instanceof Anthropic.RateLimitError) return { ok: false, erro: 'Limite de uso atingido (ou conta sem crédito). Confira o saldo na Anthropic.' }
+    if (e instanceof Anthropic.APIError) return { ok: false, erro: `Falha (${e.status}): ${e.message}` }
+    return { ok: false, erro: e instanceof Error ? e.message : 'Falha ao testar a chave.' }
+  }
+}
+

@@ -6,6 +6,7 @@ import Equipe from './equipe'
 import ConfigPagamento from './config-pagamento'
 import ConfigNotificacoes from './config-notificacoes'
 import IntegracaoBling from './integracao-bling'
+import IntegracaoIa from './integracao-ia'
 import {
   buscarConfigPagamento,
   buscarConfigNotificacoes,
@@ -103,6 +104,7 @@ export default async function ConfiguracoesPage() {
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
         <IntegracaoBling estado={estadoBling} />
+        <IntegracaoIa configurada={!!process.env.ANTHROPIC_API_KEY} />
       </div>
 
       <div className="mt-8">
