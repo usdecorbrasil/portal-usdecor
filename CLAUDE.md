@@ -256,7 +256,9 @@ ali a imagem é o conteúdo.
   contato do Bling. Para limpar de uma vez, Configurações → Bling → "Tirar o limite do
   Bling de todos os clientes" (`tirarLimitesNoBling` em `actions/bling.ts`): passa por
   todos os clientes (vínculo gravado ou busca por CNPJ), pula quem já está sem limite e
-  registra cada mudança na auditoria do cliente.
+  registra cada mudança na auditoria do cliente. Cliente novo ou editado no portal já vai
+  ao Bling com `financeiro.limiteCredito = 0` (`corpoDoContato`, com o bloco `financeiro`
+  mesclado como o `endereco`).
 - **Limite de crédito não é alterável por fora.** Há trava no banco exigindo
   `atualizar_limite_credito()`, e a função identifica quem chama pela sessão — chave de
   serviço não passa. Só pelo portal, logado como admin/financeiro, e com motivo, que vai

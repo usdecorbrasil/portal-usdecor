@@ -64,6 +64,9 @@ function corpoDoContato(c: ClienteFiscal) {
     tipo,
     numeroDocumento: documento,
     situacao: 'A',
+    // O limite de crédito vale só no portal (decisão do dono, 09/10/2026): todo
+    // contato que o portal cria ou atualiza fica sem limite no Bling
+    financeiro: { limiteCredito: 0 },
   }
 
   if (c.email) corpo.email = c.email
@@ -143,6 +146,13 @@ export async function sincronizarContatoComBling(
         ...((atual.endereco as Record<string, unknown>) ?? {}),
         ...(corpo.endereco as Record<string, unknown>),
       }
+    }
+
+    // Financeiro também é aninhado: só o limite muda, a condição de pagamento
+    // e a categoria do contato ficam
+    mesclado.financeiro = {
+      ...((atual.financeiro as Record<string, unknown>) ?? {}),
+      ...(corpo.financeiro as Record<string, unknown>),
     }
 
     delete mesclado.id

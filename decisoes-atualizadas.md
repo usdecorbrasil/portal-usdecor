@@ -346,4 +346,5 @@ Hobby da Vercel não aceita cron horário.
 | O limite de crédito vale só no portal (Faturar). Se o cadastro do cliente no Bling barra o pedido de venda pelo limite de lá, o portal tira esse limite do contato (`limiteCredito = 0`), registra em auditoria e tenta de novo uma vez | ✅ |
 | Se o Bling continuar barrando, a tela pede para marcar "Limite ilimitado" no contato do Bling | ✅ |
 | Configurações → Bling tem o botão "Tirar o limite do Bling de todos os clientes", com confirmação e resultado por cliente | ✅ |
+| Cliente cadastrado ou editado no portal já vai ao Bling sem limite de crédito | ✅ |
 
