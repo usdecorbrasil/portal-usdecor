@@ -490,6 +490,10 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   dobro (1 L × 5 L). Certeza alta vincula sozinho com o aviso verde "vinculado sozinho…
   confira"; média mostra "Parece ser X · vincular · não é este". Empate entre dois
   candidatos não sugere. O cadastro rápido avisa "já existe parecido" antes de duplicar.
+- **Quem lê o quê** (migration `20261009100000`): `suprimento_movimentos` é só de
+  admin/financeiro (tem `custo_total`); a produção lê `suprimento_movimentos_producao`
+  (view sem custo, com `pedido_numero`). `suprimento_saldos` só responde para a equipe
+  interna. `saldo_tecido()` não é chamável pela API — só pelas funções do banco.
 - **Item de nota com suprimento vira entrada no estoque** (gatilho
   `despesa_item_entrada_suprimento`, com o custo). Excluir a nota lança o ajuste inverso.
 - **Custos pelas compras** (08/10/2026): Financeiro → Custos mostra a média
