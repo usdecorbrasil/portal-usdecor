@@ -357,11 +357,11 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 - Definir prazo padrão de vencimento do boleto.
 - Criar produto genérico de estampa no Bling.
 - Definir gateway de pagamento para cartão de crédito/débito.
-- **Limpeza dos anexos de envio de arte não existe.** O campo
-  `envios_arte.arquivos_expiram_em` já é preenchido com hoje + 25 dias ao marcar como
-  cadastrado, mas nada apaga os arquivos do bucket `envios-arte` depois disso. Falta uma
-  rotina agendada (Vercel Cron → rota protegida por segredo, diária). Sem ela o
-  armazenamento cresce indefinidamente.
+- ~~Limpeza dos anexos de envio de arte não existe~~ — **feito em 09/10/2026**:
+  `/api/cron/limpeza`, chamada todo dia pelo workflow `avisos-diarios.yml`, apaga do
+  bucket `envios-arte` os arquivos dos envios com `arquivos_expiram_em` vencido (registros
+  ficam para o histórico) e do bucket `despesas` as fotos/PDFs com mais de 2 dias que
+  nenhuma nota usa. `?simular=1` só conta.
 - **Integração com o Bling existe só no OAuth** (`/api/bling/conectar` e `/callback`).
   Não cria pedido de venda, nem sincroniza NF, expedição, entrega ou baixa financeira.
   Consequência: o pedido não passa de "Pedido pronto" — `admin_lancar_status` só aceita
