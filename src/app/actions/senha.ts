@@ -61,7 +61,11 @@ export async function definirNovaSenha(
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
+  // Só quem acabou de abrir o link de redefinição (marca gravada em
+  // /auth/confirmar, válida por 30 min). Sessão comum troca a senha em
+  // "Minha conta", que pede a atual.
+  const liberadoAte = Number(user?.app_metadata?.redefinicao_senha_ate ?? 0)
+  if (!user || liberadoAte < Date.now()) {
     return { ok: false, erro: 'Link expirado. Peça um novo e-mail de recuperação.' }
   }
 
@@ -72,6 +76,11 @@ export async function definirNovaSenha(
   if (error) {
     return { ok: false, erro: 'Não foi possível alterar a senha. Tente novamente.' }
   }
+
+  // A liberação vale para uma troca só
+  await createAdminClient().auth.admin.updateUserById(user.id, {
+    app_metadata: { redefinicao_senha_ate: null },
+  })
 
   return { ok: true }
 }
@@ -167,6 +176,11 @@ export async function definirPrimeiraSenha(
   } = await supabase.auth.getUser()
 
   if (!user) return { ok: false, erro: 'Sessão expirada. Entre novamente.' }
+  // Só serve para sair da senha provisória do convite; depois disso, a troca
+  // é em "Minha conta", que pede a senha atual
+  if (user.app_metadata?.senha_provisoria !== true) {
+    return { ok: false, erro: 'Sua senha já foi criada. Para trocar, use Minha conta.' }
+  }
 
   const { error } = await supabase.auth.updateUser({
     password: parsed.data.senha,
