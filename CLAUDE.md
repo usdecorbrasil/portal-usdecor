@@ -362,7 +362,9 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
   análise ou rejeitado nunca sai) — o catálogo guarda só a miniatura de até 500 KB no
   bucket `artes`, que a limpeza não toca; a equipe precisa guardar o original antes do
   prazo (decisão do dono, 09/10/2026). Do bucket `despesas`, apaga as fotos/PDFs com mais
-  de 15 dias que nenhuma nota usa. Registros ficam para o histórico. `?simular=1` só conta.
+  de 15 dias que nenhuma nota usa. Registros ficam para o histórico. `?simular=1` só conta; o
+  agendamento só simula até a variável do repositório `LIMPEZA_ATIVA` ser `1`, e rodando à
+  mão escolhe-se simular ou apagar.
 - ~~Integração com o Bling existe só no OAuth~~ — **superado**: o Faturar cria o pedido
   de venda, a cobrança e a NF; a baixa de pagamento vem de hora em hora
   (`/api/cron/pagamentos`); "Pedido fechado" se lança no painel. Expedido/Entregue
