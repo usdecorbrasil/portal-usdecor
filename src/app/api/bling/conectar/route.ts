@@ -1,7 +1,18 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { lerPerfil } from '@/lib/auth/perfil'
 
-export async function GET() {
+/**
+ * Início do OAuth do Bling. Só admin/financeiro: quem conecta decide para qual
+ * conta do Bling vão pedidos, contatos, notas e cobranças da empresa. Sem esta
+ * trava, qualquer usuário logado (inclusive cliente) poderia trocar o token.
+ */
+export async function GET(request: NextRequest) {
+  const perfil = await lerPerfil()
+  if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
   const state = crypto.randomUUID()
 
   const cookieStore = await cookies()

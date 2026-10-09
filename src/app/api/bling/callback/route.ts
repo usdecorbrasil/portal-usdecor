@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CABECALHO_JWT } from '@/lib/bling/cliente'
+import { lerPerfil } from '@/lib/auth/perfil'
 
 export async function GET(request: NextRequest) {
+  // Mesma trava do início do fluxo: o token só é gravado para admin/financeiro
+  const perfil = await lerPerfil()
+  if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
   const searchParams = request.nextUrl.searchParams
   const code = searchParams.get('code')
   const state = searchParams.get('state')
