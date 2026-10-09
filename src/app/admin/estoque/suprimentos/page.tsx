@@ -20,11 +20,19 @@ export default async function SuprimentosPage() {
     supabase.from('suprimentos').select('id, nome, unidade, minimo, consumo_por_metro, ativo, categoria_id, categorias_despesa(nome)').order('nome'),
     supabase.from('suprimento_saldos').select('suprimento_id, saldo, ultimo_movimento'),
     supabase.from('categorias_despesa').select('id, nome').eq('ativo', true).order('nome'),
-    supabase
-      .from('suprimento_movimentos')
-      .select('id, suprimento_id, tipo, quantidade, custo_total, observacao, criado_em, pedidos(numero)')
-      .order('criado_em', { ascending: false })
-      .limit(100),
+    // Custo só para quem vê valores: a produção lê a view sem a coluna de
+    // custo (a tabela de movimentos é só de admin/financeiro no banco)
+    dono
+      ? supabase
+          .from('suprimento_movimentos')
+          .select('id, suprimento_id, tipo, quantidade, custo_total, observacao, criado_em, pedidos(numero)')
+          .order('criado_em', { ascending: false })
+          .limit(100)
+      : supabase
+          .from('suprimento_movimentos_producao')
+          .select('id, suprimento_id, tipo, quantidade, observacao, criado_em, pedido_numero')
+          .order('criado_em', { ascending: false })
+          .limit(100),
   ])
 
   const saldoDe = new Map(((saldos ?? []) as any[]).map((s) => [s.suprimento_id, s]))
@@ -50,7 +58,7 @@ export default async function SuprimentosPage() {
     quantidade: Number(m.quantidade),
     custoTotal: dono && m.custo_total != null ? Number(m.custo_total) : null,
     observacao: m.observacao ?? null,
-    pedidoNumero: m.pedidos?.numero != null ? Number(m.pedidos.numero) : null,
+    pedidoNumero: (m.pedidos?.numero ?? m.pedido_numero) != null ? Number(m.pedidos?.numero ?? m.pedido_numero) : null,
     data: m.criado_em,
   }))
 
