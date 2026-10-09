@@ -25,10 +25,9 @@ Repositório: `usdecorbrasil/portal-bello-tecido` (GitHub)
   configurações.
 - **Funcionário** (interno): acesso operacional, mas **nunca vê valores monetários** nas
   telas (mesma regra em todas as telas, inclusive relatórios).
-- **Admin Financeiro** (interno, papel novo — não é permissão extra do Dono): define
-  limite de crédito por cliente, controla boletos, parcelamentos e cobranças.
-  Variável interna que hoje representa "dono OU financeiro" foi renomeada para
-  `nivelAdmin`.
+- **Financeiro** (interno): papel `financeiro`, com **exatamente o mesmo acesso** que o
+  Dono (`admin`) — ver "Papéis: admin e financeiro são o mesmo acesso". Define limite de
+  crédito, controla boletos, parcelamentos, cobranças e contas a pagar.
 
 ## Catálogo
 
@@ -103,8 +102,8 @@ pendentes se concluem pelo botão "Concluir faturamento" no bloco Pedido faturad
 que chama `faturarPedido` de novo (retomável).
 
 Importante:
-- O pedido **não** precisa passar por todas as etapas (ex.: sem costura pula direto de
-  Estampando para Pedido pronto; retirada em balcão pula Expedido).
+- O pedido **não** precisa passar por todas as etapas (ex.: retirada em balcão pula
+  Expedido).
 - **Implicação técnica**: a coluna `status` em `pedidos` é **derivada** do último
   registro em `pedido_status_historico`, não é mais um campo independente atualizado à
   mão.
@@ -120,8 +119,7 @@ Importante:
   `-webkit-touch-callout: none` na linha, senão o menu de contexto do Android e a prévia
   de link do iOS cancelam o gesto. Rolagem automática perto das bordas. Destinos vêm de
   `destinosPermitidos()` em `src/app/admin/pedidos/estagios.ts` e espelham a regra do
-  painel do pedido: uma etapa por vez, exceto saindo de Estampando, onde a costura pode
-  ser pulada. Tentar arrastar uma linha que não se move (aguardando confirmação, ou já
+  painel do pedido: uma etapa por vez. Tentar arrastar uma linha que não se move (aguardando confirmação, ou já
   em etapa do Bling) mostra o motivo (`motivoSemDestino()`) em vez de ignorar.
 - A listagem é densa, em linhas com cabeçalho de colunas por etapa. A coluna
   **"Parado há"** conta dias desde o **último lançamento de status**, não desde a
@@ -253,8 +251,8 @@ ali a imagem é o conteúdo.
   serviço não passa. Só pelo portal, logado como admin/financeiro, e com motivo, que vai
   para `cliente_limite_historico`. Confirmado em 13/09/2026: a alteração pelo portal
   funciona.
-- **Pedido de venda criado ao lançar "Pedido pronto"** (`src/lib/bling/pedido.ts`), não
-  na confirmação: o valor é metragem × preço/metro e a metragem só existe depois da
+- **Pedido de venda criado no Faturar** (`faturarPedido` → `src/lib/bling/pedido.ts`),
+  não na confirmação nem ao lançar "Estampa pronta": o valor é metragem × preço/metro e a metragem só existe depois da
   estampa. Vai com **uma linha de metragem** (produto genérico `ESTAMPA`, unidade `m`),
   não uma por arte — no portal a quantidade de peças serve à produção, não ao preço, e
   somar peças não fecharia com o total nem com os boletos. A taxa da forma de pagamento
@@ -305,7 +303,7 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 ## Integração com o Bling
 
 - API v3, OAuth 2.0. Credenciais na área de aplicativos do painel Bling.
-- Pedido confirmado no portal → criado no Bling como pedido de venda.
+- Pedido faturado no portal (botão Faturar) → criado no Bling como pedido de venda.
 - Sincronização de volta: Nota fiscal emitida, Expedido, Entregue, baixa financeira
   (gatilho de "Pedido fechado").
 - Desligar o envio automático de NF no painel do Bling (o portal controla isso).
@@ -358,21 +356,25 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 - Criar produto genérico de estampa no Bling.
 - Definir gateway de pagamento para cartão de crédito/débito.
 - ~~Limpeza dos anexos de envio de arte não existe~~ — **feito em 09/10/2026**:
-  `/api/cron/limpeza`, chamada todo dia pelo workflow `avisos-diarios.yml`, apaga do
-  bucket `envios-arte` os arquivos dos envios com `arquivos_expiram_em` vencido (registros
-  ficam para o histórico) e do bucket `despesas` as fotos/PDFs com mais de 15 dias que
-  nenhuma nota usa. `?simular=1` só conta.
-- **Integração com o Bling existe só no OAuth** (`/api/bling/conectar` e `/callback`).
-  Não cria pedido de venda, nem sincroniza NF, expedição, entrega ou baixa financeira.
-  Consequência: o pedido não passa de "Pedido pronto" — `admin_lancar_status` só aceita
-  impressao/estampando/corte_costura/pronto, e o único caminho para "fechado" é dar baixa
-  em todas as parcelas.
+  `/api/cron/limpeza`, chamada todo dia pelo workflow `avisos-diarios.yml`. Apaga do
+  bucket `envios-arte` o **original** enviado pelo cliente 25 dias depois de o envio ser
+  marcado como cadastrado (`arquivos_expiram_em`; nunca antes de 15 dias, e envio em
+  análise ou rejeitado nunca sai) — o catálogo guarda só a miniatura de até 500 KB no
+  bucket `artes`, que a limpeza não toca; a equipe precisa guardar o original antes do
+  prazo (decisão do dono, 09/10/2026). Do bucket `despesas`, apaga as fotos/PDFs com mais
+  de 15 dias que nenhuma nota usa. Registros ficam para o histórico. `?simular=1` só conta; o
+  agendamento só simula até a variável do repositório `LIMPEZA_ATIVA` ser `1`, e rodando à
+  mão escolhe-se simular ou apagar.
+- ~~Integração com o Bling existe só no OAuth~~ — **superado**: o Faturar cria o pedido
+  de venda, a cobrança e a NF; a baixa de pagamento vem de hora em hora
+  (`/api/cron/pagamentos`); "Pedido fechado" se lança no painel. Expedido/Entregue
+  vindos do Bling ainda não são lidos.
 - **E-mails: 4 dos 14 gatilhos** implementados (`convite_acesso`, `pedido_recebido`,
   `em_producao`, `pedido_pronto`). Falta NF emitida, cancelamentos, ajuste de
   quantidade, artes rejeitadas, recuperação de senha e todos os avisos internos à
   equipe.
-  - `pedido_pronto` é a **cobrança**, disparada em `lancarStatus` quando a etapa
-    "Pedido pronto" é lançada. Traz metragem, mercadoria, taxa da forma de pagamento,
+  - A **cobrança** (antes `pedido_pronto`, disparada em `lancarStatus`) hoje sai no
+    **Faturar**, junto com o pedido no Bling. Traz metragem, mercadoria, taxa da forma de pagamento,
     total e as parcelas com vencimento. Falhar no e-mail **não** derruba o lançamento da
     etapa — produção não pode travar porque a mensagem não saiu, e `email_log` garante
     que o reenvio não duplica.
@@ -568,7 +570,7 @@ Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admi
 
 ## Ajuste de metragem (13/09/2026, `docs/sql/016`)
 
-Em **Estampando** e **Corte/costura** o botão "Ajustar quantidades" dá lugar a
+Em **Estampando** o botão "Ajustar quantidades" dá lugar a
 **Ajustar metragem**: com o romaneio lançado, peça não muda mais nada — o valor é
 metragem × preço, e o que pode mudar é a metragem (quebra na estamparia). A RPC
 `admin_ajustar_metragem` repete o cálculo de `confirmar_romaneio` (total, custos por
@@ -578,6 +580,10 @@ quebra é a produção. Antes de Estampando continua sendo quantidade; de Pronto
 nada.
 
 ## "Pedido pronto": o que acontece e o que trava (13/09/2026)
+
+> **Histórico.** Desde 07–08/10/2026 Bling, cobrança e forma de pagamento acontecem no
+> **Faturar**, não no lançamento de "Estampa pronta". As lições abaixo (tempo da função,
+> enum de `bling_sync`) continuam valendo; o fluxo descrito, não.
 
 - **Boleto abaixo do mínimo por documento bloqueia** a etapa — no servidor
   (`lancarStatus` → `boletoAbaixoDoMinimo`) e no modal, que desativa o botão. Compara a
@@ -602,7 +608,7 @@ nada.
   `PATCH` em id inexistente devolve 204 — o cast só acontece quando há linha; ler o
   `enum` no OpenAPI do PostgREST é o jeito confiável.
 - **"Pendente" depois de pronto é falha**: a tela do pedido mostra o bloco de reenvio
-  sempre que `bling_sync_status !== 'ok'` a partir de "pronto", em amarelo quando não há
+  sempre que `bling_sync_status !== 'enviado'` a partir de "pronto", em amarelo quando não há
   erro registrado. "Tentar de novo" reenvia ao Bling **e** a cobrança (`email_log`
   impede duplicar).
 
@@ -929,15 +935,18 @@ commits, PRs e comentários **em português do Brasil**.
   fica congelado no valor da época. Cálculo de total sempre em metros, uma
   vez só, para não divergir da nota fiscal.
 
-## Fluxo de status (10 etapas)
-aguardando → recebido → impressao → estampando → corte_costura → pronto →
-faturado → nf_emitida → expedido → entregue → fechado.
+## Fluxo de status
+aguardando → recebido → impressao → estampando → pronto → faturado →
+nf_emitida → expedido → entregue → fechado. O estágio Corte/costura foi
+eliminado em 08/10/2026: o banco recusa lançá-lo e o valor `corte_costura` ficou no
+enum só para não quebrar o histórico de pedidos antigos.
 O envio ao Bling, a cobrança e a NF acontecem **só** no botão Faturar
 (`faturarPedido` em `src/app/actions/faturamento.ts`), na transição
 pronto → faturado. Pedidos agrupados: só o agrupador vai ao Bling.
 
 ## Papéis
-cliente, funcionario, dono (admin), e futuramente financeiro.
+cliente, funcionario, admin (dono) e financeiro — admin e financeiro têm o mesmo
+acesso.
 Funcionário nunca vê preços nem valores — nem na tela, nem na resposta do
 servidor.
 
