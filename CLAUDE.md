@@ -360,7 +360,7 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
 - ~~Limpeza dos anexos de envio de arte não existe~~ — **feito em 09/10/2026**:
   `/api/cron/limpeza`, chamada todo dia pelo workflow `avisos-diarios.yml`, apaga do
   bucket `envios-arte` os arquivos dos envios com `arquivos_expiram_em` vencido (registros
-  ficam para o histórico) e do bucket `despesas` as fotos/PDFs com mais de 2 dias que
+  ficam para o histórico) e do bucket `despesas` as fotos/PDFs com mais de 15 dias que
   nenhuma nota usa. `?simular=1` só conta.
 - **Integração com o Bling existe só no OAuth** (`/api/bling/conectar` e `/callback`).
   Não cria pedido de venda, nem sincroniza NF, expedição, entrega ou baixa financeira.
