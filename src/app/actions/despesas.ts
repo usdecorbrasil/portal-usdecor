@@ -10,6 +10,7 @@ import { lerDocumento, TIPOS_DOCUMENTO, VERSAO_PROMPT, type DocumentoLido, type 
 import { cnpjCpfValido, chaveAcessoValida } from '@/lib/despesas/validar'
 import { corrigirPelaChave, divergenciasDaChave } from '@/lib/despesas/chave'
 import { problemasDaLeitura, avisoDaEmissao } from '@/lib/despesas/conferir'
+import { lerXmlNfe } from '@/lib/despesas/xml-nfe'
 import { hojeBrasilia } from '@/lib/datas'
 import { aplicarCustosAutomaticos } from '@/lib/custos/compras'
 import { CONDICOES, quitadaNaCompra, validarParcelas, ROTULO_CURTO } from '@/lib/contas-pagar/condicoes'
@@ -28,6 +29,8 @@ type Resultado<T = object> = ({ ok: true } & T) | { ok: false; erro: string }
 const BUCKET = 'despesas'
 const TAMANHO_MAXIMO = 10 * 1024 * 1024
 const TIPOS_ARQUIVO = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
+/** XML da NF-e: os navegadores mandam com um destes tipos (ou nenhum, no celular). */
+const TIPOS_XML = ['text/xml', 'application/xml', ''] as const
 
 async function exigirAdmin() {
   const perfil = await lerPerfil()
@@ -45,7 +48,7 @@ export type Rascunho = {
   /** Nulo quando a nota é lançada sem foto/PDF (permitido, com lembrete na tela). */
   arquivoPath: string | null
   origem: 'camera' | 'upload'
-  modo: 'manual' | 'ia'
+  modo: 'manual' | 'ia' | 'xml'
   /** Modelo que fez a leitura (rapido | preciso), quando houve. */
   modelo: ModeloLeitura | null
   documento: DocumentoLido | null
@@ -127,8 +130,8 @@ async function lerEConferir(
 }
 
 /** Sobe o arquivo (já comprimido no aparelho) para o bucket privado. */
-async function guardarArquivo(conteudo: Buffer, mediaType: (typeof TIPOS_ARQUIVO)[number]): Promise<Resultado<{ caminho: string }>> {
-  const extensao = mediaType === 'application/pdf' ? 'pdf' : mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg'
+async function guardarArquivo(conteudo: Buffer, mediaType: (typeof TIPOS_ARQUIVO)[number] | 'text/xml'): Promise<Resultado<{ caminho: string }>> {
+  const extensao = mediaType === 'application/pdf' ? 'pdf' : mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : mediaType === 'text/xml' ? 'xml' : 'jpg'
   const caminho = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${extensao}`
   const { error } = await createAdminClient().storage.from(BUCKET).upload(caminho, conteudo, { contentType: mediaType })
   if (error) return { ok: false, erro: `Não deu para guardar o arquivo: ${error.message}` }
@@ -175,6 +178,36 @@ export async function anexarComprovanteDespesa(despesaId: string, form: FormData
   revalidatePath('/admin/financeiro/a-pagar')
   revalidatePath('/admin/dashboard')
   return { ok: true }
+}
+
+/**
+ * XML da NF-e: lido no servidor, sem IA e sem custo. Os dados vêm exatos do
+ * documento assinado, então a conferência abre toda preenchida com
+ * confiança 1. O XML fica guardado como o comprovante da nota.
+ */
+export async function importarXmlNfe(form: FormData): Promise<Resultado<{ rascunho: Rascunho }>> {
+  const perfil = await exigirAdmin()
+  if (!perfil) return { ok: false, erro: 'Acesso negado.' }
+
+  const arquivo = form.get('arquivo')
+  if (!(arquivo instanceof File) || arquivo.size === 0) return { ok: false, erro: 'Escolha o arquivo XML da nota.' }
+  if (arquivo.size > 2 * 1024 * 1024) return { ok: false, erro: 'XML acima de 2 MB — não parece ser uma NF-e.' }
+  if (!/\.xml$/i.test(arquivo.name) && !(TIPOS_XML as readonly string[]).includes(arquivo.type)) {
+    return { ok: false, erro: 'O arquivo precisa ser o XML da NF-e (.xml).' }
+  }
+
+  const conteudo = Buffer.from(await arquivo.arrayBuffer())
+  const leitura = lerXmlNfe(conteudo.toString('utf8'))
+  if (!leitura.ok) return { ok: false, erro: leitura.erro }
+
+  const guardado = await guardarArquivo(conteudo, 'text/xml')
+  if (!guardado.ok) return guardado
+
+  const { documento, ajustes } = conferirPelaChave(leitura.documento)
+  return {
+    ok: true,
+    rascunho: { arquivoPath: guardado.caminho, origem: 'upload', modo: 'xml', modelo: null, documento, erroLeitura: null, ajustes },
+  }
 }
 
 /**
@@ -228,7 +261,7 @@ export async function lerDespesa(form: FormData): Promise<Resultado<{ rascunho: 
 export async function relerDespesa(arquivoPath: string, modelo: ModeloLeitura): Promise<Resultado<{ rascunho: Rascunho }>> {
   const perfil = await exigirAdmin()
   if (!perfil) return { ok: false, erro: 'Acesso negado.' }
-  if (!/^\d{4}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp|pdf)$/.test(arquivoPath)) return { ok: false, erro: 'Arquivo inválido.' }
+  if (!/^\d{4}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp|pdf)$/.test(arquivoPath)) return { ok: false, erro: 'Arquivo inválido. Nota importada do XML não precisa de releitura.' }
 
   const admin = createAdminClient()
   const { data, error } = await admin.storage.from(BUCKET).download(arquivoPath)
@@ -272,7 +305,7 @@ const schemaItem = z.object({
 const schemaDespesa = z.object({
   arquivoPath: z.string().min(1).nullable(),
   origem: z.enum(['camera', 'upload']),
-  modo: z.enum(['manual', 'ia']),
+  modo: z.enum(['manual', 'ia', 'xml']),
   modeloIa: z.enum(['rapido', 'preciso']).nullable().optional(),
   tipo: z.enum(TIPOS_DOCUMENTO),
   fornecedorNome: z.string().trim().max(200).nullable().optional(),
@@ -500,7 +533,7 @@ export async function salvarDespesa(
         de: null,
         para: quitadaNaCompra(d.condicao) ? ROTULO_CURTO[d.condicao] : `${ROTULO_CURTO[d.condicao]} · ${d.parcelas.length}x`,
       },
-      { campo: 'Modo', de: null, para: d.modo === 'ia' ? `lida por IA (${d.modeloIa ?? 'rapido'}) e conferida` : 'digitada' },
+      { campo: 'Modo', de: null, para: d.modo === 'ia' ? `lida por IA (${d.modeloIa ?? 'rapido'}) e conferida` : d.modo === 'xml' ? 'importada do XML da NF-e' : 'digitada' },
     ],
   })
 

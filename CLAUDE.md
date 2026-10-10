@@ -549,8 +549,13 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   - **Métrica de acerto**: `despesas.leitura_ia` guarda o que a IA devolveu, o modelo, o
     motivo da releitura e `alterados` (campos que a conferência mudou); `versao_prompt`
     guarda `VERSAO_PROMPT` de `ler-documento.ts` — mudou as instruções, suba a versão.
-- Não existe XML/SEFAZ nem QR code de NFC-e ainda (está na especificação do dono como
-  caminho preferencial); hoje é só imagem/PDF + IA ou digitação.
+- **Importar XML da NF-e** (10/10/2026, migration `20261010100000`): terceiro botão em
+  Nova nota. `src/lib/despesas/xml-nfe.ts` (puro, sem biblioteca — o layout 4.00 é fixo)
+  lê `infNFe > emit/dest/det/total/cobr/pag` e devolve o mesmo `DocumentoLido` da IA com
+  confiança 1; `importarXmlNfe` guarda o `.xml` no bucket como comprovante e abre a
+  conferência com `modo = 'xml'` (CHECK e `admin_anexar_arquivo_despesa` aceitam xml).
+  Duplicatas viram parcelas; `tPag` vira a condição de pagamento; IPI+ST+seguro+outras
+  entram em `impostos`. Nada de IA, custo zero. Não há consulta à SEFAZ nem QR code.
 
 ## Contas a pagar (08/10/2026, migration `20261008190000`)
 
