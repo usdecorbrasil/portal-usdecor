@@ -26,6 +26,10 @@ const ItemLido = z.object({
   categoria: z.string().nullable(),
   /** Nome exato de um suprimento cadastrado que corresponde ao item, ou null. */
   suprimento: z.string().nullable(),
+  /** Item é tecido de cliente (matéria-prima que o cliente manda estampar), não compra da empresa. */
+  tecido_de_cliente: z.boolean(),
+  /** Nome exato de um tecido cadastrado que corresponde ao item, ou null. */
+  tecido: z.string().nullable(),
   confianca: z.number().min(0).max(1),
 })
 
@@ -38,6 +42,8 @@ const DocumentoLido = z.object({
   destinatario_nome: z.string().nullable(),
   /** CNPJ ou CPF do comprador, só dígitos. */
   destinatario_doc: z.string().nullable(),
+  /** Quando a nota é de tecido de cliente: nome exato do cliente da lista, ou null. */
+  tecido_cliente: z.string().nullable(),
   numero: z.string().nullable(),
   serie: z.string().nullable(),
   /** Chave de acesso de 44 dígitos, se houver. */
@@ -84,6 +90,10 @@ export type EntradaLeitura = {
   categorias: string[]
   /** Nomes dos suprimentos cadastrados (com unidade), para casar itens. */
   suprimentos: string[]
+  /** Tecidos cadastrados (estoque dos clientes), para reconhecer nota de tecido. */
+  tecidos?: string[]
+  /** Clientes ativos (razão social e CNPJ), para dizer de quem é o tecido. */
+  clientes?: { nome: string; doc: string | null }[]
   /**
    * rapido = Haiku (padrão, ~R$ 0,01 por página); preciso = Opus (~R$ 0,40),
    * para reler uma nota que o rápido não entendeu.
@@ -99,7 +109,7 @@ export type ModeloLeitura = 'rapido' | 'preciso'
  * Versão das instruções abaixo. Vai gravada com cada nota (`despesas.versao_prompt`)
  * para comparar a taxa de acerto quando o texto mudar — mudou o texto, suba a versão.
  */
-export const VERSAO_PROMPT = 'v2-2026-10-09'
+export const VERSAO_PROMPT = 'v3-2026-10-10'
 
 export const MODELOS: Record<ModeloLeitura, { id: string; rotulo: string }> = {
   rapido: { id: 'claude-haiku-5-5', rotulo: 'rápido (Haiku)' },
@@ -117,7 +127,7 @@ export type ResultadoLeitura =
  * valor por item × total, desconto na última linha, nº do cupom × COO,
  * CNPJ do emitente × do destinatário).
  */
-function instrucoes(categorias: string[], suprimentos: string[]) {
+function instrucoes(categorias: string[], suprimentos: string[], tecidos: string[], clientes: { nome: string; doc: string | null }[]) {
   return `Você é o leitor de documentos de compra e despesa de uma estamparia por sublimação no Brasil (impressão de tecidos). Receberá a foto ou o PDF de UM documento e devolverá os dados dele, só os dados: nada de comentários.
 
 TIPOS DE DOCUMENTO
@@ -150,6 +160,12 @@ ITENS
 - categoria: escolha UMA da lista abaixo pelo que o item é, não pelo fornecedor. Tinta de impressora/sublimática → Tinta; papel sublimático/transfer/bobina → Papel sublimático; tecido, malha, poliéster, oxford → Tecido; plástico, saco, caixa, fita → Embalagem; conta de luz → Energia; mão de obra, serviço, costura terceirizada → Serviços de terceiros. Se nenhuma couber, null.
 - suprimento: se o item for claramente o MESMO produto de um dos suprimentos cadastrados (mesmo tipo e, quando houver, mesma cor/modelo), devolva o nome exato do suprimento; na dúvida, null. Nunca marque suprimento em serviço, energia ou aluguel.
 
+TECIDO DE CLIENTE
+- A estamparia estampa tecido que o CLIENTE manda (oxford, tactel, malha, poliéster, helanca, suplex, crepe, cetim…). Esse tecido NÃO é compra da empresa: é matéria-prima do cliente, que entra no estoque dele.
+- tecido_de_cliente = true no item quando ele é tecido (metragem ou rolo de tecido). Tinta, papel, embalagem e serviço são sempre false.
+- tecido: se o item for um dos tecidos cadastrados (mesmo nome ou nome claramente equivalente — "OXFORD 100% POL" é "Oxford"), devolva o nome exato da lista; senão null.
+- tecido_cliente (no cabeçalho): quando há item de tecido, diga de qual cliente é. Procure o nome ou o CNPJ de um cliente da lista no destinatário, no remetente, nas observações ("tecido de", "ref. cliente", "p/") ou no próprio nome do emitente (o cliente pode ser quem emite a remessa). Devolva o nome exato da lista; se nenhum bater, null. Sem item de tecido, null.
+
 TOTAIS
 - subtotal = soma dos itens antes de desconto/frete; total = valor final a pagar impresso no documento ("VALOR TOTAL", "TOTAL A PAGAR", "VALOR LÍQUIDO"). Nunca calcule o total: copie o impresso.
 - impostos = soma do que se soma ao preço além de itens e frete: IPI, ICMS-ST, SEGURO, OUTRAS DESPESAS ACESSÓRIAS, juros. ICMS "incluso" e PIS/COFINS "aproximados" NÃO entram.
@@ -171,6 +187,8 @@ CONFIANÇA (0 a 1), por campo e por item
 - Foto borrada, inclinada, com reflexo ou cortada: baixe a confiança dos campos afetados. Não invente nada para "completar" o documento.
 
 Categorias de gasto disponíveis (nome exato ou null): ${categorias.join('; ')}.
+${tecidos.length ? `Tecidos cadastrados (nome exato ou null): ${tecidos.join('; ')}.` : 'Não há tecidos cadastrados: devolva null em "tecido" (tecido_de_cliente continua valendo).'}
+${clientes.length ? `Clientes da estamparia (nome exato ou null em tecido_cliente): ${clientes.map((c) => (c.doc ? `${c.nome} (CNPJ ${c.doc})` : c.nome)).join('; ')}.` : ''}
 ${
   suprimentos.length
     ? `Suprimentos cadastrados (nome exato ou null): ${suprimentos.join('; ')}.`
@@ -198,7 +216,7 @@ export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLe
       max_tokens: 16000,
       // Rápido: esforço baixo (custo por página na casa do centavo). Preciso: alto.
       output_config: { effort: entrada.esforco ?? (modelo === 'preciso' ? 'high' : 'low'), format: zodOutputFormat(DocumentoLido) },
-      system: [{ type: 'text', text: instrucoes(entrada.categorias, entrada.suprimentos), cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: instrucoes(entrada.categorias, entrada.suprimentos, entrada.tecidos ?? [], entrada.clientes ?? []), cache_control: { type: 'ephemeral' } }],
       messages: [
         {
           role: 'user',

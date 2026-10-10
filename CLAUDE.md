@@ -556,6 +556,17 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   conferência com `modo = 'xml'` (CHECK e `admin_anexar_arquivo_despesa` aceitam xml).
   Duplicatas viram parcelas; `tPag` vira a condição de pagamento; IPI+ST+seguro+outras
   entram em `impostos`. Nada de IA, custo zero. Não há consulta à SEFAZ nem QR code.
+- **Tecido de cliente na nota** (10/10/2026): a leitura (IA e XML) recebe os tecidos
+  cadastrados e os clientes ativos e marca `tecido_de_cliente` por item, `tecido` (nome
+  cadastrado) e `tecido_cliente` no cabeçalho (pelo CNPJ do emitente/destinatário ou nome
+  nas observações — o cliente costuma ser quem emite a remessa). Na conferência, a caixa
+  "Tecido de cliente" troca categoria/suprimento pelo seletor de tecido (com cadastro
+  rápido via `criarTecido`, que passou a devolver o id) e o cabeçalho pede "De qual
+  cliente é o tecido". Ao salvar, `criarEnviosDeTecido` cria um `tecido_envios` por
+  tecido (metros = quantidade somada, nota copiada para `documentos/tecidos/...` como NF
+  de remessa via `anexar_nf_envio_tecido`); o saldo só muda na conferência, como sempre.
+  Nota só de tecido **não** vira despesa nem conta a pagar (vai para Estoque → Tecidos do
+  cliente); nota mista separa item a item. Quem lança é a equipe (decisão do dono).
 
 ## Contas a pagar (08/10/2026, migration `20261008190000`)
 

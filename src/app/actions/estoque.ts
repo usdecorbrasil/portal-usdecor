@@ -34,7 +34,7 @@ function revalidar() {
 
 /* --------------------------------- tecidos --------------------------------- */
 
-export async function criarTecido(nome: string): Promise<Resultado> {
+export async function criarTecido(nome: string): Promise<{ ok: true; id: string } | { ok: false; erro: string }> {
   if (!(await exigirDono())) return { ok: false, erro: 'Acesso negado.' }
 
   const parsed = z.string().trim().min(2, 'Nome muito curto').max(80).safeParse(nome)
@@ -60,7 +60,7 @@ export async function criarTecido(nome: string): Promise<Resultado> {
   })
 
   revalidar()
-  return { ok: true }
+  return { ok: true, id: data.id as string }
 }
 
 export async function renomearTecido(id: string, nome: string): Promise<Resultado> {

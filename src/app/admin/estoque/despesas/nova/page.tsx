@@ -15,7 +15,7 @@ export default async function NovaDespesaPage() {
   const perfil = await lerPerfil()
   if (!perfil || !perfil.veValores) redirect('/admin/estoque')
   const supabase = await createClient()
-  const [{ data: categorias }, { data: suprimentos }, { data: vinculos }, { data: compradores }] = await Promise.all([
+  const [{ data: categorias }, { data: suprimentos }, { data: vinculos }, { data: compradores }, { data: tecidos }, { data: clientes }] = await Promise.all([
     supabase.from('categorias_despesa').select('id, nome').eq('ativo', true).order('nome'),
     supabase.from('suprimentos').select('id, nome, unidade').eq('ativo', true).order('nome'),
     // Itens de notas anteriores já ligados a suprimento: base da sugestão de vínculo
@@ -27,6 +27,9 @@ export default async function NovaDespesaPage() {
       .limit(1000),
     // Destinatário das notas já salvas: o comprador de sempre é a empresa
     supabase.from('despesas').select('destinatario_doc').not('destinatario_doc', 'is', null).is('excluido_em', null).limit(500),
+    // Tecido de cliente na nota vira envio de tecido: precisa dos tecidos e dos clientes
+    supabase.from('tecidos').select('id, nome').eq('ativo', true).order('nome'),
+    supabase.from('clientes').select('id, razao_social').eq('ativo', true).is('arquivado', false).order('razao_social'),
   ])
 
   // Quem aparece em 2+ notas conta como "a empresa" (aprende sozinho, sem cadastro)
@@ -64,6 +67,8 @@ export default async function NovaDespesaPage() {
         suprimentos={(suprimentos ?? []).map((s) => ({ id: s.id as string, nome: s.nome as string, unidade: s.unidade as string }))}
         historico={historico}
         destinatarios={destinatarios}
+        tecidos={(tecidos ?? []).map((t) => ({ id: t.id as string, nome: t.nome as string }))}
+        clientes={(clientes ?? []).map((c) => ({ id: c.id as string, nome: c.razao_social as string }))}
       />
     </div>
   )
