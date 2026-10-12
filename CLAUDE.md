@@ -475,6 +475,10 @@ dono: provar que tudo o que passou na conta corrente e no cartão está lançado
   do extrato; índices únicos parciais impedem a mesma conta/cobrança em dois lançamentos),
   `admin_ignorar_lancamento`, `admin_desfazer_conciliacao`, `admin_fechar_extrato`,
   `admin_excluir_extrato`. Auditoria entidade `extrato`.
+- **Etiqueta nas listas**: conta a pagar ou cobrança conciliada aparece com `✓ extrato` em A pagar
+  e A receber (consulta a `extrato_lancamentos` conciliados por `conta_pagar_id` /
+  `pedido_id + numero_parcela`), o detalhe mostra a data do lançamento e o link para o extrato,
+  e o CSV de A pagar leva a coluna "Extrato".
 
 ## Baixa manual: confirmar recebimento e pagamento (12/10/2026, migration `20261012130000`)
 
