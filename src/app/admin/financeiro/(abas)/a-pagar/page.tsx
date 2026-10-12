@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { listarContasPagar, type FiltroContas } from '@/app/actions/contas-pagar'
+import { listarCartoes } from '@/app/actions/cartoes'
 import ListaContas from './lista-contas'
 
 /**
@@ -23,7 +24,7 @@ const dataValida = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : und
 export default async function APagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; comprovante?: string }>
+  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; comprovante?: string; cartao?: string }>
 }) {
   const sp = await searchParams
   const situacao = (SITUACOES.find((s) => s.chave === sp.situacao)?.chave ?? 'abertas') as FiltroContas['situacao']
@@ -32,9 +33,10 @@ export default async function APagarPage({
     de: dataValida(sp.de),
     ate: dataValida(sp.ate),
     semComprovante: sp.comprovante === 'pendente',
+    cartao: sp.cartao && /^[0-9a-f-]{36}$/.test(sp.cartao) ? sp.cartao : undefined,
   }
 
-  const r = await listarContasPagar(filtro)
+  const [r, cartoes] = await Promise.all([listarContasPagar(filtro), listarCartoes()])
   if (!r) return null
   const { contas, resumo, hoje } = r
 
@@ -50,6 +52,7 @@ export default async function APagarPage({
     if (filtro.de) q.set('de', filtro.de)
     if (filtro.ate) q.set('ate', filtro.ate)
     if (filtro.semComprovante) q.set('comprovante', 'pendente')
+    if (filtro.cartao) q.set('cartao', filtro.cartao)
     return `?${q.toString()}`
   }
 
@@ -61,12 +64,17 @@ export default async function APagarPage({
           paga na hora (dinheiro, Pix, débito) entra já quitada; lançada sem foto ou PDF, aparece
           como sem comprovante.
         </p>
-        <Link
-          href="/admin/estoque/despesas/nova"
-          className="shrink-0 inline-flex items-center justify-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
-        >
-          📷 LANÇAR NOTA DE COMPRA
-        </Link>
+        <div className="shrink-0 flex flex-col sm:items-end gap-1.5">
+          <Link
+            href="/admin/estoque/despesas/nova"
+            className="inline-flex items-center justify-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+          >
+            📷 LANÇAR NOTA DE COMPRA
+          </Link>
+          <Link href="/admin/financeiro/cartoes" className="text-xs text-[#0090D8] hover:underline">
+            💳 Cartões de crédito ({cartoes.filter((c) => c.ativo).length})
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
@@ -101,6 +109,15 @@ export default async function APagarPage({
         <form className="flex flex-wrap items-end gap-2" action="">
           <input type="hidden" name="situacao" value={situacao} />
           {filtro.semComprovante && <input type="hidden" name="comprovante" value="pendente" />}
+          {cartoes.length > 0 && (
+            <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
+              CARTÃO
+              <select name="cartao" defaultValue={filtro.cartao ?? ''} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white">
+                <option value="">todos</option>
+                {cartoes.map((c) => <option key={c.id} value={c.id}>{c.final ? `${c.nome} · ${c.final}` : c.nome}{c.ativo ? '' : ' (inativo)'}</option>)}
+              </select>
+            </label>
+          )}
           <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
             {situacao === 'pagas' ? 'PAGAS DE' : 'VENCE DE'}
             <input type="date" name="de" defaultValue={filtro.de} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white" />
@@ -110,9 +127,9 @@ export default async function APagarPage({
             <input type="date" name="ate" defaultValue={filtro.ate} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white" />
           </label>
           <button className="text-xs px-3 py-1.5 rounded-sm border border-[#131A2E] bg-white">Filtrar</button>
-          {(filtro.de || filtro.ate) && (
+          {(filtro.de || filtro.ate || filtro.cartao) && (
             <Link href={`?situacao=${situacao}`} className="text-xs text-[#6E6E68] underline pb-1.5">
-              limpar datas
+              limpar filtros
             </Link>
           )}
         </form>

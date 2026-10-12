@@ -55,7 +55,7 @@ export default function ListaContas({
 
   function exportar() {
     const linhas = [
-      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante'],
+      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Cartão', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante'],
       ...contas.map((c) => [
         dataBr(c.vencimento),
         c.descricao,
@@ -63,6 +63,7 @@ export default function ListaContas({
         c.categoria ?? '',
         `${c.parcela}/${c.parcelas}`,
         ROTULO_CURTO[c.forma],
+        c.cartao ?? '',
         numCsv(c.valor),
         c.canceladaEm ? 'Cancelada' : c.pagoEm ? 'Paga' : c.vencimento < hoje ? 'Vencida' : 'Em aberto',
         c.pagoEm ? dataBr(c.pagoEm) : '',
@@ -99,7 +100,7 @@ export default function ListaContas({
                 <span className="w-20">Vencimento</span>
                 <span className="flex-1">Conta</span>
                 <span className="w-12 text-right">Parc.</span>
-                <span className="w-16">Forma</span>
+                <span className="w-28">Forma</span>
                 <span className="w-24 text-right">Valor</span>
               </div>
               <div className={CORPO}>
@@ -142,8 +143,9 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
         </span>
         <span className="flex items-center gap-2 sm:contents">
           <span className={NUM + ' sm:w-12 sm:text-right text-[#6E6E68]'}>{c.parcelas > 1 ? `${c.parcela}/${c.parcelas}` : ''}</span>
-          <span className="sm:w-16">
+          <span className="sm:w-28 min-w-0">
             <span className={ETIQUETA + ' bg-[#F2F1ED] text-[#6E6E68]'}>{ROTULO_CURTO[c.forma]}</span>
+            {c.cartao && <span className="block text-[10px] text-[#6E6E68] truncate">{c.cartao}</span>}
           </span>
           {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' sm:hidden'}>{etiqueta.t}</span>}
           {c.semComprovante && <span className={ETIQUETA + ' bg-[#FFFBEE] text-[#8A6100]'}>sem comprovante</span>}

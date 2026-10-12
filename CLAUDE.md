@@ -587,6 +587,22 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   valor `pago` continua existindo no banco, na IA e no XML — leitura que vem como `pago`
   chega à tela sem escolha, e a equipe decide; nota só de tecido ainda usa `pago`
   internamente, porque não gera conta a pagar.
+- **Cartões de crédito da empresa** (decisão do dono, 12/10/2026, migration `20261012120000`):
+  Financeiro → **Cartões** (`/admin/financeiro/cartoes`, card próprio como o Crédito; link em
+  A pagar), tabela `cartoes_credito` (nome, final de 4 dígitos, `dia_fechamento`,
+  `dia_vencimento`, ativo; nome único entre ativos; só admin/financeiro; auditoria
+  `cartao_credito`). Na conferência, condição **crédito** pede "Qual cartão" (com um só
+  cadastrado, já vem escolhido) e as parcelas recebem o **vencimento da fatura**, não a data
+  da nota: regra pura em `src/lib/contas-pagar/cartoes.ts` — compra até o dia de fechamento
+  cai na fatura do mês, depois dele na do mês seguinte; a fatura vence no `dia_vencimento`
+  (mesmo mês se vence depois do fechamento, senão no seguinte); parcelas seguintes uma fatura
+  por mês, dia maior que o mês segura no último dia. Quem confere pode ajustar à mão.
+  `admin_gerar_contas_despesa` ganhou `p_cartao_id` (a versão de 4 parâmetros foi removida —
+  duas assinaturas deixariam a chamada por nome ambígua no PostgREST): cartão só com crédito,
+  **obrigatório quando há cartão ativo cadastrado**, gravado em `despesas.cartao_id` e em cada
+  `contas_pagar.cartao_id`. A pagar mostra o cartão sob a forma, filtra por `?cartao=<id>` e
+  exporta a coluna no CSV. Sem cartão cadastrado, o crédito segue com o vencimento padrão
+  (+1 mês).
 - **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
   - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
     `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e

@@ -340,6 +340,8 @@ const schemaDespesa = z.object({
     .array(z.object({ vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), valor: z.number().positive() }))
     .max(36)
     .default([]),
+  /** Cartão de crédito usado (só com condição crédito); o banco exige quando há cartão cadastrado. */
+  cartaoId: z.string().uuid().nullable().optional(),
   subtotal: z.number().min(0).nullable().optional(),
   desconto: z.number().min(0).default(0),
   frete: z.number().min(0).default(0),
@@ -640,6 +642,7 @@ export async function salvarDespesa(
     p_condicao: d.condicao,
     p_parcelas: quitadaNaCompra(d.condicao) ? null : d.parcelas,
     p_categoria_id: categoriaConta,
+    p_cartao_id: d.condicao === 'credito' ? d.cartaoId ?? null : null,
   })
   if (erroContas) {
     await createAdminClient().from('despesas').delete().eq('id', despesa.id)
