@@ -140,6 +140,9 @@ function formVazio(): Form {
   }
 }
 
+/** "Já pago" saiu da lista a pedido do dono (12/10/2026): toda nota entra em contas a pagar com débito, crédito, boleto ou outro combinado. */
+const CONDICOES_NA_TELA = CONDICOES.filter((c) => c !== 'pago')
+
 export default function Captura({
   categorias,
   suprimentos: suprimentosIniciais,
@@ -184,6 +187,11 @@ export default function Captura({
   const inputAnexo = useRef<HTMLInputElement>(null)
   const [anexando, setAnexando] = useState(false)
   const [confirmarSemArquivo, setConfirmarSemArquivo] = useState(false)
+  /** Arquivo aberto em tela cheia para conferir os dados lidos. */
+  const [verArquivo, setVerArquivo] = useState(false)
+  const [ampliado, setAmpliado] = useState(false)
+  const ehImagem = !!arquivo?.type.startsWith('image/')
+  const ehPdf = arquivo?.type === 'application/pdf'
   const inputXml = useRef<HTMLInputElement>(null)
   const [importandoXml, setImportandoXml] = useState(false)
 
@@ -215,7 +223,7 @@ export default function Captura({
     setArquivo(comprimido)
     setOrigem(de)
     if (preview) URL.revokeObjectURL(preview)
-    setPreview(comprimido.type.startsWith('image/') ? URL.createObjectURL(comprimido) : null)
+    setPreview(URL.createObjectURL(comprimido))
   }
 
   function aplicarRascunho(rascunhoNovo: Rascunho) {
@@ -239,7 +247,7 @@ export default function Captura({
         formaPagamento: d.forma_pagamento ?? '',
         // Duplicatas impressas na nota viram as parcelas; sem elas, a condição
         // escolhida gera um vencimento padrão
-        condicao: d.condicao_pagamento ?? (d.duplicatas.length ? 'boleto' : ''),
+        condicao: d.condicao_pagamento === 'pago' ? '' : d.condicao_pagamento ?? (d.duplicatas.length ? 'boleto' : ''),
         parcelas:
           d.condicao_pagamento === 'pago' || d.condicao_pagamento === 'debito'
             ? []
@@ -341,7 +349,7 @@ export default function Captura({
     }
     setArquivo(comprimido)
     if (preview) URL.revokeObjectURL(preview)
-    setPreview(comprimido.type.startsWith('image/') ? URL.createObjectURL(comprimido) : null)
+    setPreview(URL.createObjectURL(comprimido))
     setRascunho((atual) => (atual ? { ...atual, arquivoPath: r.rascunho.arquivoPath } : r.rascunho))
     setConfirmarSemArquivo(false)
   }
@@ -622,7 +630,7 @@ export default function Captura({
 
         {arquivo && (
           <div className="mt-4 bg-white border border-[#DDDCD5] rounded-sm p-3">
-            {preview ? (
+            {preview && ehImagem ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={preview} alt="Prévia da nota" className="max-h-80 mx-auto rounded-sm" />
             ) : (
@@ -1000,7 +1008,7 @@ export default function Captura({
             <label className={rotulo}>COMO FOI PAGA
               <select value={form.condicao} onChange={(e) => escolherCondicao(e.target.value as Condicao | '')} className={campo + ' ' + (form.condicao ? normal : duvida)}>
                 <option value="">— escolher —</option>
-                {CONDICOES.map((c) => <option key={c} value={c}>{ROTULO_CONDICAO[c]}</option>)}
+                {CONDICOES_NA_TELA.map((c) => <option key={c} value={c}>{ROTULO_CONDICAO[c]}</option>)}
               </select>
             </label>
             <label className={rotulo}>O QUE DIZ A NOTA
@@ -1063,15 +1071,62 @@ export default function Captura({
       </div>
 
       <aside className="lg:sticky lg:top-4 self-start">
-        {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Nota" className="w-full rounded-sm border border-[#DDDCD5]" />
+        {preview && ehImagem ? (
+          <button type="button" onClick={() => { setAmpliado(false); setVerArquivo(true) }} className="block w-full text-left group" title="Clique para ver em tela cheia">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview} alt="Nota" className="w-full rounded-sm border border-[#DDDCD5] group-hover:border-[#131A2E]" />
+            <span className="block text-[11px] text-[#6E6E68] text-center mt-1 group-hover:text-[#131A2E]">🔍 clique para ampliar e conferir</span>
+          </button>
+        ) : preview && ehPdf ? (
+          <button type="button" onClick={() => setVerArquivo(true)} className="w-full border border-[#DDDCD5] hover:border-[#131A2E] rounded-sm p-5 text-center bg-white">
+            <span className="block text-2xl">📄</span>
+            <span className="block text-xs font-semibold tracking-wide mt-1">VER O PDF</span>
+            <span className="block text-[11px] text-[#6E6E68] mt-1 truncate">{arquivo?.name}</span>
+          </button>
         ) : (
           <div className="border border-dashed border-[#DDDCD5] rounded-sm p-6 text-center text-xs text-[#6E6E68]">
             {arquivo?.name ?? (rascunho?.arquivoPath ? 'sem prévia' : 'sem arquivo anexado')}
           </div>
         )}
       </aside>
+
+      {preview && (ehImagem || ehPdf) && !verArquivo && (
+        <button
+          type="button"
+          onClick={() => { setAmpliado(false); setVerArquivo(true) }}
+          className="lg:hidden fixed bottom-4 right-4 z-40 bg-[#131A2E] text-white rounded-full shadow-lg px-4 py-2.5 text-xs font-semibold tracking-wide"
+        >
+          🧾 VER A NOTA
+        </button>
+      )}
+
+      {verArquivo && preview && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" role="dialog" aria-modal="true" aria-label="Arquivo da nota">
+          <div className="flex items-center gap-2 px-3 py-2 text-white text-xs shrink-0">
+            <span className="flex-1 min-w-0 truncate">{arquivo?.name ?? 'Nota'}</span>
+            {ehImagem && (
+              <button type="button" onClick={() => setAmpliado((v) => !v)} className="border border-white/50 rounded-sm px-2.5 py-1 font-semibold tracking-wide">
+                {ampliado ? 'AJUSTAR À TELA' : '🔍 AMPLIAR'}
+              </button>
+            )}
+            <a href={preview} target="_blank" rel="noopener" className="border border-white/50 rounded-sm px-2.5 py-1 font-semibold tracking-wide">ABRIR EM OUTRA ABA</a>
+            <button type="button" onClick={() => setVerArquivo(false)} className="bg-white text-[#131A2E] rounded-sm px-2.5 py-1 font-semibold tracking-wide">FECHAR ✕</button>
+          </div>
+          {ehImagem ? (
+            <div className="flex-1 overflow-auto" onClick={() => setVerArquivo(false)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt="Nota em tela cheia"
+                onClick={(e) => { e.stopPropagation(); setAmpliado((v) => !v) }}
+                className={ampliado ? 'max-w-none w-[200%] sm:w-[160%] cursor-zoom-out' : 'max-w-full max-h-full mx-auto object-contain h-full cursor-zoom-in'}
+              />
+            </div>
+          ) : (
+            <iframe src={preview} title="PDF da nota" className="flex-1 w-full bg-white" />
+          )}
+        </div>
+      )}
 
       {confirmarSemArquivo && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Salvar sem comprovante">
