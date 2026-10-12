@@ -73,8 +73,8 @@ export default async function APagarPage({
           >
             📷 LANÇAR NOTA DE COMPRA
           </Link>
-          <Link href="/admin/financeiro/cartoes" className="text-xs text-[#0090D8] hover:underline">
-            💳 Cartões de crédito ({cartoes.filter((c) => c.ativo).length})
+          <Link href="/admin/configuracoes#cartoes" className="text-xs text-[#0090D8] hover:underline">
+            💳 Cartões de crédito ({cartoes.filter((c) => c.ativo).length}) · em Configurações
           </Link>
         </div>
       </div>

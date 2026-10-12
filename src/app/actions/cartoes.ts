@@ -8,7 +8,7 @@ import { registrar, diferencas } from '@/lib/auditoria'
 import type { CartaoCredito } from '@/lib/contas-pagar/cartoes'
 
 /**
- * Cartões de crédito da empresa (Financeiro → Cartões). Só admin/financeiro.
+ * Cartões de crédito da empresa (Configurações → Pagamento). Só admin/financeiro.
  * Dia de fechamento e de vencimento definem em que fatura cai cada compra —
  * a regra está em `src/lib/contas-pagar/cartoes.ts`.
  */
@@ -21,7 +21,7 @@ async function exigirDono() {
 }
 
 function revalidar() {
-  revalidatePath('/admin/financeiro/cartoes')
+  revalidatePath('/admin/configuracoes')
   revalidatePath('/admin/financeiro/a-pagar')
   revalidatePath('/admin/estoque/despesas/nova')
 }

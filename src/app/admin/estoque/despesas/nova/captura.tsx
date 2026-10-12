@@ -1077,7 +1077,7 @@ export default function Captura({
               ) : (
                 <p className="text-xs text-[#6B5320] bg-[#FFFBEE] border border-[#C79600] rounded-sm px-3 py-2">
                   Nenhum cartão de crédito cadastrado: o vencimento fica em um mês após a nota.{' '}
-                  <Link href="/admin/financeiro/cartoes" className="underline font-semibold" target="_blank">Cadastrar cartões</Link> para as parcelas caírem na fatura certa.
+                  <Link href="/admin/configuracoes#cartoes" className="underline font-semibold" target="_blank">Cadastrar cartões</Link> (Configurações → Pagamento) para as parcelas caírem na fatura certa.
                 </p>
               )}
               {cartaoEscolhido && (
