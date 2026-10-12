@@ -549,6 +549,13 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   - **Métrica de acerto**: `despesas.leitura_ia` guarda o que a IA devolveu, o modelo, o
     motivo da releitura e `alterados` (campos que a conferência mudou); `versao_prompt`
     guarda `VERSAO_PROMPT` de `ler-documento.ts` — mudou as instruções, suba a versão.
+  - **Esquema sem `nullable`** (12/10/2026): a saída estruturada da API aceita no máximo
+    **16 campos com união de tipos** (`nullable` conta), e o documento chegou a 24 com
+    destinatário e tecido — a primeira foto real falhou com HTTP 400 antes de ser lida.
+    `DocumentoFio`/`ItemFio` (o que a IA devolve) não têm null nenhum: texto ausente é
+    `""`, número ausente é `0`, condição desconhecida é `nao_informado`; `normalizar()`
+    converte para o `DocumentoLido` com null que conferência, chave e XML usam. Campo novo
+    na leitura segue a mesma regra — nada de `.nullable()` no esquema de fio.
 - **Importar XML da NF-e** (10/10/2026, migration `20261010100000`): terceiro botão em
   Nova nota. `src/lib/despesas/xml-nfe.ts` (puro, sem biblioteca — o layout 4.00 é fixo)
   lê `infNFe > emit/dest/det/total/cobr/pag` e devolve o mesmo `DocumentoLido` da IA com
