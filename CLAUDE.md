@@ -667,7 +667,10 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   card recolhível abaixo de Formas de pagamento, âncora `#cartoes`; mudou do Financeiro para lá a
   pedido do dono em 12/10/2026; A pagar só filtra por cartão, sem link; a conferência linka), tabela `cartoes_credito` (nome, final de 4 dígitos, `dia_fechamento`,
   `dia_vencimento`, ativo; nome único entre ativos; só admin/financeiro; auditoria
-  `cartao_credito`, listada no Histórico de Configurações). Na conferência, condição **crédito** pede "Qual cartão" (com um só
+  `cartao_credito`, listada no Histórico de Configurações). **Excluir** só cartão nunca usado (RPC
+  `admin_excluir_cartao`, migration `20261012170000`: recusa com hint `cartao_usado` se há nota, conta a
+  pagar ou qualquer outra referência; a tabela não dá DELETE a `authenticated`); cartão já usado só
+  se desativa. Na conferência, condição **crédito** pede "Qual cartão" (com um só
   cadastrado, já vem escolhido) e as parcelas recebem o **vencimento da fatura**, não a data
   da nota: regra pura em `src/lib/contas-pagar/cartoes.ts` — compra até o dia de fechamento
   cai na fatura do mês, depois dele na do mês seguinte; a fatura vence no `dia_vencimento`
