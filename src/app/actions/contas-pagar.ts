@@ -203,6 +203,36 @@ export async function baixarContaPagar(id: string, pagoEm: string, valorPago: nu
   return { ok: true }
 }
 
+/** Baixa em lote: várias contas pagas na mesma data, cada uma pelo valor da conta. */
+export async function baixarContasPagarEmLote(ids: string[], pagoEm: string, obs: string | null): Promise<Resultado<{ feitas: number; erros: string[] }>> {
+  if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
+  const parsed = z
+    .object({ ids: z.array(z.string().uuid()).min(1, 'Selecione ao menos uma conta').max(200), pagoEm: data, obs: z.string().trim().max(500).nullable() })
+    .safeParse({ ids, pagoEm, obs })
+  if (!parsed.success) return { ok: false, erro: parsed.error.issues[0].message }
+
+  const supabase = await createClient()
+  const { data: contas, error } = await supabase.from('contas_pagar').select('id, descricao, valor').in('id', parsed.data.ids).is('pago_em', null).is('cancelada_em', null)
+  if (error) return { ok: false, erro: error.message }
+
+  const erros: string[] = []
+  let feitas = 0
+  for (const c of (contas ?? []) as { id: string; descricao: string; valor: number | string }[]) {
+    const valor = Number(c.valor)
+    const { error: e } = await supabase.rpc('admin_baixar_conta_pagar', { p_id: c.id, p_pago_em: parsed.data.pagoEm, p_valor_pago: valor, p_obs: parsed.data.obs })
+    if (e) {
+      erros.push(`${c.descricao}: ${e.message}`)
+      continue
+    }
+    feitas++
+    await registrar({ entidade: 'conta_pagar', entidadeId: c.id, acao: 'pagou', campos: [{ campo: 'Pagamento', de: null, para: `R$ ${brl(valor)} em ${dataBr(parsed.data.pagoEm)} (em lote)` }] })
+  }
+  revalidatePath(CAMINHO)
+  revalidatePath('/admin/financeiro')
+  if (!feitas) return { ok: false, erro: erros.length ? erros.join(' · ') : 'Nenhuma das contas selecionadas está em aberto.' }
+  return { ok: true, feitas, erros }
+}
+
 export async function estornarContaPagar(id: string, motivoTexto: string): Promise<Resultado> {
   if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
   const m = motivo.safeParse(motivoTexto)

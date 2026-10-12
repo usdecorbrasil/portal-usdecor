@@ -445,6 +445,26 @@ vencimento (boleto a emitir). Dados de `resumoFluxoCaixa(de, ate)` em
 `contas_pagar` abertas. O layout não recebe `searchParams`, por isso o período fica em
 estado do cliente e a troca chama a action. Sem migration.
 
+## Baixa manual: confirmar recebimento e pagamento (12/10/2026, migration `20261012130000`)
+
+Pedido do dono: controle financeiro nas listas. Em **A receber** e **A pagar**, cada
+cobrança/conta em aberto tem **caixa de seleção**; marcadas, aparece a barra fixa com data,
+observação e "Confirmar recebimento/pagamento" em lote. Abrir a linha mostra o detalhe com
+o mesmo botão (A pagar já tinha "registrar pagamento"; A receber ganhou o painel, com link
+para o pedido). `a-receber/lista-receber.tsx` substituiu `filtro-status.tsx`.
+
+- **A receber**: RPC `admin_registrar_recebimento(p_pedido_id, p_numero_parcela, p_recebido_em,
+  p_valor, p_obs)` — parcelado é parcela por parcela (`pedido_parcelas.pago_em`; com a última,
+  `pedidos.pago_em`/`valor_pago`); à vista é o pedido (valor = o listado, senão
+  `valor_cobranca_pedido`). Data futura, pedido cancelado, à vista em pedido parcelado e
+  parcela já recebida são recusados. Deixa rastro no andamento com origem **`sistema`**
+  ("Recebimento confirmado pelo financeiro (parcela n) por Fulano: obs") — origem `admin`
+  seria barrada por `status_bloquear_por_atraso`, e receber é o que destrava. A baixa
+  automática do Bling continua. Action `confirmarRecebimentos` em `actions/recebimentos.ts`
+  (uma RPC por item, auditoria `pedido`/`pagou`, erros por item sem derrubar o lote).
+- **A pagar**: `baixarContasPagarEmLote(ids, pagoEm, obs)` chama `admin_baixar_conta_pagar`
+  por conta, **pelo valor da conta** — juros/desconto continuam pelo detalhe.
+
 ## Painel de crédito (08/10/2026)
 
 Financeiro → **Crédito** (`src/app/admin/financeiro/credito`; **card próprio** abaixo dos

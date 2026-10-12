@@ -1,5 +1,6 @@
 import { buscarAguardandoRecebimento } from '@/app/actions/clientes'
-import FiltroStatus from './filtro-status'
+import { hojeBrasilia } from '@/lib/datas'
+import ListaReceber from './lista-receber'
 
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -13,7 +14,7 @@ export default async function AReceberPage() {
 
   return (
     <div>
-      <p className="text-sm text-[#6E6E68] mb-6">
+      <p className="text-sm text-[#6E6E68] mb-2">
         {pendentes.length} cobrança{pendentes.length !== 1 ? 's' : ''} em
         aberto
         {pendentes.length > 0 && (
@@ -22,6 +23,9 @@ export default async function AReceberPage() {
             <span className="font-mono">R$ {brl(valorTotal)}</span> no total
           </>
         )}
+      </p>
+      <p className="text-xs text-[#6E6E68] mb-6">
+        Marque as cobranças que já conferiu e confirme o recebimento, ou abra uma delas e confirme ali. A baixa pelo Bling continua acontecendo sozinha.
       </p>
 
       {vencidas.length > 0 && (
@@ -46,7 +50,7 @@ export default async function AReceberPage() {
           </p>
         </div>
       ) : (
-        <FiltroStatus parcelas={parcelas} />
+        <ListaReceber parcelas={parcelas} hoje={hojeBrasilia()} />
       )}
     </div>
   )

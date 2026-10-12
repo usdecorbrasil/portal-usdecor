@@ -10,6 +10,7 @@ import { anexarComprovanteDespesa } from '@/app/actions/despesas'
 import {
   alterarContaPagar,
   baixarContaPagar,
+  baixarContasPagarEmLote,
   cancelarContaPagar,
   estornarContaPagar,
   type ContaPagar,
@@ -42,6 +43,45 @@ export default function ListaContas({
   hoje: string
 }) {
   const [aberta, setAberta] = useState<string | null>(null)
+  const router = useRouter()
+  // Seleção em lote: só contas em aberto (controle financeiro, pedido do dono em 12/10/2026)
+  const [selecao, setSelecao] = useState<Set<string>>(new Set())
+  const [pagoEmLote, setPagoEmLote] = useState(hoje)
+  const [obsLote, setObsLote] = useState('')
+  const [erroLote, setErroLote] = useState('')
+  const [avisoLote, setAvisoLote] = useState('')
+  const [pendenteLote, iniciarLote] = useTransition()
+  const abertasTodas = contas.filter((c) => !c.pagoEm && !c.canceladaEm)
+  const selecionadas = abertasTodas.filter((c) => selecao.has(c.id))
+  const totalSelecionado = selecionadas.reduce((s, c) => s + c.valor, 0)
+
+  function alternarSelecao(id: string) {
+    setSelecao((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+  function selecionarGrupo(lista: ContaPagar[], marcar: boolean) {
+    setSelecao((s) => {
+      const n = new Set(s)
+      lista.filter((c) => !c.pagoEm && !c.canceladaEm).forEach((c) => (marcar ? n.add(c.id) : n.delete(c.id)))
+      return n
+    })
+  }
+  function baixarSelecionadas() {
+    setErroLote('')
+    setAvisoLote('')
+    iniciarLote(async () => {
+      const r = await baixarContasPagarEmLote(selecionadas.map((c) => c.id), pagoEmLote, obsLote.trim() || null)
+      if (!r.ok) return setErroLote(r.erro)
+      setSelecao(new Set())
+      setObsLote('')
+      setAvisoLote(`${r.feitas} conta${r.feitas > 1 ? 's' : ''} paga${r.feitas > 1 ? 's' : ''} confirmada${r.feitas > 1 ? 's' : ''}.${r.erros.length ? ' Não deu para confirmar: ' + r.erros.join(' · ') : ''}`)
+      router.refresh()
+    })
+  }
 
   const em7 = somarDias(hoje, 7)
   const grupos: Grupo[] =
@@ -82,6 +122,29 @@ export default function ListaContas({
 
   return (
     <div className="mt-4 space-y-4">
+      {avisoLote && <p className="text-xs text-[#2E7D4F] bg-[#E3F0E8] border border-[#2E7D4F] rounded-sm px-3 py-2">{avisoLote}</p>}
+      {erroLote && <p className="text-xs text-[#B00063] bg-white border border-[#B00063] rounded-sm px-3 py-2">{erroLote}</p>}
+      {selecionadas.length > 0 && (
+        <div className="sticky top-2 z-20 bg-[#131A2E] text-white rounded-sm px-3 py-2.5 shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+            <p className="text-xs flex-1 min-w-0">
+              <span className="font-semibold">{selecionadas.length} conta{selecionadas.length > 1 ? 's' : ''} selecionada{selecionadas.length > 1 ? 's' : ''}</span>
+              {' · '}<span className="font-mono">R$ {brl(totalSelecionado)}</span>
+              <span className="block text-white/70">cada uma entra paga pelo valor da conta; para valor diferente (juros, desconto), abra a conta.</span>
+            </p>
+            <label className="text-[10px] font-mono tracking-wider text-white/70">PAGO EM
+              <input type="date" value={pagoEmLote} max={hoje} onChange={(e) => setPagoEmLote(e.target.value)} className="block border border-white/30 rounded-sm px-2 py-1 text-xs bg-white text-[#131A2E]" />
+            </label>
+            <label className="text-[10px] font-mono tracking-wider text-white/70 flex-1 min-w-0">OBSERVAÇÃO (opcional)
+              <input value={obsLote} onChange={(e) => setObsLote(e.target.value)} placeholder="ex.: pagos pelo Itaú" className="block w-full border border-white/30 rounded-sm px-2 py-1 text-xs bg-white text-[#131A2E]" />
+            </label>
+            <button disabled={pendenteLote} onClick={baixarSelecionadas} className="rounded-sm px-4 py-2 text-xs font-bold tracking-wide bg-[#2E7D4F] text-white disabled:opacity-50">
+              {pendenteLote ? 'CONFIRMANDO…' : 'CONFIRMAR PAGAMENTO'}
+            </button>
+            <button disabled={pendenteLote} onClick={() => setSelecao(new Set())} className="text-xs underline text-white/80 pb-2">limpar</button>
+          </div>
+        </div>
+      )}
       <div className="flex justify-end">
         <button onClick={exportar} className="text-xs text-[#0090D8] hover:underline">
           baixar CSV ({contas.length})
@@ -99,6 +162,17 @@ export default function ListaContas({
             </div>
             <div className={CAIXA + ' rounded-t-none'}>
               <div className={CABECALHO + ' hidden sm:flex'}>
+                <span className="w-7 shrink-0 flex items-center">
+                  {g.contas.some((c) => !c.pagoEm && !c.canceladaEm) && (
+                    <input
+                      type="checkbox"
+                      aria-label="Selecionar todas em aberto"
+                      checked={g.contas.filter((c) => !c.pagoEm && !c.canceladaEm).every((c) => selecao.has(c.id))}
+                      onChange={(e) => selecionarGrupo(g.contas, e.target.checked)}
+                      className="accent-[#131A2E]"
+                    />
+                  )}
+                </span>
                 <span className="w-20">Vencimento</span>
                 <span className="flex-1">Conta</span>
                 <span className="w-12 text-right">Parc.</span>
@@ -107,7 +181,7 @@ export default function ListaContas({
               </div>
               <div className={CORPO}>
                 {g.contas.map((c) => (
-                  <Linha key={c.id} c={c} hoje={hoje} aberta={aberta === c.id} alternar={() => setAberta(aberta === c.id ? null : c.id)} />
+                  <Linha key={c.id} c={c} hoje={hoje} aberta={aberta === c.id} alternar={() => setAberta(aberta === c.id ? null : c.id)} marcada={selecao.has(c.id)} marcar={() => alternarSelecao(c.id)} />
                 ))}
               </div>
             </div>
@@ -117,7 +191,7 @@ export default function ListaContas({
   )
 }
 
-function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; aberta: boolean; alternar: () => void }) {
+function Linha({ c, hoje, aberta, alternar, marcada, marcar }: { c: ContaPagar; hoje: string; aberta: boolean; alternar: () => void; marcada: boolean; marcar: () => void }) {
   const vencida = !c.pagoEm && !c.canceladaEm && c.vencimento < hoje
   const tarja = c.canceladaEm ? 'bg-[#BDBCB5]' : c.pagoEm ? 'bg-[#8CB399]' : vencida ? 'bg-[#B00063]' : 'bg-[#C4A868]'
   const etiqueta = c.canceladaEm
@@ -131,7 +205,11 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
   return (
     <div data-busca className="relative">
       <span className={'absolute left-0 top-0 bottom-0 w-px ' + tarja} />
-      <button onClick={alternar} className="w-full text-left flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 px-2.5 py-1.5 bg-white hover:bg-[#FAFAF8]">
+      <div className="flex items-stretch bg-white hover:bg-[#FAFAF8]">
+      <span className="w-7 shrink-0 flex items-center justify-center pl-2.5">
+        {!c.pagoEm && !c.canceladaEm && <input type="checkbox" aria-label={`Selecionar ${c.descricao}`} checked={marcada} onChange={marcar} className="accent-[#131A2E]" />}
+      </span>
+      <button onClick={alternar} className="flex-1 min-w-0 text-left flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 pr-2.5 pl-1 py-1.5">
         <span className="flex items-center gap-2 sm:contents">
           <span className={NUM + ' sm:w-20 ' + (vencida ? 'text-[#B00063] font-semibold' : '')}>{dataBr(c.vencimento)}</span>
           <span className="flex-1 min-w-0">
@@ -155,6 +233,7 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
         </span>
         {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' hidden sm:inline'}>{etiqueta.t}</span>}
       </button>
+      </div>
       {aberta && <Painel c={c} hoje={hoje} />}
     </div>
   )
