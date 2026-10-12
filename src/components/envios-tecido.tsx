@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { anexarNf, conferirEnvio, recusarEnvio } from '@/app/actions/envio-tecido'
+import { anexarNf, conferirEnvio, recusarEnvio, lerNfEnvio, type NfLida } from '@/app/actions/envio-tecido'
 import { ROTULO_SITUACAO_ENVIO, type SituacaoEnvio } from '@/lib/estoque/tipos'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
 import { paraNumeroBr } from '@/lib/numero'
@@ -155,6 +155,18 @@ function Conferencia({ envio: e }: { envio: EnvioLinha }) {
   const [recusando, setRecusando] = useState(false)
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
+  // Leitura da NF pela IA: só pré-confere; quem decide a metragem é quem mede
+  const [nf, setNf] = useState<NfLida | null>(null)
+  const [lendo, iniciarLeitura] = useTransition()
+
+  function lerNota() {
+    setErro('')
+    iniciarLeitura(async () => {
+      const r = await lerNfEnvio(e.id)
+      if (!r.ok) return setErro(r.erro)
+      setNf(r.nf)
+    })
+  }
 
   function confirmar() {
     setErro('')
@@ -183,6 +195,40 @@ function Conferencia({ envio: e }: { envio: EnvioLinha }) {
         Meça o que chegou. A metragem conferida é a que entra no saldo do
         cliente — se diferir da informada, a diferença fica anotada no extrato.
       </p>
+      {e.nfUrl && !recusando && (
+        <div className="mb-2">
+          {!nf && (
+            <button type="button" onClick={lerNota} disabled={lendo || pendente} className="border border-[#0090D8] text-[#0090D8] bg-white rounded-sm px-2.5 py-1 text-[11px] font-semibold tracking-wide disabled:opacity-50">
+              {lendo ? 'LENDO A NOTA…' : e.nfUrl.includes('.xml') ? '📄 LER O XML DA NOTA E COMPARAR' : '🤖 LER A NOTA COM IA E COMPARAR'}
+            </button>
+          )}
+          {nf && (
+            <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 text-xs">
+              <p className="font-semibold text-[#131A2E]">
+                {nf.modo === 'xml' ? 'XML · ' : 'IA · '}Nota {nf.numero ? `nº ${nf.numero}` : 'sem número legível'}{nf.emissao ? ` · ${nf.emissao.split('-').reverse().join('/')}` : ''}{nf.emitente ? ` · ${nf.emitente}` : ''}
+              </p>
+              {nf.itens.length > 0 && (
+                <ul className="mt-1 text-[#6E6E68]">
+                  {nf.itens.map((i, idx) => (
+                    <li key={idx}>{i.descricao} — <span className="font-mono">{String(i.quantidade).replace('.', ',')} {i.unidade ?? ''}</span>{i.tecido ? ` (${i.tecido})` : ''}</li>
+                  ))}
+                </ul>
+              )}
+              {nf.confere.map((c) => <p key={c} className="text-[#2E7D4F] mt-1">✓ {c}</p>)}
+              {nf.divergencias.map((d) => <p key={d} className="text-[#8A6100] mt-1">⚠ {d}</p>)}
+              <div className="flex flex-wrap gap-3 mt-2">
+                {nf.metrosLidos != null && (
+                  <button type="button" onClick={() => { setMetros(String(nf.metrosLidos).replace('.', ',')); setObs((o) => o || `NF ${nf.numero ?? ''} lida por IA: ${nf.metrosLidos} m`.trim()) }} className="text-[#0090D8] underline">
+                    usar {String(nf.metrosLidos).replace('.', ',')} m da nota
+                  </button>
+                )}
+                <button type="button" onClick={() => setNf(null)} className="text-[#6E6E68] underline">fechar</button>
+              </div>
+              <p className="text-[10px] text-[#9B9A93] mt-1">A leitura só compara; nada é gravado até você confirmar a conferência. O cliente não vê isto.</p>
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2">
         {!recusando && (
           <div>
@@ -255,14 +301,15 @@ function AnexarNf({ envio: e }: { envio: EnvioLinha }) {
       <p className="text-[11px] text-[#6E6E68] leading-relaxed mb-2">
         Anexe a NF de remessa deste envio. Depois da conferência ela não pode mais ser trocada.
       </p>
+      <p className="text-[11px] text-[#2E7D4F] mb-2">Prefira o <strong>XML da nota</strong> (o arquivo que chega junto da NF-e por e-mail): é lido na hora, sem erro de leitura. PDF ou foto também servem.</p>
       <div className="flex flex-wrap items-end gap-2">
         <div>
           <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">Nº DA NF</label>
           <input name="nfNumero" type="text" maxLength={40} defaultValue={e.nfNumero ?? ''} className={campo + ' w-32 font-mono'} />
         </div>
         <div className="flex-1 min-w-[12rem]">
-          <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">ARQUIVO (PDF, JPG OU PNG)</label>
-          <input name="nf" type="file" accept="application/pdf,image/jpeg,image/png" className="block w-full text-xs text-[#6E6E68] file:mr-3 file:border file:border-[#DDDCD5] file:rounded-sm file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
+          <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">ARQUIVO (XML, PDF, JPG OU PNG)</label>
+          <input name="nf" type="file" accept=".xml,text/xml,application/xml,application/pdf,image/jpeg,image/png" className="block w-full text-xs text-[#6E6E68] file:mr-3 file:border file:border-[#DDDCD5] file:rounded-sm file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
         </div>
         <button type="submit" disabled={pendente} className="bg-[#131A2E] text-white rounded-sm px-4 py-2 text-xs font-bold tracking-wide disabled:opacity-50">
           {pendente ? 'ENVIANDO…' : 'SALVAR NF'}

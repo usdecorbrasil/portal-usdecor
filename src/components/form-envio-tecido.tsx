@@ -116,8 +116,9 @@ export default function FormEnvioTecido({
           <input id="envio-nf-numero" name="nfNumero" type="text" maxLength={40} placeholder="Ex.: 12345" className={campo + ' font-mono'} />
         </div>
         <div>
-          <label htmlFor="envio-nf" className={rotulo}>ARQUIVO DA NF (PDF, JPG OU PNG, ATÉ 4 MB)</label>
-          <input id="envio-nf" name="nf" type="file" accept="application/pdf,image/jpeg,image/png" className="block w-full text-xs text-[#6E6E68] file:mr-3 file:border file:border-[#DDDCD5] file:rounded-sm file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
+          <label htmlFor="envio-nf" className={rotulo}>ARQUIVO DA NF (XML, PDF, JPG OU PNG, ATÉ 4 MB)</label>
+          <input id="envio-nf" name="nf" type="file" accept=".xml,text/xml,application/xml,application/pdf,image/jpeg,image/png" className="block w-full text-xs text-[#6E6E68] file:mr-3 file:border file:border-[#DDDCD5] file:rounded-sm file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
+          <p className="text-[11px] text-[#2E7D4F] mt-1">Prefira o <strong>XML da nota</strong> (o arquivo que chega junto da NF-e por e-mail): é lido na hora, sem erro de leitura. PDF ou foto também servem.</p>
           <p className="text-[11px] text-[#9B9A93] mt-1">Pode anexar depois, enquanto o envio não for conferido.</p>
         </div>
         <div className="sm:col-span-2">
