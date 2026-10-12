@@ -15,9 +15,16 @@ type Form = { nome: string; final: string; diaFechamento: string; diaVencimento:
 const vazio = (): Form => ({ nome: '', final: '', diaFechamento: '', diaVencimento: '' })
 const doCartao = (c: CartaoCredito): Form => ({ nome: c.nome, final: c.final ?? '', diaFechamento: String(c.diaFechamento), diaVencimento: String(c.diaVencimento) })
 
-export default function ListaCartoes({ cartoes, hoje }: { cartoes: CartaoCredito[]; hoje: string }) {
+/**
+ * Configurações → Pagamento → Cartões de crédito da empresa (pedido do dono,
+ * 12/10/2026: fica junto das formas de pagamento, não no Financeiro). Nome,
+ * final, dia de fechamento e de vencimento da fatura; a regra de em que
+ * fatura a compra cai está em `src/lib/contas-pagar/cartoes.ts`.
+ */
+export default function CartoesCredito({ cartoes, hoje }: { cartoes: CartaoCredito[]; hoje: string }) {
   const router = useRouter()
-  const [editando, setEditando] = useState<string | 'novo' | null>(cartoes.length ? null : 'novo')
+  const [aberto, setAberto] = useState(false)
+  const [editando, setEditando] = useState<string | 'novo' | null>(null)
   const [form, setForm] = useState<Form>(vazio())
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
@@ -56,8 +63,26 @@ export default function ListaCartoes({ cartoes, hoje }: { cartoes: CartaoCredito
       ? `Compra feita hoje (${dataBr(hoje)}) vence em ${dataBr(vencimentoDaFatura(hoje, { diaFechamento: fech, diaVencimento: venc }))}.`
       : null
 
+  const ativos = cartoes.filter((c) => c.ativo)
+  const resumo = ativos.length
+    ? ativos.map((c) => `${c.nome} (fecha ${c.diaFechamento}, vence ${c.diaVencimento})`).join(' · ')
+    : 'Nenhum cartão cadastrado — compra no crédito usa o vencimento padrão'
+
   return (
-    <div>
+    <div id="cartoes" className="bg-white border border-[#DDDCD5] rounded-sm p-4 mt-3">
+      <button type="button" onClick={() => setAberto((v) => !v)} aria-expanded={aberto} className="w-full flex items-start justify-between gap-3 text-left">
+        <span className="min-w-0">
+          <span className="block font-semibold tracking-tight text-sm">Cartões de crédito da empresa</span>
+          <span className="block text-xs text-[#6E6E68] mt-1 leading-relaxed">
+            {aberto
+              ? 'Cada cartão tem o dia em que a fatura fecha e o dia em que vence. Compra feita até o fechamento entra na fatura do mês; depois dele, na do mês seguinte. Ao lançar uma nota paga no crédito, a equipe escolhe o cartão e as parcelas já vêm com o vencimento real da fatura.'
+              : resumo}
+          </span>
+        </span>
+        <span aria-hidden className={`text-[#6E6E68] text-xs shrink-0 mt-0.5 transition-transform ${aberto ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+
+      {aberto && (<div className="mt-4">
       {editando && (
         <div className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-3 mb-4">
           <p className="text-xs font-semibold tracking-wide text-[#131A2E] mb-2">{editando === 'novo' ? 'NOVO CARTÃO' : 'EDITAR CARTÃO'}</p>
@@ -82,11 +107,9 @@ export default function ListaCartoes({ cartoes, hoje }: { cartoes: CartaoCredito
             <button onClick={salvar} disabled={pendente} className={botao + ' bg-[#131A2E] text-white'}>
               {pendente ? 'SALVANDO…' : 'SALVAR'}
             </button>
-            {cartoes.length > 0 && (
-              <button onClick={() => setEditando(null)} disabled={pendente} className={botao + ' border border-[#131A2E] bg-white'}>
-                CANCELAR
-              </button>
-            )}
+            <button onClick={() => setEditando(null)} disabled={pendente} className={botao + ' border border-[#131A2E] bg-white'}>
+              CANCELAR
+            </button>
           </div>
         </div>
       )}
@@ -99,7 +122,7 @@ export default function ListaCartoes({ cartoes, hoje }: { cartoes: CartaoCredito
       {erro && !editando && <p className="text-xs text-[#B00063] mb-2">{erro}</p>}
 
       {cartoes.length === 0 ? (
-        <div className={VAZIO}>Nenhum cartão cadastrado. Sem cartão, a compra no crédito usa o vencimento padrão (um mês após a nota).</div>
+        <div className={VAZIO}>Nenhum cartão cadastrado. Sem cartão, a compra no crédito usa o vencimento padrão (um mês após a nota). O cadastro vale para a conferência de notas e para o contas a pagar.</div>
       ) : (
         <div className={CAIXA}>
           <div className={CABECALHO + ' hidden sm:flex'}>
@@ -132,6 +155,7 @@ export default function ListaCartoes({ cartoes, hoje }: { cartoes: CartaoCredito
           </div>
         </div>
       )}
+      </div>)}
     </div>
   )
 }

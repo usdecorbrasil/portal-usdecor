@@ -599,10 +599,11 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   chega à tela sem escolha, e a equipe decide; nota só de tecido ainda usa `pago`
   internamente, porque não gera conta a pagar.
 - **Cartões de crédito da empresa** (decisão do dono, 12/10/2026, migration `20261012120000`):
-  Financeiro → **Cartões** (`/admin/financeiro/cartoes`, card próprio como o Crédito; link em
-  A pagar), tabela `cartoes_credito` (nome, final de 4 dígitos, `dia_fechamento`,
+  **Configurações → Pagamento → "Cartões de crédito da empresa"** (`configuracoes/cartoes-credito.tsx`,
+  card recolhível abaixo de Formas de pagamento, âncora `#cartoes`; mudou do Financeiro para lá a
+  pedido do dono em 12/10/2026; A pagar e a conferência só linkam), tabela `cartoes_credito` (nome, final de 4 dígitos, `dia_fechamento`,
   `dia_vencimento`, ativo; nome único entre ativos; só admin/financeiro; auditoria
-  `cartao_credito`). Na conferência, condição **crédito** pede "Qual cartão" (com um só
+  `cartao_credito`, listada no Histórico de Configurações). Na conferência, condição **crédito** pede "Qual cartão" (com um só
   cadastrado, já vem escolhido) e as parcelas recebem o **vencimento da fatura**, não a data
   da nota: regra pura em `src/lib/contas-pagar/cartoes.ts` — compra até o dia de fechamento
   cai na fatura do mês, depois dele na do mês seguinte; a fatura vence no `dia_vencimento`

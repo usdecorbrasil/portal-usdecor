@@ -4,6 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { lerPerfil } from '@/lib/auth/perfil'
 import Equipe from './equipe'
 import ConfigPagamento from './config-pagamento'
+import CartoesCredito from './cartoes-credito'
+import { listarCartoes } from '@/app/actions/cartoes'
+import { hojeBrasilia } from '@/lib/datas'
 import ConfigNotificacoes from './config-notificacoes'
 import IntegracaoBling from './integracao-bling'
 import IntegracaoIa from './integracao-ia'
@@ -48,10 +51,11 @@ export default async function ConfiguracoesPage() {
     (usuarios?.users ?? []).map((u) => [u.id, u.email ?? ''])
   )
 
-  const [configPagamento, configNotificacoes, estadoBling] = await Promise.all([
+  const [configPagamento, configNotificacoes, estadoBling, cartoes] = await Promise.all([
     buscarConfigPagamento(),
     buscarConfigNotificacoes(),
     lerEstadoBling(),
+    listarCartoes(),
   ])
 
   return (
@@ -88,6 +92,7 @@ export default async function ConfiguracoesPage() {
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
         <ConfigPagamento configAtual={configPagamento} />
+        <CartoesCredito cartoes={cartoes} hoje={hojeBrasilia()} />
       </div>
 
       <div className="mt-8">
@@ -115,7 +120,7 @@ export default async function ConfiguracoesPage() {
         {/* Equipe e pagamento na mesma lista: é a pergunta que se faz aqui —
             o que andou mudando nas configurações, e por quem */}
         <HistoricoAlteracoes
-          entidade={['configuracao', 'equipe']}
+          entidade={['configuracao', 'equipe', 'cartao_credito']}
           recolhido
         />
       </div>
