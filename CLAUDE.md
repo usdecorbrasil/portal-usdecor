@@ -445,6 +445,41 @@ vencimento (boleto a emitir). Dados de `resumoFluxoCaixa(de, ate)` em
 `contas_pagar` abertas. O layout não recebe `searchParams`, por isso o período fica em
 estado do cliente e a troca chama a action. Sem migration.
 
+## Conciliação de extratos (12/10/2026, migration `20261012140000`)
+
+Financeiro → **Conciliação** (aba do card Contas, `financeiro/(abas)/conciliacao`). Pedido do
+dono: provar que tudo o que passou na conta corrente e no cartão está lançado.
+
+- **Importar** (`importarExtrato` em `actions/conciliacao.ts`): tipo banco ou fatura de cartão
+  (exige o cartão de `cartoes_credito`). **OFX** é lido sem IA (`src/lib/conciliacao/ofx.ts`,
+  puro: `<STMTTRN>`, 1.x SGML ou 2.x XML, ISO-8859-1 por padrão, `TRNAMT` com vírgula aceito).
+  PDF, imagem ou CSV passam por `src/lib/conciliacao/ler-extrato.ts` (IA, esquema de fio sem
+  null como o das notas, `VERSAO_PROMPT_EXTRATO`, CSV vai como texto; `max_tokens` estourado
+  devolve "divida o período"). Arquivo no bucket `extratos`; tabelas `extratos` e
+  `extrato_lancamentos` (só leitura para `authenticated`; escrita por chave de serviço e RPCs).
+- **Casamento** (`src/lib/conciliacao/casar.ts`, puro): valor igual é obrigatório (1 centavo);
+  data perto do vencimento/pagamento (banco, 7 dias) ou da **data da compra** (cartão, 5 dias);
+  nome do fornecedor/cliente na descrição pontua; `PARC 02/03` na fatura precisa bater com a
+  parcela da conta. Certeza **alta** (≥85 e 15 à frente), **média**, ou **nenhuma** (sem
+  candidata, ou duas empatadas — a tela lista e a equipe escolhe). Saída ↔ `contas_pagar`
+  (não canceladas, vencimento no período ± margem); entrada ↔ `parcelas_a_receber`.
+- **Tela** (`conciliacao/[id]/conciliar.tsx`): quadros entradas/saídas/conciliados/pendentes/
+  ignorados, filtro, cada lançamento com a sugestão, seletor com as 5 melhores + busca manual,
+  **"dar baixa/confirmar recebimento com a data e o valor do extrato"** (marcado por padrão
+  quando a conta/cobrança está em aberto), ignorar com motivo (tarifa, transferência, pagamento
+  da fatura), desfazer (a baixa feita **fica** — estorna-se em A pagar / no pedido), link
+  "lançar nota" para saída não lançada. **Fechar** só sem pendente; reabrir volta a aceitar
+  mudanças; excluir só sem nada conciliado (apaga o arquivo do bucket).
+- **RPCs**: `admin_conciliar_lancamento` (saída exige conta, entrada exige pedido; com
+  `p_baixar` chama `admin_baixar_conta_pagar` / `admin_registrar_recebimento` na data e valor
+  do extrato; índices únicos parciais impedem a mesma conta/cobrança em dois lançamentos),
+  `admin_ignorar_lancamento`, `admin_desfazer_conciliacao`, `admin_fechar_extrato`,
+  `admin_excluir_extrato`. Auditoria entidade `extrato`.
+- **Etiqueta nas listas**: conta a pagar ou cobrança conciliada aparece com `✓ extrato` em A pagar
+  e A receber (consulta a `extrato_lancamentos` conciliados por `conta_pagar_id` /
+  `pedido_id + numero_parcela`), o detalhe mostra a data do lançamento e o link para o extrato,
+  e o CSV de A pagar leva a coluna "Extrato".
+
 ## Baixa manual: confirmar recebimento e pagamento (12/10/2026, migration `20261012130000`)
 
 Pedido do dono: controle financeiro nas listas. Em **A receber** e **A pagar**, cada
