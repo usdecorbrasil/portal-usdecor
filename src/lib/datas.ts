@@ -15,3 +15,9 @@ const FORMATO = new Intl.DateTimeFormat('en-CA', {
 export function hojeBrasilia(agora: Date = new Date()): string {
   return FORMATO.format(agora)
 }
+
+/** Soma dias a uma data AAAA-MM-DD, sem depender do fuso (conta em UTC). */
+export function somarDias(iso: string, dias: number): string {
+  const [a, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10)
+}

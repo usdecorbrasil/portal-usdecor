@@ -434,6 +434,17 @@ esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própri
   o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
   etapas para o banco e ajustar essas três pontas juntas.
 
+## Totalizador de contas a receber e a pagar (12/10/2026)
+
+Card no topo do Financeiro (`financeiro/card-fluxo.tsx` servidor + `fluxo-caixa.tsx` cliente,
+incluído em `financeiro/(abas)/layout.tsx`): a receber e a pagar **que vencem no período**
+(atalhos 7 / 15 / 30 dias a partir de hoje, ou datas personalizadas), saldo previsto
+(receber − pagar) e, à parte, o que **já venceu** de cada lado e as cobranças ainda sem
+vencimento (boleto a emitir). Dados de `resumoFluxoCaixa(de, ate)` em
+`actions/fluxo-caixa.ts`: a receber vem de `parcelas_a_receber` (pedidos), a pagar de
+`contas_pagar` abertas. O layout não recebe `searchParams`, por isso o período fica em
+estado do cliente e a troca chama a action. Sem migration.
+
 ## Painel de crédito (08/10/2026)
 
 Financeiro → **Crédito** (`src/app/admin/financeiro/credito`; **card próprio** abaixo dos
