@@ -601,7 +601,7 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
 - **Cartões de crédito da empresa** (decisão do dono, 12/10/2026, migration `20261012120000`):
   **Configurações → Pagamento → "Cartões de crédito da empresa"** (`configuracoes/cartoes-credito.tsx`,
   card recolhível abaixo de Formas de pagamento, âncora `#cartoes`; mudou do Financeiro para lá a
-  pedido do dono em 12/10/2026; A pagar e a conferência só linkam), tabela `cartoes_credito` (nome, final de 4 dígitos, `dia_fechamento`,
+  pedido do dono em 12/10/2026; A pagar só filtra por cartão, sem link; a conferência linka), tabela `cartoes_credito` (nome, final de 4 dígitos, `dia_fechamento`,
   `dia_vencimento`, ativo; nome único entre ativos; só admin/financeiro; auditoria
   `cartao_credito`, listada no Histórico de Configurações). Na conferência, condição **crédito** pede "Qual cartão" (com um só
   cadastrado, já vem escolhido) e as parcelas recebem o **vencimento da fatura**, não a data

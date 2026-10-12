@@ -66,17 +66,12 @@ export default async function APagarPage({
           paga na hora (dinheiro, Pix, débito) entra já quitada; lançada sem foto ou PDF, aparece
           como sem comprovante.
         </p>
-        <div className="shrink-0 flex flex-col sm:items-end gap-1.5">
-          <Link
-            href="/admin/estoque/despesas/nova"
-            className="inline-flex items-center justify-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
-          >
-            📷 LANÇAR NOTA DE COMPRA
-          </Link>
-          <Link href="/admin/configuracoes#cartoes" className="text-xs text-[#0090D8] hover:underline">
-            💳 Cartões de crédito ({cartoes.filter((c) => c.ativo).length}) · em Configurações
-          </Link>
-        </div>
+        <Link
+          href="/admin/estoque/despesas/nova"
+          className="shrink-0 inline-flex items-center justify-center gap-1.5 bg-[#131A2E] text-white rounded-sm px-3.5 py-2 text-xs font-semibold tracking-wide"
+        >
+          📷 LANÇAR NOTA DE COMPRA
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
