@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, TITULO_GRUPO, VAZIO } from '@/components/estilo-lista'
 import { baixarCsv, paraCsv, numCsv } from '@/components/baixar-csv'
 import { ROTULO_CURTO } from '@/lib/contas-pagar/condicoes'
@@ -102,7 +103,7 @@ export default function ListaContas({
 
   function exportar() {
     const linhas = [
-      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Cartão', 'Compra', 'Vencimento na nota', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante'],
+      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Cartão', 'Compra', 'Vencimento na nota', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante', 'Extrato'],
       ...contas.map((c) => [
         dataBr(c.vencimento),
         c.descricao,
@@ -118,6 +119,7 @@ export default function ListaContas({
         c.pagoEm ? dataBr(c.pagoEm) : '',
         c.valorPago != null ? numCsv(c.valorPago) : '',
         c.semComprovante ? 'sem arquivo' : 'anexado',
+        c.extratoData ? `conferido ${dataBr(c.extratoData)}` : '',
       ]),
     ]
     baixarCsv(`contas-a-pagar-${situacao}-${hoje}.csv`, paraCsv(linhas))
@@ -236,6 +238,7 @@ function Linha({ c, hoje, aberta, alternar, marcada, marcar, categorias, cartoes
           </span>
           {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' sm:hidden'}>{etiqueta.t}</span>}
           {c.semComprovante && <span className={ETIQUETA + ' bg-[#FFFBEE] text-[#8A6100]'}>sem comprovante</span>}
+          {c.extratoId && <span className={ETIQUETA + ' bg-[#E6EDEE] text-[#0090D8]'} title="Conferida com o extrato">✓ extrato</span>}
           <span className={NUM + ' ml-auto sm:ml-0 sm:w-24 text-right font-semibold'}>R$ {brl(c.valorPago ?? c.valor)}</span>
         </span>
         {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' hidden sm:inline'}>{etiqueta.t}</span>}
@@ -304,6 +307,12 @@ function Painel({ c, hoje, categorias, cartoes }: { c: ContaPagar; hoje: string;
         <p className="text-xs text-[#6E6E68] mb-2">
           {c.dataCompra && <>Compra em {dataBr(c.dataCompra)}</>}
           {c.vencimentoOriginal && <>{c.dataCompra ? ' · ' : ''}na nota vence {dataBr(c.vencimentoOriginal)}; na fatura{c.cartao ? ` do ${c.cartao}` : ''}, {dataBr(c.vencimento)}</>}
+        </p>
+      )}
+      {c.extratoId && (
+        <p className="text-xs text-[#0090D8] mb-2">
+          ✓ Conferida no extrato{c.extratoData ? ` (lançamento de ${dataBr(c.extratoData)})` : ''} ·{' '}
+          <Link href={`/admin/financeiro/conciliacao/${c.extratoId}`} className="underline">abrir o extrato</Link>
         </p>
       )}
       {c.pagoEm && c.valorPago != null && c.valorPago !== c.valor && (

@@ -1,5 +1,6 @@
 import { buscarAguardandoRecebimento } from '@/app/actions/clientes'
 import { hojeBrasilia } from '@/lib/datas'
+import { createClient } from '@/lib/supabase/server'
 import ListaReceber from './lista-receber'
 
 const brl = (v: number) =>
@@ -7,6 +8,10 @@ const brl = (v: number) =>
 
 export default async function AReceberPage() {
   const parcelas = await buscarAguardandoRecebimento()
+  // Cobranças conferidas no extrato (conciliação): etiqueta e link
+  const supabase = await createClient()
+  const { data: conc } = await supabase.from('extrato_lancamentos').select('pedido_id, numero_parcela, extrato_id, data').eq('situacao', 'conciliado').not('pedido_id', 'is', null).limit(5000)
+  const conferidas = new Map(((conc ?? []) as { pedido_id: string; numero_parcela: number | null; extrato_id: string; data: string }[]).map((l) => [`${l.pedido_id}:${l.numero_parcela ?? 0}`, { extratoId: l.extrato_id, data: l.data }]))
   const pendentes = parcelas.filter((p) => !p.pagoEm)
   const vencidas = parcelas.filter((p) => p.vencida)
   const valorTotal = pendentes.reduce((a, p) => a + p.valor, 0)
@@ -50,7 +55,7 @@ export default async function AReceberPage() {
           </p>
         </div>
       ) : (
-        <ListaReceber parcelas={parcelas} hoje={hojeBrasilia()} />
+        <ListaReceber parcelas={parcelas} hoje={hojeBrasilia()} conferidas={Object.fromEntries(conferidas)} />
       )}
     </div>
   )

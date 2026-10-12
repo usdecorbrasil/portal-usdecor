@@ -31,7 +31,7 @@ const botao = 'rounded-sm px-4 py-2 text-xs font-bold tracking-wide disabled:opa
  * detalhe de cada uma com o botão "Confirmar recebimento". A baixa automática
  * pelo Bling continua; isto é para o que o financeiro já conferiu.
  */
-export default function ListaReceber({ parcelas, hoje }: { parcelas: ParcelaAReceber[]; hoje: string }) {
+export default function ListaReceber({ parcelas, hoje, conferidas = {} }: { parcelas: ParcelaAReceber[]; hoje: string; /** chave `pedidoId:numeroParcela|0` → extrato que conferiu */ conferidas?: Record<string, { extratoId: string; data: string }> }) {
   const router = useRouter()
   const [filtro, setFiltro] = useState<string | null>(null)
   const [selecao, setSelecao] = useState<Set<string>>(new Set())
@@ -154,6 +154,7 @@ export default function ListaReceber({ parcelas, hoje }: { parcelas: ParcelaARec
                   {itens.map((p) => {
                     const k = chave(p)
                     const paga = !!p.pagoEm
+                    const conferida = conferidas[`${p.pedidoId}:${p.numeroParcela ?? 0}`]
                     return (
                       <div key={k} data-busca={`${p.numero} ${p.clienteNome}`} className="relative">
                         <span aria-hidden className={'absolute left-0 top-0 bottom-0 w-px ' + (p.vencida ? 'bg-[#B00063]' : paga ? 'bg-[#8CB399]' : 'bg-[#C4A868]')} />
@@ -168,13 +169,14 @@ export default function ListaReceber({ parcelas, hoje }: { parcelas: ParcelaARec
                             <span className={NOME + ' flex-1 min-w-0'}>{p.clienteNome}</span>
                             {p.vencida && <span className={ETIQUETA + ' bg-[#B00063] text-white'}>vencida</span>}
                             {paga && <span className={ETIQUETA + ' bg-[#E3F0E8] text-[#2E7D4F]'}>recebido</span>}
+                            {conferida && <span className={ETIQUETA + ' bg-[#E6EDEE] text-[#0090D8]'} title="Conferida com o extrato">✓ extrato</span>}
                             <span className="w-28 shrink-0 text-[10px] text-[#9B9A93] truncate hidden sm:block">{ROTULOS_PAGAMENTO[p.formaPagamento] ?? p.formaPagamento}</span>
                             <span className={NUM + ' w-16 shrink-0 text-right ' + (p.vencida ? 'font-bold text-[#B00063]' : 'text-[#6E6E68]')}>{p.vencimento ? dataBr(p.vencimento) : '—'}</span>
                             <span className={NUM + ' w-20 shrink-0 text-right font-semibold ' + (p.vencida ? 'text-[#B00063]' : 'text-[#131A2E]')}>{brl(p.valor)}</span>
                           </button>
                         </div>
                         {aberta === k && (
-                          <Painel p={p} hoje={hoje} pendente={pendente} erro={erro} onConfirmar={(quando, texto) => confirmar([paraItem(p)], quando, texto)} />
+                          <Painel p={p} hoje={hoje} pendente={pendente} erro={erro} conferida={conferida} onConfirmar={(quando, texto) => confirmar([paraItem(p)], quando, texto)} />
                         )}
                       </div>
                     )
@@ -189,7 +191,7 @@ export default function ListaReceber({ parcelas, hoje }: { parcelas: ParcelaARec
   )
 }
 
-function Painel({ p, hoje, pendente, erro, onConfirmar }: { p: ParcelaAReceber; hoje: string; pendente: boolean; erro: string; onConfirmar: (quando: string, texto: string) => void }) {
+function Painel({ p, hoje, pendente, erro, conferida, onConfirmar }: { p: ParcelaAReceber; hoje: string; pendente: boolean; erro: string; conferida?: { extratoId: string; data: string }; onConfirmar: (quando: string, texto: string) => void }) {
   const router = useRouter()
   const [quando, setQuando] = useState(hoje)
   const [texto, setTexto] = useState('')
@@ -221,6 +223,11 @@ function Painel({ p, hoje, pendente, erro, onConfirmar }: { p: ParcelaAReceber; 
         {p.pagoEm ? ` · recebido em ${dataBr(p.pagoEm)}` : ''}
         {' · '}<Link href={`/admin/pedidos/${p.pedidoId}`} className="text-[#0090D8] hover:underline">abrir o pedido</Link>
       </p>
+      {conferida && (
+        <p className="text-xs text-[#0090D8] mb-2">
+          ✓ Conferida no extrato (lançamento de {dataBr(conferida.data)}) · <Link href={`/admin/financeiro/conciliacao/${conferida.extratoId}`} className="underline">abrir o extrato</Link>
+        </p>
+      )}
       {!p.pagoEm && (
         <div className="flex flex-wrap gap-3 text-xs mb-2">
           <button type="button" onClick={() => setEditando((v) => !v)} className={editando ? 'font-bold underline' : 'text-[#0090D8] hover:underline'}>

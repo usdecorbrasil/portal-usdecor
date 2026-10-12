@@ -19,6 +19,7 @@ const CARDS: { titulo: string; abas: Aba[] }[] = [
     abas: [
       { href: '/admin/financeiro/a-receber', label: 'A receber' },
       { href: '/admin/financeiro/a-pagar', label: 'A pagar' },
+      { href: '/admin/financeiro/conciliacao', label: 'Conciliação' },
     ],
   },
   {

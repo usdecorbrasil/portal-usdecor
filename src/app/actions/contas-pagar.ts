@@ -51,6 +51,9 @@ export type ContaPagar = {
   dataCompra: string | null
   vencimentoOriginal: string | null
   categoriaId: string | null
+  /** Conciliada com um lançamento de extrato (id do extrato e data do lançamento). */
+  extratoId: string | null
+  extratoData: string | null
 }
 
 export type FiltroContas = {
@@ -113,6 +116,8 @@ const paraConta = (c: LinhaBanco): ContaPagar => ({
   dataCompra: c.data_compra,
   vencimentoOriginal: c.vencimento_original,
   categoriaId: c.categoria_id,
+  extratoId: null,
+  extratoData: null,
   cartao: c.cartoes_credito ? (c.cartoes_credito.final ? `${c.cartoes_credito.nome} · ${c.cartoes_credito.final}` : c.cartoes_credito.nome) : null,
 })
 
@@ -173,6 +178,22 @@ export async function listarContasPagar(filtro: FiltroContas): Promise<{ contas:
   }
 
   const contas = ((lista.data ?? []) as unknown as LinhaBanco[]).map(paraConta)
+  // Conferidas no extrato: etiqueta na lista e link no detalhe
+  if (contas.length) {
+    const { data: conc } = await supabase
+      .from('extrato_lancamentos')
+      .select('conta_pagar_id, extrato_id, data')
+      .eq('situacao', 'conciliado')
+      .in('conta_pagar_id', contas.map((c) => c.id))
+    const porConta = new Map(((conc ?? []) as { conta_pagar_id: string; extrato_id: string; data: string }[]).map((l) => [l.conta_pagar_id, l]))
+    for (const c of contas) {
+      const l = porConta.get(c.id)
+      if (l) {
+        c.extratoId = l.extrato_id
+        c.extratoData = l.data
+      }
+    }
+  }
   return { contas: filtro.semComprovante ? contas.filter((c) => c.semComprovante) : contas, resumo, hoje }
 }
 
