@@ -556,6 +556,27 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   conferência com `modo = 'xml'` (CHECK e `admin_anexar_arquivo_despesa` aceitam xml).
   Duplicatas viram parcelas; `tPag` vira a condição de pagamento; IPI+ST+seguro+outras
   entram em `impostos`. Nada de IA, custo zero. Não há consulta à SEFAZ nem QR code.
+- **Tecido de cliente na nota** (10/10/2026): a leitura (IA e XML) recebe os tecidos
+  cadastrados e os clientes ativos e marca `tecido_de_cliente` por item, `tecido` (nome
+  cadastrado) e `tecido_cliente` no cabeçalho (pelo CNPJ do emitente/destinatário ou nome
+  nas observações — o cliente costuma ser quem emite a remessa). Na conferência, a caixa
+  "Tecido de cliente" troca categoria/suprimento pelo seletor de tecido (com cadastro
+  rápido via `criarTecido`, que passou a devolver o id) e o cabeçalho pede "De qual
+  cliente é o tecido". Ao salvar, `criarEnviosDeTecido` cria um `tecido_envios` por
+  tecido (metros = quantidade somada, nota copiada para `documentos/tecidos/...` como NF
+  de remessa via `anexar_nf_envio_tecido`); o saldo só muda na conferência, como sempre.
+  Nota só de tecido **não** vira despesa nem conta a pagar (vai para Estoque → Tecidos do
+  cliente); nota mista separa item a item. Quem lança é a equipe (decisão do dono).
+- **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
+  - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
+    `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e
+    quantidades** pede confirmação no pop-up.
+  - Envio de tecido (migration `20261012100000`, gatilho `tecido_envios_validar`, vale
+    para cadastro à mão e nota lida): mesmo cliente + mesmo nº de NF em envio não recusado
+    recusa (`hint = 'envio_duplicado'`); sem NF, mesmo cliente + tecido + metragem no mesmo
+    dia recusa. Ao lançar a nota, `criarEnviosDeTecido` procura antes o envio que o cliente
+    já avisou com aquela NF: se aberto e do mesmo tecido, **anexa a nota a ele** em vez de
+    criar outro (a tela avisa); se já conferido, bloqueia.
 
 ## Contas a pagar (08/10/2026, migration `20261008190000`)
 
