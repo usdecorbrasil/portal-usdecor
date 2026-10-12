@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { lerDespesa, relerDespesa, importarXmlNfe, salvarDespesa, type Rascunho, type DadosDespesa, type DuplicataProvavel } from '@/app/actions/despesas'
 import { criarSuprimento } from '@/app/actions/suprimentos'
 import { criarTecido } from '@/app/actions/estoque'
+import { criarCartao } from '@/app/actions/cartoes'
 import CameraNota from './camera-nota'
 import { comprimir } from '@/lib/despesas/comprimir'
 import { TIPOS_DOCUMENTO } from '@/lib/despesas/tipos'
@@ -23,7 +24,6 @@ import { sugerirVinculo, parecidos, type VinculoAnterior } from '@/lib/supriment
 import { paraNumeroBr } from '@/lib/numero'
 import { hojeBrasilia } from '@/lib/datas'
 import { divergenciasDaChave, corrigirPelaChave } from '@/lib/despesas/chave'
-import Link from 'next/link'
 import { vencimentosNoCartao, rotuloCartao, type CartaoCredito } from '@/lib/contas-pagar/cartoes'
 import { avisoDaEmissao } from '@/lib/despesas/conferir'
 import { chaveAcessoValida } from '@/lib/despesas/validar'
@@ -158,7 +158,7 @@ export default function Captura({
   destinatarios,
   tecidos: tecidosIniciais,
   clientes,
-  cartoes,
+  cartoes: cartoesIniciais,
 }: {
   categorias: Categoria[]
   suprimentos: Suprimento[]
@@ -174,6 +174,11 @@ export default function Captura({
   const router = useRouter()
   const [suprimentos, setSuprimentos] = useState<Suprimento[]>(suprimentosIniciais)
   const [tecidos, setTecidos] = useState<Tecido[]>(tecidosIniciais)
+  // Cartões: o cadastro rápido na própria conferência acrescenta aqui (dono, 12/10/2026)
+  const [cartoes, setCartoes] = useState<CartaoCredito[]>(cartoesIniciais)
+  const [novoCartao, setNovoCartao] = useState<{ nome: string; final: string; diaFechamento: string; diaVencimento: string } | null>(null)
+  const [erroCartao, setErroCartao] = useState('')
+  const [criandoCartao, setCriandoCartao] = useState(false)
   /** Itens com o cadastro rápido de tecido aberto: nome digitado. */
   const [novosTecidos, setNovosTecidos] = useState<Record<number, string>>({})
   const [criandoTecido, setCriandoTecido] = useState<number | null>(null)
@@ -429,6 +434,30 @@ export default function Captura({
     })
   }
 
+  async function salvarNovoCartao() {
+    if (!novoCartao) return
+    setErroCartao('')
+    setCriandoCartao(true)
+    const r = await criarCartao(novoCartao)
+    setCriandoCartao(false)
+    if (!r.ok) return setErroCartao(r.erro)
+    const c: CartaoCredito = {
+      id: r.id,
+      nome: novoCartao.nome.trim(),
+      final: novoCartao.final.replace(/\D/g, '') || null,
+      diaFechamento: Number(novoCartao.diaFechamento),
+      diaVencimento: Number(novoCartao.diaVencimento),
+      ativo: true,
+    }
+    setCartoes((lista) => [...lista, c])
+    setNovoCartao(null)
+    escolherCartaoDaLista(c)
+  }
+
+  function escolherCartaoDaLista(cartao: CartaoCredito) {
+    setForm((f) => ({ ...f, cartaoId: cartao.id, parcelas: parcelasPeloCartao(num(f.total), f.parcelas.length || 1, cartao, f.emissao, f.parcelas) }))
+  }
+
   function redistribuir(qtd: number) {
     if (!form.condicao || quitadaNaCompra(form.condicao)) return
     const cartao = form.condicao === 'credito' ? cartoes.find((x) => x.id === form.cartaoId) : undefined
@@ -441,7 +470,7 @@ export default function Captura({
   }
 
   const cartaoEscolhido = form.condicao === 'credito' ? cartoes.find((x) => x.id === form.cartaoId) ?? null : null
-  const faltaCartao = form.condicao === 'credito' && cartoes.length > 0 && !form.cartaoId
+  const faltaCartao = form.condicao === 'credito' && !form.cartaoId
 
   function setParcela(idx: number, patch: Partial<{ vencimento: string; valor: string }>) {
     setForm((f) => ({ ...f, parcelas: f.parcelas.map((p, j) => (j === idx ? { ...p, ...patch } : p)) }))
@@ -530,7 +559,7 @@ export default function Captura({
       return
     }
     if (!soTecido && faltaCartao) {
-      setErro('Escolha em qual cartão de crédito a compra foi feita (seção Pagamento).')
+      setErro('Compra no crédito exige o cartão: escolha um ou cadastre o cartão usado (seção Pagamento).')
       return
     }
     if (!soTecido && erroParcelas) {
@@ -676,6 +705,9 @@ export default function Captura({
             <span className="block text-xs font-normal text-[#6E6E68] mt-1">o arquivo que o fornecedor manda por e-mail · sem IA, dados exatos</span>
           </button>
         </div>
+        <p className="text-xs text-[#2E7D4F] bg-[#E3F0E8] border border-[#2E7D4F] rounded-sm px-3 py-2 mt-3">
+          Prefira o <strong>XML da NF-e</strong> sempre que o fornecedor mandar: é lido na hora, com os dados exatos e sem gastar leitura por IA. Foto e PDF ficam para cupom, recibo e nota sem XML.
+        </p>
 
         {arquivo && (
           <div className="mt-4 bg-white border border-[#DDDCD5] rounded-sm p-3">
@@ -1067,18 +1099,50 @@ export default function Captura({
 
           {form.condicao === 'credito' && (
             <div className="mt-2">
-              {cartoes.length ? (
-                <label className={rotulo}>QUAL CARTÃO
+              <div className="flex items-end gap-2">
+                <label className={rotulo + ' flex-1 min-w-0'}>QUAL CARTÃO (obrigatório)
                   <select value={form.cartaoId} onChange={(e) => escolherCartao(e.target.value)} className={campo + ' ' + (form.cartaoId ? normal : duvida)}>
                     <option value="">— escolher o cartão —</option>
                     {cartoes.map((c) => <option key={c.id} value={c.id}>{rotuloCartao(c)} · fecha dia {c.diaFechamento}, vence dia {c.diaVencimento}</option>)}
                   </select>
                 </label>
-              ) : (
-                <p className="text-xs text-[#6B5320] bg-[#FFFBEE] border border-[#C79600] rounded-sm px-3 py-2">
-                  Nenhum cartão de crédito cadastrado: o vencimento fica em um mês após a nota.{' '}
-                  <Link href="/admin/configuracoes#cartoes" className="underline font-semibold" target="_blank">Cadastrar cartões</Link> (Configurações → Pagamento) para as parcelas caírem na fatura certa.
+                {!novoCartao && (
+                  <button type="button" onClick={() => { setErroCartao(''); setNovoCartao({ nome: '', final: '', diaFechamento: '', diaVencimento: '' }) }} className="shrink-0 border border-[#131A2E] bg-white rounded-sm px-3 py-2 text-xs font-semibold tracking-wide" title="Cadastrar o cartão usado">
+                    + CARTÃO
+                  </button>
+                )}
+              </div>
+              {!cartoes.length && !novoCartao && (
+                <p className="text-xs text-[#6B5320] bg-[#FFFBEE] border border-[#C79600] rounded-sm px-3 py-2 mt-1.5">
+                  Nenhum cartão cadastrado. Compra no crédito só entra com o cartão, para a parcela cair no vencimento da fatura: use &ldquo;+ Cartão&rdquo; para cadastrar o que foi usado.
                 </p>
+              )}
+              {novoCartao && (
+                <div className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-2.5 mt-1.5">
+                  <p className="text-[10px] font-mono tracking-wider text-[#6E6E68] mb-1.5">NOVO CARTÃO DE CRÉDITO</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <label className={rotulo + ' col-span-2 sm:col-span-1'}>NOME
+                      <input value={novoCartao.nome} onChange={(e) => setNovoCartao({ ...novoCartao, nome: e.target.value })} className={campo + ' ' + normal} placeholder="ex.: Nubank PJ" autoFocus />
+                    </label>
+                    <label className={rotulo}>FINAL (4 dígitos)
+                      <input value={novoCartao.final} onChange={(e) => setNovoCartao({ ...novoCartao, final: e.target.value })} className={campo + ' ' + normal} inputMode="numeric" maxLength={4} placeholder="opcional" />
+                    </label>
+                    <label className={rotulo}>FECHA NO DIA
+                      <input value={novoCartao.diaFechamento} onChange={(e) => setNovoCartao({ ...novoCartao, diaFechamento: e.target.value })} className={campo + ' ' + normal} inputMode="numeric" placeholder="1 a 31" />
+                    </label>
+                    <label className={rotulo}>VENCE NO DIA
+                      <input value={novoCartao.diaVencimento} onChange={(e) => setNovoCartao({ ...novoCartao, diaVencimento: e.target.value })} className={campo + ' ' + normal} inputMode="numeric" placeholder="1 a 31" />
+                    </label>
+                  </div>
+                  {erroCartao && <p className="text-xs text-[#B00063] mt-1.5">{erroCartao}</p>}
+                  <div className="flex gap-2 mt-2">
+                    <button type="button" onClick={salvarNovoCartao} disabled={criandoCartao} className="bg-[#131A2E] text-white rounded-sm px-3 py-1.5 text-[11px] font-bold tracking-wide disabled:opacity-50">
+                      {criandoCartao ? 'SALVANDO…' : 'CADASTRAR E USAR'}
+                    </button>
+                    <button type="button" onClick={() => setNovoCartao(null)} className="border border-[#DDDCD5] bg-white rounded-sm px-3 py-1.5 text-[11px] font-semibold tracking-wide">CANCELAR</button>
+                  </div>
+                  <p className="text-[10px] text-[#9B9A93] mt-1.5">O cartão fica cadastrado em Configurações → Pagamento para as próximas notas.</p>
+                </div>
               )}
               {cartaoEscolhido && (
                 <p className="text-xs text-[#2E7D4F] mt-1.5">
