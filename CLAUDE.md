@@ -574,6 +574,19 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   de remessa via `anexar_nf_envio_tecido`); o saldo só muda na conferência, como sempre.
   Nota só de tecido **não** vira despesa nem conta a pagar (vai para Estoque → Tecidos do
   cliente); nota mista separa item a item. Quem lança é a equipe (decisão do dono).
+- **Conferência com o arquivo à mão** (12/10/2026): na conferência, a prévia da nota (coluna
+  da direita no computador; botão flutuante "Ver a nota" no celular) abre o arquivo em tela
+  cheia — imagem com ampliar/ajustar e PDF em `iframe` —, mais "abrir em outra aba". A prévia
+  é o `object URL` do arquivo comprimido que subiu, para imagem **e** PDF (`preview`,
+  `ehImagem`/`ehPdf` em `captura.tsx`); XML não tem prévia.
+- **"Já pago" saiu da lista "Como foi paga" e entrou "Pix"** (decisão do dono, 12/10/2026,
+  migration `20261012110000`): a tela oferece Pix, débito, crédito, boleto e a pagar
+  (`CONDICOES_NA_TELA`). `pix` se comporta como débito — conta a pagar nasce quitada na
+  emissão (`quitadaNaCompra`, `admin_gerar_contas_despesa` com "Pago por Pix"); a IA lê
+  `pix` separado de `pago` (dinheiro/transferência) e o XML mapeia `tPag` 17 para `pix`. O
+  valor `pago` continua existindo no banco, na IA e no XML — leitura que vem como `pago`
+  chega à tela sem escolha, e a equipe decide; nota só de tecido ainda usa `pago`
+  internamente, porque não gera conta a pagar.
 - **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
   - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
     `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e
@@ -590,7 +603,7 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
 Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admin/financeiro.
 
 - **Toda nota exige a condição de pagamento** na conferência (`despesas.condicao_pagamento`):
-  `pago` (dinheiro/Pix/transferência), `debito`, `credito`, `boleto`, `a_pagar`. Regras puras
+  `pago` (dinheiro/transferência; fora da tela desde 12/10/2026), `pix`, `debito`, `credito`, `boleto`, `a_pagar`. Regras puras
   em `src/lib/contas-pagar/condicoes.ts` (`gerarParcelas` divide o total mês a mês com os
   centavos na 1ª; `validarParcelas` espelha `contas_pagar_validar_parcelas` no banco).
 - A IA lê `condicao_pagamento` e as **duplicatas** da DANFE ("Fatura/Duplicatas"), que

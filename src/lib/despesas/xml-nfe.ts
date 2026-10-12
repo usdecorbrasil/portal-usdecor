@@ -54,10 +54,11 @@ function condicaoDoPagamento(tPag: string | null, temDuplicatas: boolean): Docum
   switch (tPag) {
     case '01': // dinheiro
     case '16': // depósito
-    case '17': // PIX
     case '18': // transferência
     case '19': // programa de fidelidade
       return 'pago'
+    case '17':
+      return 'pix'
     case '03':
       return 'credito'
     case '04':

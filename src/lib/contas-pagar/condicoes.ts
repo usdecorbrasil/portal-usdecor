@@ -4,11 +4,12 @@
  * novo (`contas_pagar_validar_parcelas`), com a mesma regra.
  */
 
-export const CONDICOES = ['pago', 'debito', 'credito', 'boleto', 'a_pagar'] as const
+export const CONDICOES = ['pago', 'pix', 'debito', 'credito', 'boleto', 'a_pagar'] as const
 export type Condicao = (typeof CONDICOES)[number]
 
 export const ROTULO_CONDICAO: Record<Condicao, string> = {
-  pago: 'Já pago (dinheiro, Pix, transferência)',
+  pago: 'Já pago (dinheiro, transferência)',
+  pix: 'Pix',
   debito: 'Cartão de débito',
   credito: 'Cartão de crédito',
   boleto: 'Boleto',
@@ -17,6 +18,7 @@ export const ROTULO_CONDICAO: Record<Condicao, string> = {
 
 export const ROTULO_CURTO: Record<Condicao, string> = {
   pago: 'Pago',
+  pix: 'Pix',
   debito: 'Débito',
   credito: 'Crédito',
   boleto: 'Boleto',
@@ -24,7 +26,7 @@ export const ROTULO_CURTO: Record<Condicao, string> = {
 }
 
 /** Já sai paga na emissão: não tem parcela nem vencimento a escolher. */
-export const quitadaNaCompra = (c: Condicao) => c === 'pago' || c === 'debito'
+export const quitadaNaCompra = (c: Condicao) => c === 'pago' || c === 'pix' || c === 'debito'
 
 export const MAX_PARCELAS_CONTA = 36
 

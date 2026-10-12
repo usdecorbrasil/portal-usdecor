@@ -45,7 +45,7 @@ const ItemFio = z.object({
   confianca: z.number().min(0).max(1),
 })
 
-const CONDICOES = ['pago', 'debito', 'credito', 'boleto', 'a_pagar'] as const
+const CONDICOES = ['pago', 'pix', 'debito', 'credito', 'boleto', 'a_pagar'] as const
 
 const DocumentoFio = z.object({
   tipo: z.enum(TIPOS_DOCUMENTO),
@@ -195,7 +195,7 @@ export type ModeloLeitura = 'rapido' | 'preciso'
  * Versão das instruções abaixo. Vai gravada com cada nota (`despesas.versao_prompt`)
  * para comparar a taxa de acerto quando o texto mudar — mudou o texto, suba a versão.
  */
-export const VERSAO_PROMPT = 'v4-2026-10-12'
+export const VERSAO_PROMPT = 'v5-2026-10-12'
 
 export const MODELOS: Record<ModeloLeitura, { id: string; rotulo: string }> = {
   rapido: { id: 'claude-haiku-5-5', rotulo: 'rápido (Haiku)' },
@@ -263,12 +263,13 @@ TOTAIS
 PAGAMENTO
 - forma_pagamento: o texto do documento sobre pagamento, como está ("Cartão de Crédito", "PIX", "28/56 DDL", "Boleto"); "" se não houver.
 - condicao_pagamento, uma destas ou nao_informado se o documento não disser:
-  - pago: pago na hora em dinheiro, Pix, transferência ou depósito ("Dinheiro", "PIX", "Troco", recibo de pagamento quitado).
+  - pix: pago por Pix ("PIX", "Pix", QR code de pagamento).
+  - pago: pago na hora em dinheiro, transferência ou depósito ("Dinheiro", "Troco", "TED", recibo de pagamento quitado).
   - debito: cartão de débito.
   - credito: cartão de crédito (inclusive parcelado na maquininha, "Crédito 3x").
   - boleto: boleto bancário ou duplicatas com vencimento (quadro "FATURA/DUPLICATAS" na DANFE).
   - a_pagar: venda a prazo sem boleto nem cartão ("a prazo", "fiado", "faturado" sem duplicatas).
-  Em NFC-e o meio vem em "FORMA DE PAGAMENTO" no rodapé. Em NF-e, "Pagamento à vista" com meio "Dinheiro"/"PIX" é pago; "a prazo" com duplicatas é boleto.
+  Em NFC-e o meio vem em "FORMA DE PAGAMENTO" no rodapé. Em NF-e, "Pagamento à vista" com meio "PIX" é pix, com "Dinheiro" é pago; "a prazo" com duplicatas é boleto.
 - duplicatas: cada parcela impressa (número, vencimento AAAA-MM-DD, valor), na ordem. Na DANFE fica no quadro "FATURA / DUPLICATAS" ("001 15/11/2026 1.234,56"). Num boleto avulso, uma duplicata com o vencimento e o valor do documento. Sem parcelas impressas, lista vazia — nunca invente vencimentos.
 
 CONFIANÇA (0 a 1), por campo e por item
