@@ -499,6 +499,15 @@ para o pedido). `a-receber/lista-receber.tsx` substituiu `filtro-status.tsx`.
   (uma RPC por item, auditoria `pedido`/`pagou`, erros por item sem derrubar o lote).
 - **A pagar**: `baixarContasPagarEmLote(ids, pagoEm, obs)` chama `admin_baixar_conta_pagar`
   por conta, **pelo valor da conta** — juros/desconto continuam pelo detalhe.
+- **Edição geral** (dono, 12/10/2026, migration `20261012160000`): em A pagar, "editar a
+  conta" (só em aberto) muda descrição, categoria, **forma** (crédito/boleto/a pagar — pago,
+  Pix e débito entram quitados, então não), **cartão** (obrigatório no crédito, limpo fora
+  dele), vencimento e valor, com motivo ≥ 10; `admin_alterar_conta_pagar` ganhou os campos
+  novos (a assinatura antiga de 4 parâmetros foi removida) e anota "Alterada (antes: …)" em
+  `observacao` + auditoria. Em A receber, "editar vencimento ou valor" da parcela (à vista
+  só o vencimento, `pedidos.vencimento_avista`) pela RPC `admin_alterar_cobranca_pedido`,
+  que recusa parcela/pedido já recebido e deixa rastro no andamento (origem `sistema`);
+  **boleto/Pix já emitido no Bling não muda** — a tela avisa.
 
 ## Painel de crédito (08/10/2026)
 
