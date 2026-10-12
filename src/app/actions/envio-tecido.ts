@@ -10,6 +10,7 @@ import { templateInterno } from '@/lib/resend/templates/interno'
 import { urlDoSite } from '@/lib/site'
 import { paraNumeroBr } from '@/lib/numero'
 import { lerDocumento } from '@/lib/despesas/ler-documento'
+import { lerXmlNfe } from '@/lib/despesas/xml-nfe'
 
 /**
  * Envio de tecido — separado do pedido.
@@ -29,21 +30,31 @@ const FORMATOS_NF: Record<string, string> = {
   'application/pdf': 'pdf',
   'image/jpeg': 'jpg',
   'image/png': 'png',
+  // XML da NF-e: lido sem IA na conferência (pedido do dono, 12/10/2026 — economiza a leitura)
+  'text/xml': 'xml',
+  'application/xml': 'xml',
+}
+
+/** Extensão a guardar. O navegador às vezes manda XML sem tipo: vale o nome do arquivo. */
+function extensaoNf(arquivo: File): string | null {
+  if (arquivo.name.toLowerCase().endsWith('.xml')) return 'xml'
+  return FORMATOS_NF[arquivo.type] ?? null
 }
 
 function validarNf(arquivo: FormDataEntryValue | null): string | null {
   if (!(arquivo instanceof File) || arquivo.size === 0) return null
   if (arquivo.size > NF_MAX) return 'A nota precisa ter até 4 MB.'
-  if (!FORMATOS_NF[arquivo.type]) return 'Envie a nota em PDF, JPG ou PNG.'
+  if (!extensaoNf(arquivo)) return 'Envie a nota em XML, PDF, JPG ou PNG.'
   return null
 }
 
 async function subirNf(clienteId: string, envioId: string, arquivo: File): Promise<string | null> {
   const admin = createAdminClient()
-  const caminho = `tecidos/${clienteId}/${envioId}/nf-remessa.${FORMATOS_NF[arquivo.type]}`
+  const ext = extensaoNf(arquivo) ?? 'pdf'
+  const caminho = `tecidos/${clienteId}/${envioId}/nf-remessa.${ext}`
   const { error } = await admin.storage
     .from('documentos')
-    .upload(caminho, arquivo, { contentType: arquivo.type, upsert: true })
+    .upload(caminho, arquivo, { contentType: ext === 'xml' ? 'text/xml' : arquivo.type, upsert: true })
   if (error) {
     console.error('[envio-tecido] upload NF', error.message)
     return null
@@ -264,6 +275,8 @@ function revalidar(clienteId: string | null) {
 /* Leitura da NF de remessa pela IA, na conferência (pedido do dono, 12/10/2026) */
 
 export type NfLida = {
+  /** xml = lido direto, exato e sem IA; ia = foto/PDF pela IA. */
+  modo: 'xml' | 'ia'
   numero: string | null
   emissao: string | null
   emitente: string | null
@@ -299,7 +312,7 @@ export async function lerNfEnvio(envioId: string): Promise<{ ok: true; nf: NfLid
   if (!e.nf_caminho) return { ok: false, erro: 'Este envio ainda não tem a nota anexada.' }
   const ext = e.nf_caminho.split('.').pop()?.toLowerCase() ?? ''
   const mediaType = MEDIA_POR_EXT[ext]
-  if (!mediaType) return { ok: false, erro: 'A nota precisa estar em PDF, JPG ou PNG para a leitura.' }
+  if (ext !== 'xml' && !mediaType) return { ok: false, erro: 'A nota precisa estar em XML, PDF, JPG ou PNG para a leitura.' }
 
   const admin = createAdminClient()
   const { data: arquivo, error } = await admin.storage.from('documentos').download(e.nf_caminho)
@@ -309,16 +322,18 @@ export async function lerNfEnvio(envioId: string): Promise<{ ok: true; nf: NfLid
     supabase.from('tecidos').select('nome').eq('ativo', true).order('nome'),
     supabase.from('clientes').select('razao_social, cnpj').eq('ativo', true).is('arquivado', false).order('razao_social'),
   ])
-  const leitura = await lerDocumento({
-    conteudo: Buffer.from(await arquivo.arrayBuffer()),
-    mediaType,
-    categorias: [],
-    suprimentos: [],
+  const cadastro = {
     tecidos: (tecidos ?? []).map((t) => t.nome as string),
     clientes: (clientes ?? []).map((c) => ({ nome: c.razao_social as string, doc: String(c.cnpj ?? '').replace(/\D/g, '') || null })),
-  })
+  }
+  // XML: leitura exata e sem IA. Foto/PDF: IA.
+  const leitura =
+    ext === 'xml'
+      ? lerXmlNfe(Buffer.from(await arquivo.arrayBuffer()).toString('utf8'), cadastro)
+      : await lerDocumento({ conteudo: Buffer.from(await arquivo.arrayBuffer()), mediaType: mediaType!, categorias: [], suprimentos: [], ...cadastro })
   if (!leitura.ok) return leitura
   const d = leitura.documento
+  const modo: NfLida['modo'] = ext === 'xml' ? 'xml' : 'ia'
 
   // Itens de tecido: os marcados pela IA; se ela não marcou nenhum, todos (nota de remessa é só tecido)
   const marcados = d.itens.filter((i) => i.tecido_de_cliente)
@@ -353,5 +368,5 @@ export async function lerNfEnvio(envioId: string): Promise<{ ok: true; nf: NfLid
     else divergencias.push(`metragem: o cliente informou ${informados} m, a nota soma ${metrosLidos} m`)
   } else if (itens.length) divergencias.push('a nota não traz quantidade em metros (confira a unidade dos itens)')
 
-  return { ok: true, nf: { numero: d.numero, emissao: d.emissao, emitente: d.fornecedor_nome, itens, metrosLidos, divergencias, confere } }
+  return { ok: true, nf: { modo, numero: d.numero, emissao: d.emissao, emitente: d.fornecedor_nome, itens, metrosLidos, divergencias, confere } }
 }

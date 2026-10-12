@@ -199,13 +199,13 @@ function Conferencia({ envio: e }: { envio: EnvioLinha }) {
         <div className="mb-2">
           {!nf && (
             <button type="button" onClick={lerNota} disabled={lendo || pendente} className="border border-[#0090D8] text-[#0090D8] bg-white rounded-sm px-2.5 py-1 text-[11px] font-semibold tracking-wide disabled:opacity-50">
-              {lendo ? 'LENDO A NOTA… (até 1 min)' : '🤖 LER A NOTA COM IA E COMPARAR'}
+              {lendo ? 'LENDO A NOTA…' : e.nfUrl.includes('.xml') ? '📄 LER O XML DA NOTA E COMPARAR' : '🤖 LER A NOTA COM IA E COMPARAR'}
             </button>
           )}
           {nf && (
             <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 text-xs">
               <p className="font-semibold text-[#131A2E]">
-                Nota {nf.numero ? `nº ${nf.numero}` : 'sem número legível'}{nf.emissao ? ` · ${nf.emissao.split('-').reverse().join('/')}` : ''}{nf.emitente ? ` · ${nf.emitente}` : ''}
+                {nf.modo === 'xml' ? 'XML · ' : 'IA · '}Nota {nf.numero ? `nº ${nf.numero}` : 'sem número legível'}{nf.emissao ? ` · ${nf.emissao.split('-').reverse().join('/')}` : ''}{nf.emitente ? ` · ${nf.emitente}` : ''}
               </p>
               {nf.itens.length > 0 && (
                 <ul className="mt-1 text-[#6E6E68]">
@@ -301,14 +301,15 @@ function AnexarNf({ envio: e }: { envio: EnvioLinha }) {
       <p className="text-[11px] text-[#6E6E68] leading-relaxed mb-2">
         Anexe a NF de remessa deste envio. Depois da conferência ela não pode mais ser trocada.
       </p>
+      <p className="text-[11px] text-[#2E7D4F] mb-2">Prefira o <strong>XML da nota</strong> (o arquivo que chega junto da NF-e por e-mail): é lido na hora, sem erro de leitura. PDF ou foto também servem.</p>
       <div className="flex flex-wrap items-end gap-2">
         <div>
           <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">Nº DA NF</label>
           <input name="nfNumero" type="text" maxLength={40} defaultValue={e.nfNumero ?? ''} className={campo + ' w-32 font-mono'} />
         </div>
         <div className="flex-1 min-w-[12rem]">
-          <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">ARQUIVO (PDF, JPG OU PNG)</label>
-          <input name="nf" type="file" accept="application/pdf,image/jpeg,image/png" className="block w-full text-xs text-[#6E6E68] file:mr-3 file:border file:border-[#DDDCD5] file:rounded-sm file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
+          <label className="block text-[9px] font-mono tracking-[0.14em] text-[#6E6E68] mb-1">ARQUIVO (XML, PDF, JPG OU PNG)</label>
+          <input name="nf" type="file" accept=".xml,text/xml,application/xml,application/pdf,image/jpeg,image/png" className="block w-full text-xs text-[#6E6E68] file:mr-3 file:border file:border-[#DDDCD5] file:rounded-sm file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
         </div>
         <button type="submit" disabled={pendente} className="bg-[#131A2E] text-white rounded-sm px-4 py-2 text-xs font-bold tracking-wide disabled:opacity-50">
           {pendente ? 'ENVIANDO…' : 'SALVAR NF'}

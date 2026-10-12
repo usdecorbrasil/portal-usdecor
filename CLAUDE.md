@@ -652,6 +652,11 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   informada × lida (1% ou 0,5 m de tolerância). "Usar X m da nota" só pré-preenche a metragem
   e a observação; quem grava é a conferência de sempre (`conferir_envio_tecido`). **O cliente
   não vê nada disso**: a leitura é só do modo equipe.
+  **XML primeiro** (dono, 12/10/2026): o cliente pode anexar o **XML da NF-e** (aceito no
+  cadastro do envio e em "anexar NF"; extensão pelo nome do arquivo, porque o navegador às
+  vezes manda XML sem tipo) e vê o aviso "Prefira o XML da nota: é lido na hora, sem erro de
+  leitura" — sem falar em custo. Na conferência, XML passa por `lerXmlNfe` (exato, sem IA);
+  foto/PDF pela IA. `NfLida.modo` diz qual foi.
 - **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
   - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
     `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e
