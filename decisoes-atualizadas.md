@@ -337,7 +337,8 @@ Hobby da Vercel não aceita cron horário.
 | Emissão no futuro bloqueia; mais de 90 dias avisa | ✅ |
 | Comprador diferente do das notas anteriores (2+ notas) avisa — sem cadastro de CNPJ da empresa | ✅ |
 | `leitura_ia` + `versao_prompt` guardam a leitura original e o que a conferência mudou, para medir o acerto por modelo | ✅ |
-| Importar XML, ler QR code/código de barras e várias fotos num documento | a fazer |
+| Importar o XML da NF-e: sem IA, dados exatos, duplicatas viram parcelas, XML guardado como comprovante (`modo = 'xml'`, migration `20261010100000`) | ✅ |
+| Ler QR code/código de barras e várias fotos num documento | a fazer |
 
 ### Limite de crédito só no portal (09/10/2026)
 

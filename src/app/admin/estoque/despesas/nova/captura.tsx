@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { lerDespesa, relerDespesa, salvarDespesa, type Rascunho, type DadosDespesa, type DuplicataProvavel } from '@/app/actions/despesas'
+import { lerDespesa, relerDespesa, importarXmlNfe, salvarDespesa, type Rascunho, type DadosDespesa, type DuplicataProvavel } from '@/app/actions/despesas'
 import { criarSuprimento } from '@/app/actions/suprimentos'
 import CameraNota from './camera-nota'
 import { comprimir } from '@/lib/despesas/comprimir'
@@ -165,6 +165,27 @@ export default function Captura({
   const inputAnexo = useRef<HTMLInputElement>(null)
   const [anexando, setAnexando] = useState(false)
   const [confirmarSemArquivo, setConfirmarSemArquivo] = useState(false)
+  const inputXml = useRef<HTMLInputElement>(null)
+  const [importandoXml, setImportandoXml] = useState(false)
+
+  /** XML da NF-e: sem IA, sem compressão — vai direto para a leitura no servidor. */
+  async function importarXml(f: File | undefined) {
+    if (!f) return
+    setErro('')
+    setImportandoXml(true)
+    const fd = new FormData()
+    fd.set('arquivo', f)
+    const r = await importarXmlNfe(fd)
+    setImportandoXml(false)
+    if (!r.ok) {
+      setErro(r.erro)
+      return
+    }
+    setArquivo(null)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(null)
+    aplicarRascunho(r.rascunho)
+  }
   /** Nota parecida já lançada: pop-up antes de salvar de novo. */
   const [duplicata, setDuplicata] = useState<DuplicataProvavel | null>(null)
 
@@ -520,8 +541,9 @@ export default function Captura({
           />
         )}
         <input ref={inputArquivo} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => escolher(e.target.files?.[0], 'upload')} />
+        <input ref={inputXml} type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={(e) => importarXml(e.target.files?.[0])} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button onClick={() => setCameraAberta(true)} className="bg-white border-2 border-dashed border-[#131A2E] rounded-sm py-8 text-sm font-semibold tracking-wide hover:bg-[#FAFAF7]">
             📷 TIRAR FOTO
             <span className="block text-xs font-normal text-[#6E6E68] mt-1">abre a câmera com moldura para enquadrar a nota</span>
@@ -529,6 +551,10 @@ export default function Captura({
           <button onClick={() => inputArquivo.current?.click()} className="bg-white border-2 border-dashed border-[#DDDCD5] rounded-sm py-8 text-sm font-semibold tracking-wide hover:border-[#131A2E]">
             📎 ANEXAR ARQUIVO
             <span className="block text-xs font-normal text-[#6E6E68] mt-1">JPG, PNG ou PDF até 10 MB</span>
+          </button>
+          <button onClick={() => inputXml.current?.click()} disabled={importandoXml} className="bg-white border-2 border-dashed border-[#DDDCD5] rounded-sm py-8 text-sm font-semibold tracking-wide hover:border-[#131A2E] disabled:opacity-50">
+            {importandoXml ? 'LENDO O XML…' : '🧾 IMPORTAR XML DA NF-e'}
+            <span className="block text-xs font-normal text-[#6E6E68] mt-1">o arquivo que o fornecedor manda por e-mail · sem IA, dados exatos</span>
           </button>
         </div>
 
@@ -580,6 +606,11 @@ export default function Captura({
                 {lendo ? 'RELENDO…' : 'RELER COM O MODELO PRECISO'}
               </button>
             )}
+          </div>
+        )}
+        {rascunho?.modo === 'xml' && (
+          <div className="text-xs text-[#2E7D4F] bg-[#E3F0E8] border border-[#2E7D4F] rounded-sm px-3 py-2 mb-3">
+            ✓ Importada do XML da NF-e: fornecedor, itens, totais e parcelas vieram exatos do documento. Só falta escolher categoria e estoque de cada item e conferir o pagamento.
           </div>
         )}
         {rascunho?.modo === 'ia' && !!rascunho.releitura?.length && (

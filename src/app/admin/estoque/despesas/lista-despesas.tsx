@@ -125,6 +125,7 @@ export default function ListaDespesas({ resumo }: { resumo: ResumoDespesas }) {
                   <span className="text-[11px] text-[#6E6E68] truncate block">
                     {l.numero ? `nº ${l.numero} · ` : ''}{l.itens.length} ite{l.itens.length === 1 ? 'm' : 'ns'}
                     {l.modo === 'ia' && <span className={ETIQUETA + ' ml-1.5 bg-[#E6EDEE] text-[#0090D8]'}>IA</span>}
+                    {l.modo === 'xml' && <span className={ETIQUETA + ' ml-1.5 bg-[#E3F0E8] text-[#2E7D4F]'}>XML</span>}
                   </span>
                 </span>
                 <span className="w-16 shrink-0 hidden sm:inline text-xs text-[#6E6E68]">{TIPO[l.tipo] ?? l.tipo}</span>
