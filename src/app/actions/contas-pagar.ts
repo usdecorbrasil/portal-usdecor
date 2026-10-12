@@ -44,6 +44,12 @@ export type ContaPagar = {
   observacao: string | null
   /** Nota lançada sem foto/PDF, ou conta avulsa antiga. */
   semComprovante: boolean
+  /** Cartão de crédito da compra (conta no crédito com cartão escolhido). */
+  cartao: string | null
+  cartaoId: string | null
+  /** Data da compra (emissão da nota) e o vencimento que a nota trazia, quando a fatura do cartão mudou o usado. */
+  dataCompra: string | null
+  vencimentoOriginal: string | null
 }
 
 export type FiltroContas = {
@@ -53,6 +59,10 @@ export type FiltroContas = {
   ate?: string
   /** Só as contas cuja nota está sem foto/PDF (aviso do dashboard). */
   semComprovante?: boolean
+  /** Só as compras de um cartão de crédito (id). */
+  cartao?: string
+  /** Período por data da compra, em vez de vencimento (cruzar com o extrato do cartão). */
+  porCompra?: boolean
 }
 
 type LinhaBanco = {
@@ -73,6 +83,10 @@ type LinhaBanco = {
   observacao: string | null
   categorias_despesa: { nome: string } | null
   despesas: { arquivo_path: string | null } | null
+  cartao_id: string | null
+  cartoes_credito: { nome: string; final: string | null } | null
+  data_compra: string | null
+  vencimento_original: string | null
 }
 
 const paraConta = (c: LinhaBanco): ContaPagar => ({
@@ -93,10 +107,14 @@ const paraConta = (c: LinhaBanco): ContaPagar => ({
   canceladaMotivo: c.cancelada_motivo,
   observacao: c.observacao,
   semComprovante: !c.despesas?.arquivo_path,
+  cartaoId: c.cartao_id,
+  dataCompra: c.data_compra,
+  vencimentoOriginal: c.vencimento_original,
+  cartao: c.cartoes_credito ? (c.cartoes_credito.final ? `${c.cartoes_credito.nome} · ${c.cartoes_credito.final}` : c.cartoes_credito.nome) : null,
 })
 
 const CAMPOS =
-  'id, despesa_id, descricao, fornecedor_nome, forma, parcela, parcelas, valor, vencimento, pago_em, valor_pago, baixa_obs, cancelada_em, cancelada_motivo, observacao, categorias_despesa(nome), despesas(arquivo_path)'
+  'id, despesa_id, descricao, fornecedor_nome, forma, parcela, parcelas, valor, vencimento, pago_em, valor_pago, baixa_obs, cancelada_em, cancelada_motivo, observacao, cartao_id, data_compra, vencimento_original, categorias_despesa(nome), despesas(arquivo_path), cartoes_credito(nome, final)'
 
 export type ResumoContas = {
   vencidas: { qtd: number; valor: number }
@@ -124,7 +142,8 @@ export async function listarContasPagar(filtro: FiltroContas): Promise<{ contas:
   if (filtro.situacao === 'abertas') q = q.is('pago_em', null).is('cancelada_em', null)
   if (filtro.situacao === 'pagas') q = q.not('pago_em', 'is', null)
   if (filtro.situacao === 'canceladas') q = q.not('cancelada_em', 'is', null)
-  const colunaData = filtro.situacao === 'pagas' ? 'pago_em' : 'vencimento'
+  if (filtro.cartao) q = q.eq('cartao_id', filtro.cartao)
+  const colunaData = filtro.porCompra ? 'data_compra' : filtro.situacao === 'pagas' ? 'pago_em' : 'vencimento'
   if (filtro.de) q = q.gte(colunaData, filtro.de)
   if (filtro.ate) q = q.lte(colunaData, filtro.ate)
   q = q.order(colunaData, { ascending: filtro.situacao !== 'pagas' }).order('parcela').limit(1000)

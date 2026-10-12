@@ -15,7 +15,7 @@ export default async function NovaDespesaPage() {
   const perfil = await lerPerfil()
   if (!perfil || !perfil.veValores) redirect('/admin/estoque')
   const supabase = await createClient()
-  const [{ data: categorias }, { data: suprimentos }, { data: vinculos }, { data: compradores }, { data: tecidos }, { data: clientes }] = await Promise.all([
+  const [{ data: categorias }, { data: suprimentos }, { data: vinculos }, { data: compradores }, { data: tecidos }, { data: clientes }, { data: cartoes }] = await Promise.all([
     supabase.from('categorias_despesa').select('id, nome').eq('ativo', true).order('nome'),
     supabase.from('suprimentos').select('id, nome, unidade').eq('ativo', true).order('nome'),
     // Itens de notas anteriores já ligados a suprimento: base da sugestão de vínculo
@@ -30,6 +30,8 @@ export default async function NovaDespesaPage() {
     // Tecido de cliente na nota vira envio de tecido: precisa dos tecidos e dos clientes
     supabase.from('tecidos').select('id, nome').eq('ativo', true).order('nome'),
     supabase.from('clientes').select('id, razao_social').eq('ativo', true).is('arquivado', false).order('razao_social'),
+    // Cartões de crédito da empresa: compra no crédito escolhe o cartão e vence na fatura dele
+    supabase.from('cartoes_credito').select('id, nome, final, dia_fechamento, dia_vencimento, ativo').eq('ativo', true).order('nome'),
   ])
 
   // Quem aparece em 2+ notas conta como "a empresa" (aprende sozinho, sem cadastro)
@@ -69,6 +71,14 @@ export default async function NovaDespesaPage() {
         destinatarios={destinatarios}
         tecidos={(tecidos ?? []).map((t) => ({ id: t.id as string, nome: t.nome as string }))}
         clientes={(clientes ?? []).map((c) => ({ id: c.id as string, nome: c.razao_social as string }))}
+        cartoes={(cartoes ?? []).map((c) => ({
+          id: c.id as string,
+          nome: c.nome as string,
+          final: (c.final as string | null) ?? null,
+          diaFechamento: Number(c.dia_fechamento),
+          diaVencimento: Number(c.dia_vencimento),
+          ativo: true,
+        }))}
       />
     </div>
   )

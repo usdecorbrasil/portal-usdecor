@@ -337,9 +337,18 @@ const schemaDespesa = z.object({
   formaPagamento: z.string().trim().max(60).nullable().optional(),
   condicao: z.enum(CONDICOES, { message: 'Escolha como a nota foi paga' }),
   parcelas: z
-    .array(z.object({ vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), valor: z.number().positive() }))
+    .array(
+      z.object({
+        vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        valor: z.number().positive(),
+        /** Vencimento que a nota traz, quando o cartão mudou o usado (cruzamento com o extrato). */
+        vencimentoOriginal: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      })
+    )
     .max(36)
     .default([]),
+  /** Cartão de crédito usado (só com condição crédito); o banco exige quando há cartão cadastrado. */
+  cartaoId: z.string().uuid().nullable().optional(),
   subtotal: z.number().min(0).nullable().optional(),
   desconto: z.number().min(0).default(0),
   frete: z.number().min(0).default(0),
@@ -638,8 +647,9 @@ export async function salvarDespesa(
   const { error: erroContas } = await supabase.rpc('admin_gerar_contas_despesa', {
     p_despesa_id: despesa.id,
     p_condicao: d.condicao,
-    p_parcelas: quitadaNaCompra(d.condicao) ? null : d.parcelas,
+    p_parcelas: quitadaNaCompra(d.condicao) ? null : d.parcelas.map((p) => ({ vencimento: p.vencimento, valor: p.valor, vencimento_original: p.vencimentoOriginal ?? null })),
     p_categoria_id: categoriaConta,
+    p_cartao_id: d.condicao === 'credito' ? d.cartaoId ?? null : null,
   })
   if (erroContas) {
     await createAdminClient().from('despesas').delete().eq('id', despesa.id)
