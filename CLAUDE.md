@@ -643,6 +643,15 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   (tipo de retorno mudou: drop + create). A pagar mostra "compra dd/mm" na linha, o detalhe
   explica nota × fatura, o período filtra por vencimento **ou por data da compra**
   (`?por=compra`) e o CSV leva as duas colunas.
+- **NF de remessa do cliente lida pela IA na conferência** (pedido do dono, 12/10/2026): em
+  Estoque → Tecidos do cliente, o painel de conferência da equipe tem "Ler a nota com IA e
+  comparar" quando o envio tem NF anexada (`lerNfEnvio` em `actions/envio-tecido.ts`: baixa o
+  arquivo de `documentos`, chama `lerDocumento` com tecidos e clientes, nada de categorias).
+  Mostra nº, emissão, emitente, itens e a soma em metros, e compara com o envio: nº da NF
+  informado × lido, CNPJ/nome do cliente na nota, tecido do envio × da nota, metragem
+  informada × lida (1% ou 0,5 m de tolerância). "Usar X m da nota" só pré-preenche a metragem
+  e a observação; quem grava é a conferência de sempre (`conferir_envio_tecido`). **O cliente
+  não vê nada disso**: a leitura é só do modo equipe.
 - **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
   - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
     `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e
