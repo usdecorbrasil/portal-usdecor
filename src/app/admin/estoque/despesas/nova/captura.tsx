@@ -97,8 +97,12 @@ type Form = {
   formaPagamento: string
   /** Como a nota foi paga — obrigatório, gera as contas a pagar. */
   condicao: Condicao | ''
-  /** Parcelas a pagar (vencimento AAAA-MM-DD, valor em texto). Vazio quando já pago. */
-  parcelas: { vencimento: string; valor: string }[]
+  /**
+   * Parcelas a pagar (vencimento AAAA-MM-DD, valor em texto). Vazio quando já pago.
+   * `vencimentoNota` é a data que a nota traz (ou a padrão), guardada para cruzar com
+   * o extrato quando o cartão muda o vencimento para o da fatura.
+   */
+  parcelas: { vencimento: string; valor: string; vencimentoNota: string }[]
   /** Cartão usado, quando a condição é crédito: os vencimentos seguem a fatura dele. */
   cartaoId: string
   subtotal: string
@@ -261,9 +265,9 @@ export default function Captura({
           d.condicao_pagamento && quitadaNaCompra(d.condicao_pagamento)
             ? []
             : d.duplicatas.length
-              ? d.duplicatas.map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) }))
+              ? d.duplicatas.map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor), vencimentoNota: p.vencimento }))
               : d.condicao_pagamento && d.total
-                ? gerarParcelas(d.total, 1, primeiroVencimentoPadrao(d.condicao_pagamento, d.emissao ?? hoje())).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) }))
+                ? gerarParcelas(d.total, 1, primeiroVencimentoPadrao(d.condicao_pagamento, d.emissao ?? hoje())).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor), vencimentoNota: p.vencimento }))
                 : [],
         subtotal: txt(d.subtotal),
         desconto: txt(d.desconto),
@@ -387,14 +391,20 @@ export default function Captura({
 
   // Pagamento → contas a pagar
   const aPrazo = !!form.condicao && !quitadaNaCompra(form.condicao)
-  const parcelasNum = aPrazo ? form.parcelas.map((p) => ({ vencimento: p.vencimento, valor: num(p.valor) })) : []
+  const parcelasNum = aPrazo
+    ? form.parcelas.map((p) => ({ vencimento: p.vencimento, valor: num(p.valor), vencimentoOriginal: p.vencimentoNota && p.vencimentoNota !== p.vencimento ? p.vencimentoNota : null }))
+    : []
   const somaParcelas = Math.round(parcelasNum.reduce((s, p) => s + p.valor, 0) * 100) / 100
   const erroParcelas = aPrazo ? validarParcelas(parcelasNum, totalInformado) : null
 
   /** Parcelas de uma compra no cartão: valores divididos, vencimentos pela fatura do cartão. */
-  function parcelasPeloCartao(total: number, qtd: number, cartao: CartaoCredito, emissao: string) {
+  function parcelasPeloCartao(total: number, qtd: number, cartao: CartaoCredito, emissao: string, anteriores: Form['parcelas']) {
     const vencimentos = vencimentosNoCartao(emissao || hoje(), cartao, qtd)
-    return gerarParcelas(total, qtd, vencimentos[0]).map((p, i) => ({ vencimento: vencimentos[i] ?? p.vencimento, valor: txt(p.valor) }))
+    // O que a nota diz continua guardado: as duplicatas impressas, ou o padrão (um mês após a compra)
+    const daNota = anteriores.length === qtd
+      ? anteriores.map((p) => p.vencimentoNota)
+      : gerarParcelas(total, qtd, primeiroVencimentoPadrao('credito', emissao || hoje())).map((p) => p.vencimento)
+    return gerarParcelas(total, qtd, vencimentos[0]).map((p, i) => ({ vencimento: vencimentos[i] ?? p.vencimento, valor: txt(p.valor), vencimentoNota: daNota[i] ?? p.vencimento }))
   }
 
   function escolherCondicao(c: Condicao | '') {
@@ -404,10 +414,10 @@ export default function Captura({
       const cartaoId = c === 'credito' ? (f.cartaoId || (cartoes.length === 1 ? cartoes[0].id : '')) : ''
       const cartao = cartoes.find((x) => x.id === cartaoId)
       const parcelas = cartao
-        ? parcelasPeloCartao(num(f.total), f.parcelas.length || 1, cartao, f.emissao)
+        ? parcelasPeloCartao(num(f.total), f.parcelas.length || 1, cartao, f.emissao, f.parcelas)
         : f.parcelas.length
           ? f.parcelas
-          : gerarParcelas(num(f.total), 1, primeiroVencimentoPadrao(c, f.emissao || hoje())).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) }))
+          : gerarParcelas(num(f.total), 1, primeiroVencimentoPadrao(c, f.emissao || hoje())).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor), vencimentoNota: p.vencimento }))
       return { ...f, condicao: c, cartaoId, parcelas }
     })
   }
@@ -415,7 +425,7 @@ export default function Captura({
   function escolherCartao(cartaoId: string) {
     setForm((f) => {
       const cartao = cartoes.find((x) => x.id === cartaoId)
-      return { ...f, cartaoId, parcelas: cartao ? parcelasPeloCartao(num(f.total), f.parcelas.length || 1, cartao, f.emissao) : f.parcelas }
+      return { ...f, cartaoId, parcelas: cartao ? parcelasPeloCartao(num(f.total), f.parcelas.length || 1, cartao, f.emissao, f.parcelas) : f.parcelas }
     })
   }
 
@@ -423,11 +433,11 @@ export default function Captura({
     if (!form.condicao || quitadaNaCompra(form.condicao)) return
     const cartao = form.condicao === 'credito' ? cartoes.find((x) => x.id === form.cartaoId) : undefined
     if (cartao) {
-      setForm({ ...form, parcelas: parcelasPeloCartao(totalInformado, qtd, cartao, form.emissao) })
+      setForm({ ...form, parcelas: parcelasPeloCartao(totalInformado, qtd, cartao, form.emissao, form.parcelas) })
       return
     }
     const primeiro = form.parcelas[0]?.vencimento || primeiroVencimentoPadrao(form.condicao, form.emissao || hoje())
-    setForm({ ...form, parcelas: gerarParcelas(totalInformado, qtd, primeiro).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) })) })
+    setForm({ ...form, parcelas: gerarParcelas(totalInformado, qtd, primeiro).map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor), vencimentoNota: p.vencimento })) })
   }
 
   const cartaoEscolhido = form.condicao === 'credito' ? cartoes.find((x) => x.id === form.cartaoId) ?? null : null
@@ -1072,7 +1082,7 @@ export default function Captura({
               )}
               {cartaoEscolhido && (
                 <p className="text-xs text-[#2E7D4F] mt-1.5">
-                  Compra em {form.emissao ? form.emissao.split('-').reverse().join('/') : 'hoje'} entra na fatura que fecha dia {cartaoEscolhido.diaFechamento} e vence dia {cartaoEscolhido.diaVencimento}: as parcelas já estão com a data da fatura. Pode ajustar à mão se precisar.
+                  Compra em {form.emissao ? form.emissao.split('-').reverse().join('/') : 'hoje'} entra na fatura que fecha dia {cartaoEscolhido.diaFechamento} e vence dia {cartaoEscolhido.diaVencimento}: as parcelas já estão com a data da fatura (é o que o A pagar usa para prever o pagamento). A data da compra e o vencimento que a nota traz ficam guardados para conferir com o extrato do cartão.
                 </p>
               )}
             </div>
@@ -1103,7 +1113,7 @@ export default function Captura({
                 {form.parcelas.map((p, idx) => (
                   <div key={idx} className="grid grid-cols-[2.5rem_1fr_1fr] gap-1.5 items-end">
                     <span className="font-mono text-xs text-[#6E6E68] pb-2">{idx + 1}/{form.parcelas.length}</span>
-                    <label className={rotulo}>VENCIMENTO
+                    <label className={rotulo}>VENCIMENTO{p.vencimentoNota && p.vencimentoNota !== p.vencimento ? ` · NA NOTA ${p.vencimentoNota.split('-').reverse().join('/')}` : ''}
                       <input type="date" value={p.vencimento} onChange={(e) => setParcela(idx, { vencimento: e.target.value })} className={campo + ' ' + normal} />
                     </label>
                     <label className={rotulo}>VALOR

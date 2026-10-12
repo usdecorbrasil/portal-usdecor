@@ -24,7 +24,7 @@ const dataValida = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : und
 export default async function APagarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; comprovante?: string; cartao?: string }>
+  searchParams: Promise<{ situacao?: string; de?: string; ate?: string; comprovante?: string; cartao?: string; por?: string }>
 }) {
   const sp = await searchParams
   const situacao = (SITUACOES.find((s) => s.chave === sp.situacao)?.chave ?? 'abertas') as FiltroContas['situacao']
@@ -34,6 +34,7 @@ export default async function APagarPage({
     ate: dataValida(sp.ate),
     semComprovante: sp.comprovante === 'pendente',
     cartao: sp.cartao && /^[0-9a-f-]{36}$/.test(sp.cartao) ? sp.cartao : undefined,
+    porCompra: sp.por === 'compra',
   }
 
   const [r, cartoes] = await Promise.all([listarContasPagar(filtro), listarCartoes()])
@@ -53,6 +54,7 @@ export default async function APagarPage({
     if (filtro.ate) q.set('ate', filtro.ate)
     if (filtro.semComprovante) q.set('comprovante', 'pendente')
     if (filtro.cartao) q.set('cartao', filtro.cartao)
+    if (filtro.porCompra) q.set('por', 'compra')
     return `?${q.toString()}`
   }
 
@@ -119,7 +121,14 @@ export default async function APagarPage({
             </label>
           )}
           <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
-            {situacao === 'pagas' ? 'PAGAS DE' : 'VENCE DE'}
+            PERÍODO POR
+            <select name="por" defaultValue={filtro.porCompra ? 'compra' : ''} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white">
+              <option value="">{situacao === 'pagas' ? 'pagamento' : 'vencimento'}</option>
+              <option value="compra">data da compra</option>
+            </select>
+          </label>
+          <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
+            {filtro.porCompra ? 'COMPRA DE' : situacao === 'pagas' ? 'PAGAS DE' : 'VENCE DE'}
             <input type="date" name="de" defaultValue={filtro.de} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white" />
           </label>
           <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
@@ -127,7 +136,7 @@ export default async function APagarPage({
             <input type="date" name="ate" defaultValue={filtro.ate} className="block border border-[#DDDCD5] rounded-sm px-2 py-1 text-xs bg-white" />
           </label>
           <button className="text-xs px-3 py-1.5 rounded-sm border border-[#131A2E] bg-white">Filtrar</button>
-          {(filtro.de || filtro.ate || filtro.cartao) && (
+          {(filtro.de || filtro.ate || filtro.cartao || filtro.porCompra) && (
             <Link href={`?situacao=${situacao}`} className="text-xs text-[#6E6E68] underline pb-1.5">
               limpar filtros
             </Link>

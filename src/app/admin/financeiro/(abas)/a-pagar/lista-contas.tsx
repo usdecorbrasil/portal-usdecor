@@ -55,7 +55,7 @@ export default function ListaContas({
 
   function exportar() {
     const linhas = [
-      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Cartão', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante'],
+      ['Vencimento', 'Descrição', 'Fornecedor', 'Categoria', 'Parcela', 'Forma', 'Cartão', 'Compra', 'Vencimento na nota', 'Valor', 'Situação', 'Pago em', 'Valor pago', 'Comprovante'],
       ...contas.map((c) => [
         dataBr(c.vencimento),
         c.descricao,
@@ -64,6 +64,8 @@ export default function ListaContas({
         `${c.parcela}/${c.parcelas}`,
         ROTULO_CURTO[c.forma],
         c.cartao ?? '',
+        c.dataCompra ? dataBr(c.dataCompra) : '',
+        c.vencimentoOriginal ? dataBr(c.vencimentoOriginal) : '',
         numCsv(c.valor),
         c.canceladaEm ? 'Cancelada' : c.pagoEm ? 'Paga' : c.vencimento < hoje ? 'Vencida' : 'Em aberto',
         c.pagoEm ? dataBr(c.pagoEm) : '',
@@ -135,7 +137,7 @@ function Linha({ c, hoje, aberta, alternar }: { c: ContaPagar; hoje: string; abe
           <span className="flex-1 min-w-0">
             <span className={NOME + ' block'}>{c.descricao}</span>
             <span className="block text-[11px] text-[#6E6E68] truncate">
-              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.despesaId ? 'da nota' : 'avulsa (antiga)']
+              {[c.fornecedor && c.fornecedor !== c.descricao.split(' · ')[0] ? c.fornecedor : null, c.categoria, c.dataCompra ? `compra ${dataBr(c.dataCompra)}` : null, c.despesaId ? 'da nota' : 'avulsa (antiga)']
                 .filter(Boolean)
                 .join(' · ')}
             </span>
@@ -206,6 +208,12 @@ function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
           {c.canceladaMotivo && <p>Cancelada: {c.canceladaMotivo}</p>}
           {c.observacao && <p>{c.observacao}</p>}
         </div>
+      )}
+      {(c.dataCompra || c.vencimentoOriginal) && (
+        <p className="text-xs text-[#6E6E68] mb-2">
+          {c.dataCompra && <>Compra em {dataBr(c.dataCompra)}</>}
+          {c.vencimentoOriginal && <>{c.dataCompra ? ' · ' : ''}na nota vence {dataBr(c.vencimentoOriginal)}; na fatura{c.cartao ? ` do ${c.cartao}` : ''}, {dataBr(c.vencimento)}</>}
+        </p>
       )}
       {c.pagoEm && c.valorPago != null && c.valorPago !== c.valor && (
         <p className="text-xs text-[#6E6E68] mb-2">

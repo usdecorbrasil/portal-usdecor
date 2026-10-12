@@ -603,6 +603,14 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   `contas_pagar.cartao_id`. A pagar mostra o cartão sob a forma, filtra por `?cartao=<id>` e
   exporta a coluna no CSV. Sem cartão cadastrado, o crédito segue com o vencimento padrão
   (+1 mês).
+  **A data da fatura é só previsão do A pagar** (dono, 12/10/2026): para cruzar com o extrato
+  do cartão, cada conta guarda `contas_pagar.data_compra` (emissão da nota, sempre, com
+  backfill) e `vencimento_original` (o vencimento que a nota trazia — duplicata ou padrão —,
+  só quando difere do usado). Na conferência, a parcela mostra "na nota dd/mm" quando o cartão
+  mudou a data; `contas_pagar_validar_parcelas` passou a devolver `vencimento_original`
+  (tipo de retorno mudou: drop + create). A pagar mostra "compra dd/mm" na linha, o detalhe
+  explica nota × fatura, o período filtra por vencimento **ou por data da compra**
+  (`?por=compra`) e o CSV leva as duas colunas.
 - **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
   - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
     `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e

@@ -3,6 +3,48 @@
 
 drop function if exists public.admin_gerar_contas_despesa(uuid, text, jsonb, uuid, uuid);
 
+drop function if exists public.contas_pagar_validar_parcelas(jsonb, numeric);
+create or replace function public.contas_pagar_validar_parcelas(p_parcelas jsonb, p_total numeric)
+returns table (n integer, vencimento date, valor numeric)
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_qtd   integer;
+  v_soma  numeric;
+begin
+  if p_parcelas is null or jsonb_typeof(p_parcelas) <> 'array' then
+    raise exception 'Informe as parcelas (vencimento e valor)';
+  end if;
+  v_qtd := jsonb_array_length(p_parcelas);
+  if v_qtd < 1 or v_qtd > 36 then
+    raise exception 'Informe de 1 a 36 parcelas';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(p_parcelas) e
+     where nullif(e->>'vencimento', '') is null
+        or nullif(e->>'valor', '') is null
+        or (e->>'valor')::numeric <= 0
+  ) then
+    raise exception 'Cada parcela precisa de vencimento e valor maior que zero';
+  end if;
+
+  select round(sum((e->>'valor')::numeric), 2) into v_soma from jsonb_array_elements(p_parcelas) e;
+  if p_total is not null and abs(v_soma - round(p_total, 2)) > 0.01 then
+    raise exception 'A soma das parcelas (R$ %) não confere com o total da nota (R$ %)',
+      replace(to_char(v_soma, 'FM999999990.00'), '.', ','), replace(to_char(p_total, 'FM999999990.00'), '.', ',');
+  end if;
+
+  return query
+    select (row_number() over (order by (e->>'vencimento')::date, ord))::integer,
+           (e->>'vencimento')::date,
+           round((e->>'valor')::numeric, 2)
+      from jsonb_array_elements(p_parcelas) with ordinality as t(e, ord);
+end;
+$$;
+grant execute on function public.contas_pagar_validar_parcelas(jsonb, numeric) to authenticated, service_role;
+
 create or replace function public.admin_gerar_contas_despesa(
   p_despesa_id   uuid,
   p_condicao     text,
@@ -71,6 +113,9 @@ $$;
 grant execute on function public.admin_gerar_contas_despesa(uuid, text, jsonb, uuid) to authenticated, service_role;
 
 drop index if exists public.contas_pagar_cartao_idx;
+drop index if exists public.contas_pagar_data_compra_idx;
+alter table public.contas_pagar drop column if exists vencimento_original;
+alter table public.contas_pagar drop column if exists data_compra;
 alter table public.contas_pagar drop column if exists cartao_id;
 alter table public.despesas     drop column if exists cartao_id;
 drop policy if exists "dono le cartoes" on public.cartoes_credito;
