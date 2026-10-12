@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { listarContasPagar, type FiltroContas } from '@/app/actions/contas-pagar'
 import { listarCartoes } from '@/app/actions/cartoes'
+import { createClient } from '@/lib/supabase/server'
 import ListaContas from './lista-contas'
 
 /**
@@ -37,7 +38,12 @@ export default async function APagarPage({
     porCompra: sp.por === 'compra',
   }
 
-  const [r, cartoes] = await Promise.all([listarContasPagar(filtro), listarCartoes()])
+  const supabase = await createClient()
+  const [r, cartoes, { data: categorias }] = await Promise.all([
+    listarContasPagar(filtro),
+    listarCartoes(),
+    supabase.from('categorias_despesa').select('id, nome').eq('ativo', true).order('nome'),
+  ])
   if (!r) return null
   const { contas, resumo, hoje } = r
 
@@ -148,7 +154,13 @@ export default async function APagarPage({
         </div>
       )}
 
-      <ListaContas contas={contas} situacao={situacao} hoje={hoje} />
+      <ListaContas
+        contas={contas}
+        situacao={situacao}
+        hoje={hoje}
+        categorias={(categorias ?? []).map((c) => ({ id: c.id as string, nome: c.nome as string }))}
+        cartoes={cartoes.filter((c) => c.ativo).map((c) => ({ id: c.id, nome: c.final ? `${c.nome} · ${c.final}` : c.nome }))}
+      />
     </div>
   )
 }

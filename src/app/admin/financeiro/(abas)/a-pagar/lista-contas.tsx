@@ -33,14 +33,21 @@ function somarDias(iso: string, dias: number) {
 
 type Grupo = { titulo: string; contas: ContaPagar[]; cor?: string }
 
+type Opcao = { id: string; nome: string }
+
 export default function ListaContas({
   contas,
   situacao,
   hoje,
+  categorias = [],
+  cartoes = [],
 }: {
   contas: ContaPagar[]
   situacao: FiltroContas['situacao']
   hoje: string
+  /** Para a edição geral da conta (categoria e cartão). */
+  categorias?: Opcao[]
+  cartoes?: Opcao[]
 }) {
   const [aberta, setAberta] = useState<string | null>(null)
   const router = useRouter()
@@ -181,7 +188,7 @@ export default function ListaContas({
               </div>
               <div className={CORPO}>
                 {g.contas.map((c) => (
-                  <Linha key={c.id} c={c} hoje={hoje} aberta={aberta === c.id} alternar={() => setAberta(aberta === c.id ? null : c.id)} marcada={selecao.has(c.id)} marcar={() => alternarSelecao(c.id)} />
+                  <Linha key={c.id} c={c} hoje={hoje} aberta={aberta === c.id} alternar={() => setAberta(aberta === c.id ? null : c.id)} marcada={selecao.has(c.id)} marcar={() => alternarSelecao(c.id)} categorias={categorias} cartoes={cartoes} />
                 ))}
               </div>
             </div>
@@ -191,7 +198,7 @@ export default function ListaContas({
   )
 }
 
-function Linha({ c, hoje, aberta, alternar, marcada, marcar }: { c: ContaPagar; hoje: string; aberta: boolean; alternar: () => void; marcada: boolean; marcar: () => void }) {
+function Linha({ c, hoje, aberta, alternar, marcada, marcar, categorias, cartoes }: { c: ContaPagar; hoje: string; aberta: boolean; alternar: () => void; marcada: boolean; marcar: () => void; categorias: Opcao[]; cartoes: Opcao[] }) {
   const vencida = !c.pagoEm && !c.canceladaEm && c.vencimento < hoje
   const tarja = c.canceladaEm ? 'bg-[#BDBCB5]' : c.pagoEm ? 'bg-[#8CB399]' : vencida ? 'bg-[#B00063]' : 'bg-[#C4A868]'
   const etiqueta = c.canceladaEm
@@ -234,19 +241,24 @@ function Linha({ c, hoje, aberta, alternar, marcada, marcar }: { c: ContaPagar; 
         {etiqueta && <span className={ETIQUETA + ' ' + etiqueta.cls + ' hidden sm:inline'}>{etiqueta.t}</span>}
       </button>
       </div>
-      {aberta && <Painel c={c} hoje={hoje} />}
+      {aberta && <Painel c={c} hoje={hoje} categorias={categorias} cartoes={cartoes} />}
     </div>
   )
 }
 
 type Modo = 'pagar' | 'alterar' | 'cancelar' | 'estornar' | null
 
-function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
+function Painel({ c, hoje, categorias, cartoes }: { c: ContaPagar; hoje: string; categorias: Opcao[]; cartoes: Opcao[] }) {
   const router = useRouter()
   const [modo, setModo] = useState<Modo>(!c.pagoEm && !c.canceladaEm ? 'pagar' : null)
   const [pagoEm, setPagoEm] = useState(hoje)
   const [valor, setValor] = useState(txt(c.valor))
   const [vencimento, setVencimento] = useState(c.vencimento)
+  // Edição geral (dono, 12/10/2026)
+  const [descricao, setDescricao] = useState(c.descricao)
+  const [categoriaId, setCategoriaId] = useState(c.categoriaId ?? '')
+  const [forma, setForma] = useState<'credito' | 'boleto' | 'a_pagar'>(c.forma === 'credito' || c.forma === 'boleto' || c.forma === 'a_pagar' ? c.forma : 'a_pagar')
+  const [cartaoId, setCartaoId] = useState(c.cartaoId ?? '')
   const [texto, setTexto] = useState('')
   const [erro, setErro] = useState('')
   const [pendente, iniciar] = useTransition()
@@ -314,7 +326,7 @@ function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
         {abertaConta && (
           <>
             <button onClick={() => setModo('pagar')} className={modo === 'pagar' ? 'font-bold underline' : 'text-[#0090D8] hover:underline'}>registrar pagamento</button>
-            <button onClick={() => setModo('alterar')} className={modo === 'alterar' ? 'font-bold underline' : 'text-[#0090D8] hover:underline'}>mudar vencimento ou valor</button>
+            <button onClick={() => setModo('alterar')} className={modo === 'alterar' ? 'font-bold underline' : 'text-[#0090D8] hover:underline'}>editar a conta</button>
             <button onClick={() => setModo('cancelar')} className={modo === 'cancelar' ? 'font-bold underline' : 'text-[#B00063] hover:underline'}>cancelar conta</button>
           </>
         )}
@@ -346,22 +358,59 @@ function Painel({ c, hoje }: { c: ContaPagar; hoje: string }) {
 
       {modo === 'alterar' && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
-          <label className={rotulo}>NOVO VENCIMENTO
+          <label className={rotulo + ' col-span-2'}>DESCRIÇÃO
+            <input value={descricao} onChange={(e) => setDescricao(e.target.value)} className={campo} />
+          </label>
+          <label className={rotulo}>CATEGORIA
+            <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className={campo}>
+              <option value="">— sem categoria —</option>
+              {categorias.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+            </select>
+          </label>
+          <label className={rotulo}>FORMA
+            <select value={forma} onChange={(e) => setForma(e.target.value as 'credito' | 'boleto' | 'a_pagar')} className={campo}>
+              <option value="boleto">Boleto</option>
+              <option value="credito">Cartão de crédito</option>
+              <option value="a_pagar">A pagar (outro combinado)</option>
+            </select>
+          </label>
+          {forma === 'credito' && (
+            <label className={rotulo + ' col-span-2'}>CARTÃO (obrigatório no crédito)
+              <select value={cartaoId} onChange={(e) => setCartaoId(e.target.value)} className={campo + (cartaoId ? '' : ' border-[#C79600] bg-[#FFFBEE]')}>
+                <option value="">— escolher o cartão —</option>
+                {cartoes.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+              </select>
+            </label>
+          )}
+          <label className={rotulo}>VENCIMENTO
             <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={campo} />
           </label>
           <label className={rotulo}>VALOR
             <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" className={campo} />
           </label>
-          <label className={rotulo + ' col-span-2'}>MOTIVO (mín. 10 caracteres)
-            <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="ex.: fornecedor prorrogou o boleto" className={campo} />
+          <label className={rotulo + ' col-span-2 sm:col-span-3'}>MOTIVO (mín. 10 caracteres)
+            <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="ex.: fornecedor prorrogou o boleto; cartão escolhido errado na conferência" className={campo} />
           </label>
           <button
-            disabled={pendente || texto.trim().length < 10}
-            onClick={() => executar(() => alterarContaPagar(c.id, vencimento, num(valor), texto))}
+            disabled={pendente || texto.trim().length < 10 || (forma === 'credito' && !cartaoId)}
+            onClick={() =>
+              executar(() =>
+                alterarContaPagar(c.id, {
+                  vencimento,
+                  valor: num(valor),
+                  motivo: texto,
+                  descricao: descricao.trim() || null,
+                  categoriaId: categoriaId || null,
+                  forma,
+                  cartaoId: forma === 'credito' ? cartaoId || null : null,
+                })
+              )
+            }
             className={botao + ' bg-[#131A2E] text-white col-span-2 sm:col-span-1'}
           >
             {pendente ? 'SALVANDO…' : 'SALVAR ALTERAÇÃO'}
           </button>
+          <p className="col-span-2 sm:col-span-4 text-[11px] text-[#6E6E68]">Só conta em aberto. Trocar para crédito pede o cartão e o vencimento deve ser o da fatura. Tudo fica registrado na observação e na auditoria.</p>
         </div>
       )}
 

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME } from '@/components/estilo-lista'
-import { confirmarRecebimentos, type ItemRecebimento } from '@/app/actions/recebimentos'
+import { confirmarRecebimentos, alterarCobrancaPedido, type ItemRecebimento } from '@/app/actions/recebimentos'
 import type { ParcelaAReceber } from '@/app/actions/clientes'
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -190,8 +190,28 @@ export default function ListaReceber({ parcelas, hoje }: { parcelas: ParcelaARec
 }
 
 function Painel({ p, hoje, pendente, erro, onConfirmar }: { p: ParcelaAReceber; hoje: string; pendente: boolean; erro: string; onConfirmar: (quando: string, texto: string) => void }) {
+  const router = useRouter()
   const [quando, setQuando] = useState(hoje)
   const [texto, setTexto] = useState('')
+  // Edição da cobrança (dono, 12/10/2026): vencimento e valor da parcela; à vista só o vencimento
+  const [editando, setEditando] = useState(false)
+  const [vencimento, setVencimento] = useState(p.vencimento ?? hoje)
+  const [valor, setValor] = useState(String(p.valor).replace('.', ','))
+  const [motivo, setMotivo] = useState('')
+  const [erroEdicao, setErroEdicao] = useState('')
+  const [salvando, iniciarEdicao] = useTransition()
+  function salvarEdicao() {
+    setErroEdicao('')
+    const v = p.numeroParcela ? Number(valor.replace(/\./g, '').replace(',', '.')) : null
+    if (p.numeroParcela && !(v! > 0)) return setErroEdicao('Informe o valor.')
+    iniciarEdicao(async () => {
+      const r = await alterarCobrancaPedido(p.pedidoId, p.numeroParcela, vencimento, v, motivo)
+      if (!r.ok) return setErroEdicao(r.erro)
+      setEditando(false)
+      setMotivo('')
+      router.refresh()
+    })
+  }
   return (
     <div className="px-2.5 pb-3 pt-1 bg-[#FAFAF8] border-t border-[#EFEEE8] text-sm">
       <p className="text-xs text-[#6E6E68] mb-2">
@@ -201,6 +221,33 @@ function Painel({ p, hoje, pendente, erro, onConfirmar }: { p: ParcelaAReceber; 
         {p.pagoEm ? ` · recebido em ${dataBr(p.pagoEm)}` : ''}
         {' · '}<Link href={`/admin/pedidos/${p.pedidoId}`} className="text-[#0090D8] hover:underline">abrir o pedido</Link>
       </p>
+      {!p.pagoEm && (
+        <div className="flex flex-wrap gap-3 text-xs mb-2">
+          <button type="button" onClick={() => setEditando((v) => !v)} className={editando ? 'font-bold underline' : 'text-[#0090D8] hover:underline'}>
+            {p.numeroParcela ? 'editar vencimento ou valor' : 'editar vencimento'}
+          </button>
+        </div>
+      )}
+      {!p.pagoEm && editando && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end mb-3 bg-white border border-[#DDDCD5] rounded-sm p-2.5">
+          <label className={rotulo}>VENCIMENTO
+            <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={campo} />
+          </label>
+          {p.numeroParcela && (
+            <label className={rotulo}>VALOR
+              <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" className={campo} />
+            </label>
+          )}
+          <label className={rotulo + (p.numeroParcela ? '' : ' col-span-2')}>MOTIVO (mín. 10 caracteres)
+            <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ex.: cliente pediu prazo; valor digitado errado" className={campo} />
+          </label>
+          <button disabled={salvando || motivo.trim().length < 10} onClick={salvarEdicao} className={botao + ' bg-[#131A2E] text-white'}>
+            {salvando ? 'SALVANDO…' : 'SALVAR ALTERAÇÃO'}
+          </button>
+          <p className="col-span-2 sm:col-span-4 text-[11px] text-[#8A6100]">Boleto ou Pix já emitido no Bling não muda por aqui: altere lá também, ou gere a cobrança de novo. A mudança fica no andamento do pedido e na auditoria.</p>
+          {erroEdicao && <p className="col-span-2 sm:col-span-4 text-xs text-[#B00063]">{erroEdicao}</p>}
+        </div>
+      )}
       {!p.pagoEm && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
           <label className={rotulo}>RECEBIDO EM

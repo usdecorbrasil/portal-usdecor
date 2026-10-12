@@ -50,6 +50,7 @@ export type ContaPagar = {
   /** Data da compra (emissão da nota) e o vencimento que a nota trazia, quando a fatura do cartão mudou o usado. */
   dataCompra: string | null
   vencimentoOriginal: string | null
+  categoriaId: string | null
 }
 
 export type FiltroContas = {
@@ -81,6 +82,7 @@ type LinhaBanco = {
   cancelada_em: string | null
   cancelada_motivo: string | null
   observacao: string | null
+  categoria_id: string | null
   categorias_despesa: { nome: string } | null
   despesas: { arquivo_path: string | null } | null
   cartao_id: string | null
@@ -110,11 +112,12 @@ const paraConta = (c: LinhaBanco): ContaPagar => ({
   cartaoId: c.cartao_id,
   dataCompra: c.data_compra,
   vencimentoOriginal: c.vencimento_original,
+  categoriaId: c.categoria_id,
   cartao: c.cartoes_credito ? (c.cartoes_credito.final ? `${c.cartoes_credito.nome} · ${c.cartoes_credito.final}` : c.cartoes_credito.nome) : null,
 })
 
 const CAMPOS =
-  'id, despesa_id, descricao, fornecedor_nome, forma, parcela, parcelas, valor, vencimento, pago_em, valor_pago, baixa_obs, cancelada_em, cancelada_motivo, observacao, cartao_id, data_compra, vencimento_original, categorias_despesa(nome), despesas(arquivo_path), cartoes_credito(nome, final)'
+  'id, despesa_id, descricao, fornecedor_nome, forma, parcela, parcelas, valor, vencimento, pago_em, valor_pago, baixa_obs, cancelada_em, cancelada_motivo, observacao, cartao_id, categoria_id, data_compra, vencimento_original, categorias_despesa(nome), despesas(arquivo_path), cartoes_credito(nome, final)'
 
 export type ResumoContas = {
   vencidas: { qtd: number; valor: number }
@@ -257,19 +260,43 @@ export async function cancelarContaPagar(id: string, motivoTexto: string): Promi
   return { ok: true }
 }
 
-export async function alterarContaPagar(id: string, vencimento: string, valor: number, motivoTexto: string): Promise<Resultado> {
+/** Edição geral da conta em aberto (dono, 12/10/2026): vencimento, valor, descrição, categoria, forma e cartão, com motivo. */
+export type EdicaoConta = {
+  vencimento: string
+  valor: number
+  motivo: string
+  descricao?: string | null
+  categoriaId?: string | null
+  forma?: 'credito' | 'boleto' | 'a_pagar' | null
+  cartaoId?: string | null
+}
+
+export async function alterarContaPagar(id: string, edicao: EdicaoConta): Promise<Resultado> {
   if (!(await exigirAdmin())) return { ok: false, erro: 'Acesso negado.' }
   const parsed = z
-    .object({ vencimento: data, valor: z.number().positive('Informe o valor'), motivo })
-    .safeParse({ vencimento, valor, motivo: motivoTexto })
+    .object({
+      vencimento: data,
+      valor: z.number().positive('Informe o valor'),
+      motivo,
+      descricao: z.string().trim().min(3, 'Descrição muito curta').max(200).nullable().optional(),
+      categoriaId: z.string().uuid().nullable().optional(),
+      forma: z.enum(['credito', 'boleto', 'a_pagar']).nullable().optional(),
+      cartaoId: z.string().uuid().nullable().optional(),
+    })
+    .safeParse(edicao)
   if (!parsed.success) return { ok: false, erro: parsed.error.issues[0].message }
+  const d = parsed.data
   const supabase = await createClient()
-  const { data: antes } = await supabase.from('contas_pagar').select('vencimento, valor').eq('id', id).maybeSingle()
+  const { data: antes } = await supabase.from('contas_pagar').select('vencimento, valor, descricao, forma, cartao_id, categoria_id').eq('id', id).maybeSingle()
   const { error } = await supabase.rpc('admin_alterar_conta_pagar', {
     p_id: id,
-    p_vencimento: vencimento,
-    p_valor: valor,
-    p_motivo: parsed.data.motivo,
+    p_vencimento: d.vencimento,
+    p_valor: d.valor,
+    p_motivo: d.motivo,
+    p_descricao: d.descricao ?? null,
+    p_categoria_id: d.categoriaId ?? null,
+    p_forma: d.forma ?? null,
+    p_cartao_id: d.cartaoId ?? null,
   })
   if (error) return { ok: false, erro: error.message }
   await registrar({
@@ -277,8 +304,12 @@ export async function alterarContaPagar(id: string, vencimento: string, valor: n
     entidadeId: id,
     acao: 'editou',
     campos: [
-      { campo: 'Vencimento', de: antes ? dataBr(String(antes.vencimento)) : null, para: dataBr(vencimento) },
-      { campo: 'Valor', de: antes ? `R$ ${brl(Number(antes.valor))}` : null, para: `R$ ${brl(valor)}` },
+      { campo: 'Vencimento', de: antes ? dataBr(String(antes.vencimento)) : null, para: dataBr(d.vencimento) },
+      { campo: 'Valor', de: antes ? `R$ ${brl(Number(antes.valor))}` : null, para: `R$ ${brl(d.valor)}` },
+      { campo: 'Descrição', de: antes?.descricao ?? null, para: d.descricao ?? antes?.descricao ?? null },
+      { campo: 'Forma', de: antes?.forma ?? null, para: d.forma ?? antes?.forma ?? null },
+      { campo: 'Cartão', de: antes?.cartao_id ?? null, para: (d.forma ?? antes?.forma) === 'credito' ? d.cartaoId ?? antes?.cartao_id ?? null : null },
+      { campo: 'Categoria', de: antes?.categoria_id ?? null, para: d.categoriaId ?? antes?.categoria_id ?? null },
     ].filter((c) => c.de !== c.para),
     motivo: parsed.data.motivo,
   })
