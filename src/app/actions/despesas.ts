@@ -367,7 +367,7 @@ function soDigitos(v: string | null | undefined) {
 }
 
 /** Nota já lançada com o mesmo fornecedor, data e valor — provável repetição. */
-export type DuplicataProvavel = { fornecedor: string; numero: string | null; emissao: string; total: number }
+export type DuplicataProvavel = { fornecedor: string; numero: string | null; emissao: string; total: number; itens: number }
 
 /** O que mudou entre a leitura da IA e o que foi salvo, para a métrica de acerto. */
 function camposAlterados(lido: Record<string, unknown>, d: z.output<typeof schemaDespesa>, docFornecedor: string | null, chave: string | null) {
@@ -398,9 +398,54 @@ async function criarEnviosDeTecido(
   clienteId: string,
   itens: { descricao: string; quantidade: number; unidade: string | null | undefined; tecidoId: string }[],
   nota: { numero: string | null | undefined; arquivoPath: string | null; fornecedor: string | null | undefined }
-): Promise<Resultado<{ envios: number }>> {
+): Promise<Resultado<{ envios: number; reaproveitados: string[] }>> {
   const supabase = await createClient()
   const admin = createAdminClient()
+
+  // O cliente pode já ter avisado este envio pelo portal, com o número da NF.
+  // Aí a nota lida não vira outro envio: é anexada ao que ele abriu (o banco
+  // recusaria a repetição de qualquer jeito — aqui a mensagem é melhor)
+  const nfNumero = (nota.numero ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '')
+  const reaproveitados: string[] = []
+  if (nfNumero) {
+    const { data: abertos } = await supabase
+      .from('tecido_envios')
+      .select('id, tecido_id, nf_numero, nf_caminho, metros_informados, situacao, criado_em, tecidos(nome)')
+      .eq('cliente_id', clienteId)
+      .neq('situacao', 'recusado')
+    const mesmaNf = (abertos ?? []).filter(
+      (e) => String(e.nf_numero ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '') === nfNumero
+    )
+    const conferido = mesmaNf.find((e) => e.situacao === 'conferido')
+    if (conferido) {
+      return {
+        ok: false,
+        erro: `A NF ${nfNumero} deste cliente já foi conferida em ${new Date(String(conferido.criado_em)).toLocaleDateString('pt-BR')}: o tecido já está no estoque dele. Não registre de novo.`,
+      }
+    }
+    for (const e of mesmaNf) {
+      // Mesmo tecido do envio aberto: anexa a nota e tira da lista de criação
+      const tecidoId = String(e.tecido_id)
+      if (!itens.some((i) => i.tecidoId === tecidoId)) continue
+      if (nota.arquivoPath && !e.nf_caminho) {
+        const { data } = await admin.storage.from(BUCKET).download(nota.arquivoPath)
+        if (data) {
+          const ext = nota.arquivoPath.slice(nota.arquivoPath.lastIndexOf('.') + 1)
+          const caminho = `tecidos/${clienteId}/${e.id}/nf-remessa.${ext}`
+          const tipo = ext === 'pdf' ? 'application/pdf' : ext === 'xml' ? 'text/xml' : ext === 'png' ? 'image/png' : 'image/jpeg'
+          const { error: erroUp } = await admin.storage.from('documentos').upload(caminho, data, { contentType: tipo, upsert: true })
+          if (!erroUp) await supabase.rpc('anexar_nf_envio_tecido', { p_envio_id: e.id, p_nf_numero: nfNumero, p_nf_caminho: caminho })
+        }
+      }
+      const nome = (e.tecidos as unknown as { nome: string } | null)?.nome ?? 'tecido'
+      reaproveitados.push(`${nome} — o cliente já tinha avisado ${Number(e.metros_informados).toLocaleString('pt-BR')} m em ${new Date(String(e.criado_em)).toLocaleDateString('pt-BR')}; a nota foi anexada a esse envio`)
+      itens = itens.filter((i) => i.tecidoId !== tecidoId)
+    }
+    if (!itens.length) {
+      revalidatePath('/admin/estoque')
+      return { ok: true, envios: 0, reaproveitados }
+    }
+  }
 
   // Mesmo tecido em duas linhas: um envio só, com a metragem somada
   const porTecido = new Map<string, { metros: number; descricoes: string[] }>()
@@ -433,7 +478,9 @@ async function criarEnviosDeTecido(
       })
       .select('id')
       .single()
-    if (error || !envio) return { ok: false, erro: `Não deu para registrar o envio de tecido: ${error?.message ?? 'erro desconhecido'}` }
+    if (error || !envio) {
+      return { ok: false, erro: error?.hint === 'envio_duplicado' ? error.message : `Não deu para registrar o envio de tecido: ${error?.message ?? 'erro desconhecido'}` }
+    }
     criados++
 
     if (nfBytes) {
@@ -446,12 +493,12 @@ async function criarEnviosDeTecido(
     }
   }
   revalidatePath('/admin/estoque')
-  return { ok: true, envios: criados }
+  return { ok: true, envios: criados, reaproveitados }
 }
 
 export async function salvarDespesa(
   dados: DadosDespesa
-): Promise<Resultado<{ id: string | null; avisoCustos: string | null; envios: number }> | { ok: false; erro: string; duplicata: DuplicataProvavel }> {
+): Promise<Resultado<{ id: string | null; avisoCustos: string | null; envios: number; reaproveitados: string[] }> | { ok: false; erro: string; duplicata: DuplicataProvavel }> {
   const perfil = await exigirAdmin()
   if (!perfil) return { ok: false, erro: 'Acesso negado.' }
 
@@ -474,7 +521,7 @@ export async function salvarDespesa(
       { numero: d.numero, arquivoPath: d.arquivoPath, fornecedor: d.fornecedorNome }
     )
     if (!r.ok) return r
-    return { ok: true, id: null, avisoCustos: null, envios: r.envios }
+    return { ok: true, id: null, avisoCustos: null, envios: r.envios, reaproveitados: r.reaproveitados }
   }
   d.itens = itensDespesa
 
@@ -507,15 +554,21 @@ export async function salvarDespesa(
   if (!d.confirmarDuplicada) {
     const { data: parecidas } = await supabase
       .from('despesas')
-      .select('fornecedor_nome, fornecedor_doc, numero, emissao, total')
+      .select('fornecedor_nome, fornecedor_doc, numero, tipo, emissao, total, despesa_itens(quantidade)')
       .is('excluido_em', null)
       .eq('emissao', d.emissao)
       .eq('total', d.total)
       .limit(20)
     const nome = (d.fornecedorNome ?? '').trim().toLowerCase()
-    const igual = (parecidas ?? []).find((x) =>
-      docFornecedor && x.fornecedor_doc ? x.fornecedor_doc === docFornecedor : !!nome && String(x.fornecedor_nome ?? '').trim().toLowerCase() === nome
-    )
+    const qtdNova = d.itens.reduce((s, i) => s + i.quantidade, 0)
+    // Mesmo fornecedor, tipo, data, valor e quantidades: é a mesma nota
+    const igual = (parecidas ?? []).find((x) => {
+      const mesmoFornecedor = docFornecedor && x.fornecedor_doc ? x.fornecedor_doc === docFornecedor : !!nome && String(x.fornecedor_nome ?? '').trim().toLowerCase() === nome
+      const itensX = (x.despesa_itens ?? []) as { quantidade: number | string }[]
+      const qtdX = itensX.reduce((s, i) => s + Number(i.quantidade), 0)
+      const mesmaQtd = itensX.length === 0 || (itensX.length === d.itens.length && Math.abs(qtdX - qtdNova) < 0.001)
+      return mesmoFornecedor && x.tipo === d.tipo && mesmaQtd
+    })
     if (igual) {
       return {
         ok: false,
@@ -525,6 +578,7 @@ export async function salvarDespesa(
           numero: (igual.numero as string | null) ?? null,
           emissao: String(igual.emissao),
           total: Number(igual.total),
+          itens: ((igual.despesa_itens ?? []) as unknown[]).length,
         },
       }
     }
@@ -622,6 +676,7 @@ export async function salvarDespesa(
 
   // Nota mista: os itens de tecido viram envios, os demais ficaram na despesa
   let envios = 0
+  let reaproveitados: string[] = []
   if (itensTecido.length) {
     const r = await criarEnviosDeTecido(
       perfil.id,
@@ -631,6 +686,7 @@ export async function salvarDespesa(
     )
     if (!r.ok) return { ok: false, erro: `A despesa foi salva, mas ${r.erro.toLowerCase()} Registre o envio em Estoque → Tecidos.` }
     envios = r.envios
+    reaproveitados = r.reaproveitados
   }
 
   await registrar({
@@ -653,7 +709,7 @@ export async function salvarDespesa(
   revalidar()
   revalidatePath('/admin/financeiro/a-pagar')
   if (avisoCustos) revalidatePath('/admin/financeiro/custos')
-  return { ok: true, id: despesa.id, avisoCustos, envios }
+  return { ok: true, id: despesa.id, avisoCustos, envios, reaproveitados }
 }
 
 export async function excluirDespesa(id: string, motivo: string): Promise<Resultado> {

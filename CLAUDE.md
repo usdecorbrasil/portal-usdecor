@@ -567,6 +567,16 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   de remessa via `anexar_nf_envio_tecido`); o saldo só muda na conferência, como sempre.
   Nota só de tecido **não** vira despesa nem conta a pagar (vai para Estoque → Tecidos do
   cliente); nota mista separa item a item. Quem lança é a equipe (decisão do dono).
+- **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
+  - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
+    `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e
+    quantidades** pede confirmação no pop-up.
+  - Envio de tecido (migration `20261012100000`, gatilho `tecido_envios_validar`, vale
+    para cadastro à mão e nota lida): mesmo cliente + mesmo nº de NF em envio não recusado
+    recusa (`hint = 'envio_duplicado'`); sem NF, mesmo cliente + tecido + metragem no mesmo
+    dia recusa. Ao lançar a nota, `criarEnviosDeTecido` procura antes o envio que o cliente
+    já avisou com aquela NF: se aberto e do mesmo tecido, **anexa a nota a ele** em vez de
+    criar outro (a tela avisa); se já conferido, bloqueia.
 
 ## Contas a pagar (08/10/2026, migration `20261008190000`)
 

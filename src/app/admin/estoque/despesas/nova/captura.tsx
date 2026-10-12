@@ -541,6 +541,8 @@ export default function Captura({
         else setErro(r.erro)
         return
       }
+      // O cliente já tinha avisado o envio: a nota foi anexada a ele, nada duplicou
+      if (r.reaproveitados.length) window.alert('Envio já avisado pelo cliente:\n\n' + r.reaproveitados.join('\n'))
       // Nota só de tecido vai para a conferência de envios, não para despesas
       router.push(r.id ? '/admin/estoque/despesas' : `/admin/estoque?cliente=${form.tecidoClienteId}`)
       router.refresh()
@@ -1100,7 +1102,8 @@ export default function Captura({
             <p className="text-sm text-[#6E6E68] mt-2 leading-relaxed">
               Já existe uma nota de <strong>{duplicata.fornecedor}</strong>
               {duplicata.numero ? <> (nº {duplicata.numero})</> : null} emitida em{' '}
-              <strong>{duplicata.emissao.split('-').reverse().join('/')}</strong> no valor de <strong>R$ {brl(duplicata.total)}</strong>.
+              <strong>{duplicata.emissao.split('-').reverse().join('/')}</strong> no valor de <strong>R$ {brl(duplicata.total)}</strong>
+              {duplicata.itens ? <>, com {duplicata.itens} {duplicata.itens === 1 ? 'item' : 'itens'} e as mesmas quantidades</> : null}.
               Lançar de novo duplica a despesa, o estoque e a conta a pagar.
             </p>
             <div className="flex flex-col sm:flex-row gap-2 mt-5">

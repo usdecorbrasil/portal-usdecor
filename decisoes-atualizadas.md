@@ -339,6 +339,7 @@ Hobby da Vercel não aceita cron horário.
 | `leitura_ia` + `versao_prompt` guardam a leitura original e o que a conferência mudou, para medir o acerto por modelo | ✅ |
 | Importar o XML da NF-e: sem IA, dados exatos, duplicatas viram parcelas, XML guardado como comprovante (`modo = 'xml'`, migration `20261010100000`) | ✅ |
 | Nota de tecido de cliente: a leitura reconhece o tecido e o cliente; o item marcado vira envio de tecido (NF anexada, saldo só na conferência); nota só de tecido não gera despesa; cadastro rápido de tecido no próprio item | ✅ |
+| Toda entrada conferida contra repetição: nota de compra (chave; fornecedor+número+série; fornecedor+tipo+data+valor+quantidades pede confirmação) e envio de tecido (mesmo cliente+NF recusa; sem NF, cliente+tecido+metragem no dia recusa; nota lida anexa ao envio que o cliente já avisou) | ✅ |
 | Ler QR code/código de barras e várias fotos num documento | a fazer |
 
 ### Limite de crédito só no portal (09/10/2026)
