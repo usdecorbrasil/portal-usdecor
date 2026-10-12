@@ -140,7 +140,7 @@ function formVazio(): Form {
   }
 }
 
-/** "Já pago" saiu da lista a pedido do dono (12/10/2026): toda nota entra em contas a pagar com débito, crédito, boleto ou outro combinado. */
+/** "Já pago" saiu da lista a pedido do dono (12/10/2026): a nota entra com Pix, débito, crédito, boleto ou outro combinado. */
 const CONDICOES_NA_TELA = CONDICOES.filter((c) => c !== 'pago')
 
 export default function Captura({
@@ -249,7 +249,7 @@ export default function Captura({
         // escolhida gera um vencimento padrão
         condicao: d.condicao_pagamento === 'pago' ? '' : d.condicao_pagamento ?? (d.duplicatas.length ? 'boleto' : ''),
         parcelas:
-          d.condicao_pagamento === 'pago' || d.condicao_pagamento === 'debito'
+          d.condicao_pagamento && quitadaNaCompra(d.condicao_pagamento)
             ? []
             : d.duplicatas.length
               ? d.duplicatas.map((p) => ({ vencimento: p.vencimento, valor: txt(p.valor) }))
