@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NOME, NUM, VAZIO } from '@/components/estilo-lista'
-import { ativarCartao, criarCartao, editarCartao } from '@/app/actions/cartoes'
+import { ativarCartao, criarCartao, editarCartao, excluirCartao } from '@/app/actions/cartoes'
 import { vencimentoDaFatura, type CartaoCredito } from '@/lib/contas-pagar/cartoes'
 
 const campo = 'border border-[#DDDCD5] rounded-sm px-2 py-1.5 text-sm outline-none focus:border-[#131A2E] bg-white w-full'
@@ -51,6 +51,17 @@ export default function CartoesCredito({ cartoes, hoje }: { cartoes: CartaoCredi
   function alternar(c: CartaoCredito) {
     iniciar(async () => {
       const r = await ativarCartao(c.id, !c.ativo)
+      if (!r.ok) setErro(r.erro)
+      router.refresh()
+    })
+  }
+
+  function excluir(c: CartaoCredito) {
+    const nome = c.final ? `${c.nome} (final ${c.final})` : c.nome
+    if (!window.confirm(`Excluir o cartão ${nome}?\n\nSó sai se nunca foi usado em nota ou conta a pagar. Cartão já usado deve ser desativado.`)) return
+    setErro('')
+    iniciar(async () => {
+      const r = await excluirCartao(c.id)
       if (!r.ok) setErro(r.erro)
       router.refresh()
     })
@@ -130,7 +141,7 @@ export default function CartoesCredito({ cartoes, hoje }: { cartoes: CartaoCredi
             <span className="w-24 text-right">Fecha dia</span>
             <span className="w-24 text-right">Vence dia</span>
             <span className="w-40 text-right">Compra hoje vence</span>
-            <span className="w-32" />
+            <span className="w-44" />
           </div>
           <div className={CORPO}>
             {cartoes.map((c) => (
@@ -146,9 +157,10 @@ export default function CartoesCredito({ cartoes, hoje }: { cartoes: CartaoCredi
                   <span className={NUM + ' sm:w-24 sm:text-right'}><span className="sm:hidden">vence </span>{c.diaVencimento}</span>
                   <span className={NUM + ' sm:w-40 sm:text-right'}><span className="sm:hidden">compra hoje vence </span>{dataBr(vencimentoDaFatura(hoje, c))}</span>
                 </span>
-                <span className="sm:w-32 flex gap-3 sm:justify-end text-xs">
+                <span className="sm:w-44 flex gap-3 sm:justify-end text-xs">
                   <button onClick={() => abrir(c)} className="text-[#0090D8] hover:underline">editar</button>
                   <button onClick={() => alternar(c)} disabled={pendente} className="text-[#6E6E68] hover:underline">{c.ativo ? 'desativar' : 'reativar'}</button>
+                  <button onClick={() => excluir(c)} disabled={pendente} className="text-[#B00063] hover:underline">excluir</button>
                 </span>
               </div>
             ))}

@@ -111,3 +111,25 @@ export async function ativarCartao(id: string, ativo: boolean): Promise<Resultad
   revalidar()
   return { ok: true }
 }
+
+/**
+ * Exclui de vez um cartão cadastrado por engano. Só o cartão que nunca
+ * entrou em nota nem em conta a pagar sai; os demais ficam como histórico
+ * e a saída é desativar (a RPC recusa com hint `cartao_usado`).
+ */
+export async function excluirCartao(id: string): Promise<Resultado> {
+  if (!(await exigirDono())) return { ok: false, erro: 'Acesso negado.' }
+  const supabase = await createClient()
+  const { data: antes } = await supabase.from('cartoes_credito').select('nome, final').eq('id', id).maybeSingle()
+  if (!antes) return { ok: false, erro: 'Cartão não encontrado.' }
+  const { error } = await supabase.rpc('admin_excluir_cartao', { p_id: id })
+  if (error) return { ok: false, erro: error.message }
+  await registrar({
+    entidade: 'cartao_credito',
+    entidadeId: id,
+    acao: 'excluiu',
+    campos: [{ campo: 'Nome', de: antes.final ? `${antes.nome} · final ${antes.final}` : antes.nome, para: null }],
+  })
+  revalidar()
+  return { ok: true }
+}
