@@ -623,7 +623,7 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
     converte para o `DocumentoLido` com null que conferência, chave e XML usam. Campo novo
     na leitura segue a mesma regra — nada de `.nullable()` no esquema de fio.
 - **Importar XML da NF-e** (10/10/2026, migration `20261010100000`): terceiro botão em
-  Nova nota. `src/lib/despesas/xml-nfe.ts` (puro, sem biblioteca — o layout 4.00 é fixo)
+  Nova nota, com o aviso verde "Prefira o XML da NF-e" para a equipe (12/10/2026). `src/lib/despesas/xml-nfe.ts` (puro, sem biblioteca — o layout 4.00 é fixo)
   lê `infNFe > emit/dest/det/total/cobr/pag` e devolve o mesmo `DocumentoLido` da IA com
   confiança 1; `importarXmlNfe` guarda o `.xml` no bucket como comprovante e abre a
   conferência com `modo = 'xml'` (CHECK e `admin_anexar_arquivo_despesa` aceitam xml).
@@ -666,10 +666,12 @@ com consumo manual ou automático por metro estampado. Migration `20261008150000
   por mês, dia maior que o mês segura no último dia. Quem confere pode ajustar à mão.
   `admin_gerar_contas_despesa` ganhou `p_cartao_id` (a versão de 4 parâmetros foi removida —
   duas assinaturas deixariam a chamada por nome ambígua no PostgREST): cartão só com crédito,
-  **obrigatório quando há cartão ativo cadastrado**, gravado em `despesas.cartao_id` e em cada
-  `contas_pagar.cartao_id`. A pagar mostra o cartão sob a forma, filtra por `?cartao=<id>` e
-  exporta a coluna no CSV. Sem cartão cadastrado, o crédito segue com o vencimento padrão
-  (+1 mês).
+  **obrigatório sempre** (migration `20261012150000`, dono em 12/10/2026 — antes só quando havia
+  cartão cadastrado; sem cartão a conta ficava solta com data que não bate com a fatura),
+  gravado em `despesas.cartao_id` e em cada `contas_pagar.cartao_id`. A conferência tem o
+  botão **"+ Cartão"** (cadastro rápido via `criarCartao`, entra na lista e já fica escolhido;
+  vale para as próximas notas). A pagar mostra o cartão sob a forma, filtra por `?cartao=<id>` e
+  exporta a coluna no CSV.
   **A data da fatura é só previsão do A pagar** (dono, 12/10/2026): para cruzar com o extrato
   do cartão, cada conta guarda `contas_pagar.data_compra` (emissão da nota, sempre, com
   backfill) e `vencimento_original` (o vencimento que a nota trazia — duplicata ou padrão —,
