@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Best Color Tecidos — Portal de Pedidos",
-  description: "Portal de pedidos B2B da Best Color Tecidos",
+  title: "US Decor — Portal interno",
+  description: "Gestão interna da US Decor: produtos, estoque, pedidos dos marketplaces e financeiro",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Best Color Tecidos",
+    title: "US Decor",
   },
 };
 

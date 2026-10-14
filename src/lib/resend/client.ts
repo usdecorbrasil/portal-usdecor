@@ -11,7 +11,7 @@ export const resend = new Resend(process.env.RESEND_API_KEY)
  * Resend — não dá para enviar como @gmail.com, o provedor recusa e o e-mail
  * falharia em SPF/DKIM de qualquer forma.
  */
-export const REMETENTE = `Best Color Tecidos <${process.env.RESEND_FROM ?? 'onboarding@resend.dev'}>`
+export const REMETENTE = `US Decor <${process.env.RESEND_FROM ?? 'onboarding@resend.dev'}>`
 
 /**
  * Para onde vai a resposta do cliente. É aqui que entra uma caixa comum

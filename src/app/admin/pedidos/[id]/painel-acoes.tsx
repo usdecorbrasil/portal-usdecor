@@ -2273,7 +2273,7 @@ function TelaReimpressao({
                 <b>
                   {origemTecido === 'cliente'
                     ? `${brl(metrosNum)} m baixados do saldo do cliente`
-                    : 'fornecido pela Best Color Tecidos (saldo do cliente não muda)'}
+                    : 'fornecido pela US Decor (saldo do cliente não muda)'}
                 </b>
               </li>
               <li>· O valor da estampa do pedido não muda</li>
@@ -2368,7 +2368,7 @@ function TelaReimpressao({
             <div className="grid grid-cols-2 gap-2">
               <OpcaoCusto
                 ativo={custo === 'interno'}
-                titulo="Best Color Tecidos"
+                titulo="US Decor"
                 legenda="retrabalho interno"
                 onClick={() => setCusto('interno')}
               />
@@ -2388,7 +2388,7 @@ function TelaReimpressao({
             <div className="grid grid-cols-2 gap-2">
               <OpcaoCusto
                 ativo={origemTecido === 'empresa'}
-                titulo="Best Color Tecidos"
+                titulo="US Decor"
                 legenda="saldo do cliente não muda"
                 onClick={() => setOrigemTecido('empresa')}
               />

@@ -122,7 +122,7 @@ export default async function ContaPage() {
         </div>
       ) : (
         <p className="text-sm text-[#6E6E68] bg-white border border-[#DDDCD5] rounded-sm p-4">
-          Sem limite de crédito definido. Fale com a Best Color Tecidos se
+          Sem limite de crédito definido. Fale com a US Decor se
           quiser trabalhar com boleto parcelado.
         </p>
       )}
@@ -197,7 +197,7 @@ export default async function ContaPage() {
 
         <p className="text-xs text-[#6E6E68] pt-2 leading-relaxed">
           Empresa, CNPJ e e-mail de acesso vão para a nota fiscal e para o
-          login. Para corrigi-los, fale com a Best Color Tecidos.
+          login. Para corrigi-los, fale com a US Decor.
         </p>
       </div>
 

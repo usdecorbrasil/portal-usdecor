@@ -12,12 +12,12 @@ export default function EsqueciSenhaPage() {
     <main className="min-h-screen flex items-center justify-center bg-[#F2F1ED] px-5">
       <div className="w-full max-w-sm">
         <Image
-          src="/logo-horizontal.png"
-          alt="Best Color Tecidos"
-          width={483}
-          height={120}
+          src="/logo.png"
+          alt="US Decor"
+          width={600}
+          height={600}
           priority
-          className="h-14 w-auto mx-auto -translate-x-2"
+          className="h-28 w-auto mx-auto"
         />
 
         <h1 className="text-lg font-semibold tracking-tight text-center mt-6">

@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Portal US Decor
 
-## Getting Started
+Sistema interno de gestão da US Decor (capas de almofada vendidas na Amazon, no Mercado
+Livre e na Shopee). Next.js (App Router) + Supabase + Resend + Anthropic API, deploy na
+Vercel.
 
-First, run the development server:
+O contexto completo, as regras e a ordem dos módulos estão no [`CLAUDE.md`](CLAUDE.md);
+as decisões de negócio, em [`decisoes-atualizadas.md`](decisoes-atualizadas.md).
+
+## Rodar local
 
 ```bash
+cp .env.example .env.local   # preencher as chaves do Supabase, Resend e Anthropic
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Antes de abrir PR: `npm run build`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Mudança de banco só por migration em `supabase/migrations/` com o rollback em
+`supabase/rollbacks/`; a GitHub Action aplica ao chegar na `main`.

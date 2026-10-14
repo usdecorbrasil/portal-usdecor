@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Best Color Tecidos — Portal de Pedidos',
-    short_name: 'Best Color Tecidos',
-    description: 'Portal de pedidos B2B da Best Color Tecidos',
+    name: 'US Decor — Portal interno',
+    short_name: 'US Decor',
+    description: 'Gestão interna da US Decor: produtos, estoque, pedidos dos marketplaces e financeiro',
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait-primary',

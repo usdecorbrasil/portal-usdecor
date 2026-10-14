@@ -47,12 +47,12 @@ export default async function ClienteLayout({
             <div className="min-w-0">
               <Link href="/pedidos" aria-label="Ir para os pedidos">
                 <Image
-                  src="/logo-horizontal.png"
-                  alt="Best Color Tecidos"
-                  width={483}
-                  height={120}
+                  src="/logo.png"
+                  alt="US Decor"
+                  width={600}
+                  height={600}
                   priority
-                  className="h-7 w-auto"
+                  className="h-9 w-auto"
                 />
               </Link>
               <p className="text-xs text-[#6E6E68] mt-1 truncate">

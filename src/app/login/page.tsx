@@ -57,15 +57,15 @@ function LoginForm() {
     <main className="min-h-screen flex items-center justify-center bg-[#F2F1ED] px-5">
       <div className="w-full max-w-sm">
         <Image
-          src="/logo-horizontal.png"
-          alt="Best Color Tecidos"
-          width={483}
-          height={120}
+          src="/logo.png"
+          alt="US Decor"
+          width={600}
+          height={600}
           priority
-          className="h-14 w-auto mx-auto -translate-x-2"
+          className="h-28 w-auto mx-auto"
         />
         <p className="text-sm text-[#6E6E68] mt-4 mb-8 text-center">
-          Portal de pedidos
+          Portal interno
         </p>
 
         {avisoLink && (
@@ -143,17 +143,8 @@ function LoginForm() {
         </p>
 
         <p className="text-xs text-[#6E6E68] mt-6 leading-relaxed text-center">
-          O acesso é criado pela Best Color Tecidos. Se você ainda não tem login,
-          entre em contato{' '}
-          <a
-            href="https://bestcolortecidos.com.br"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[#B00063] hover:underline"
-          >
-            conosco
-          </a>
-          .
+          Acesso só para a equipe da US Decor. Se você ainda não tem login, peça
+          ao administrador do portal.
         </p>
       </div>
     </main>

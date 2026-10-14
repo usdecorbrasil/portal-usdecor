@@ -26,14 +26,14 @@ export function templateRedefinirSenha({
         <table width="480" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF; border-radius:4px; overflow:hidden;">
           <tr>
             <td style="background:linear-gradient(103deg,#D8007A 0%,#B4005F 100%); padding: 24px 32px;">
-              <span style="color:#FFFFFF; font-size:20px; font-weight:bold; letter-spacing:-0.5px;">Best Color Tecidos</span>
+              <span style="color:#FFFFFF; font-size:20px; font-weight:bold; letter-spacing:-0.5px;">US Decor</span>
             </td>
           </tr>
           <tr>
             <td style="padding: 32px;">
               <h1 style="font-size:18px; color:#131A2E; margin: 0 0 16px;">Olá, ${escapar(nome)}</h1>
               <p style="font-size:14px; color:#131A2E; line-height:1.6; margin: 0 0 20px;">
-                A Best Color Tecidos pediu uma nova senha para o seu acesso ao portal
+                A US Decor pediu uma nova senha para o seu acesso ao portal
                 (<span style="font-family: monospace;">${escapar(email)}</span>).
                 Clique abaixo para criar a sua:
               </p>

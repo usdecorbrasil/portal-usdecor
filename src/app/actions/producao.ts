@@ -202,7 +202,7 @@ export async function reimprimir(
       .eq('id', parsed.data.pedidoId)
       .maybeSingle()
     if (!p?.tecido_id) {
-      return { ok: false, erro: 'Este pedido não tem tecido do cliente definido — escolha "Best Color Tecidos" como origem.' }
+      return { ok: false, erro: 'Este pedido não tem tecido do cliente definido — escolha "US Decor" como origem.' }
     }
     consumo = { clienteId: p.cliente_id as string, tecidoId: p.tecido_id as string, numero: Number(p.numero) }
   }
