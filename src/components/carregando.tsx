@@ -20,12 +20,12 @@ export default function Carregando({
       className="flex flex-col items-center justify-center gap-4 py-20 sm:py-28"
     >
       <Image
-        src="/logo-horizontal.png"
+        src="/logo.png"
         alt=""
-        width={483}
-        height={120}
+        width={600}
+        height={600}
         priority
-        className="h-8 w-auto opacity-90 animate-[respira_1.6s_ease-in-out_infinite]"
+        className="h-12 w-auto opacity-90 animate-[respira_1.6s_ease-in-out_infinite]"
       />
 
       {/* barra indeterminada: não sabemos quanto falta, só que está indo */}

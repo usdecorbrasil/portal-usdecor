@@ -48,12 +48,12 @@ export default async function AdminLayout({
           {/* Leva à primeira aba do papel: funcionário não acessa o Dashboard */}
           <Link href={abas[0].href} aria-label="Página inicial" className="shrink-0">
             <Image
-              src="/logo-horizontal.png"
+              src="/logo.png"
               alt="US Decor"
-              width={483}
-              height={120}
+              width={600}
+              height={600}
               priority
-              className="h-8 w-auto"
+              className="h-10 w-auto"
             />
           </Link>
 

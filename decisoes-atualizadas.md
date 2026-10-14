@@ -14,7 +14,7 @@ Legenda: **✅ feito** está na `main`; **🔧 a construir** foi decidido e não
 |---|---|
 | Portal **interno**, só para a equipe; sem área de cliente, sem login de cliente | 🔧 (poda) |
 | Código base copiado do portal da Best Color com o histórico | ✅ |
-| Marca "US Decor" no lugar de "Best Color" no código, e-mails e remetente | ✅ (logos provisórios até o dono mandar o oficial) |
+| Marca "US Decor" no lugar de "Best Color" no código, e-mails e remetente, com o logo oficial | ✅ |
 | Sai a estamparia: metragem, romaneio, ajuste de metragem, tecido de cliente, etapas de produção, impressão, fila, crédito e limite de cliente | 🔧 (poda) |
 | Sai o pedido de venda no Bling, a cobrança/boleto/Pix do Bling e a NF pelo Faturar | 🔧 (poda) |
 | Migrations consolidadas numa base limpa para o Supabase novo, sem o histórico da estamparia | 🔧 (poda) |
