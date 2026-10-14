@@ -4,11 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 /**
- * Abas do Financeiro em dois cards (pedido do dono em 08/10/2026):
- *  - Contas: A receber (o antigo Boletos) e A pagar;
- *  - Custos, Apuração e Relatórios.
- * O conteúdo da aba aberta aparece dentro do card dela; o outro card mostra
- * só as abas, fechado. O Crédito segue num card próprio, abaixo dos dois.
+ * Abas do Financeiro em cards. Por ora só Contas (A pagar e Conciliação);
+ * A receber e Resultado por canal entram com o módulo de pedidos.
+ * O conteúdo da aba aberta aparece dentro do card dela.
  */
 
 type Aba = { href: string; label: string }
@@ -17,17 +15,8 @@ const CARDS: { titulo: string; abas: Aba[] }[] = [
   {
     titulo: 'Contas',
     abas: [
-      { href: '/admin/financeiro/a-receber', label: 'A receber' },
       { href: '/admin/financeiro/a-pagar', label: 'A pagar' },
       { href: '/admin/financeiro/conciliacao', label: 'Conciliação' },
-    ],
-  },
-  {
-    titulo: 'Custos e resultados',
-    abas: [
-      { href: '/admin/financeiro/custos', label: 'Custos' },
-      { href: '/admin/financeiro/apuracao', label: 'Apuração' },
-      { href: '/admin/financeiro/relatorios', label: 'Relatórios' },
     ],
   },
 ]

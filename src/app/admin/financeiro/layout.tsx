@@ -21,7 +21,7 @@ export default async function FinanceiroLayout({
           Financeiro
         </h1>
         <BuscaPagina
-          placeholder="Filtrar por nº ou cliente..."
+          placeholder="Filtrar por fornecedor ou descrição..."
           rotulo="Filtrar o conteúdo desta página"
         />
       </div>

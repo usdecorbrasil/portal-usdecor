@@ -3,28 +3,19 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lerPerfil } from '@/lib/auth/perfil'
 import Equipe from './equipe'
-import ConfigPagamento from './config-pagamento'
 import CartoesCredito from './cartoes-credito'
 import { listarCartoes } from '@/app/actions/cartoes'
 import { hojeBrasilia } from '@/lib/datas'
 import ConfigNotificacoes from './config-notificacoes'
-import IntegracaoBling from './integracao-bling'
 import IntegracaoIa from './integracao-ia'
-import {
-  buscarConfigPagamento,
-  buscarConfigNotificacoes,
-} from '@/app/actions/configuracoes'
-import { lerEstadoBling } from '@/lib/bling/cliente'
+import { buscarConfigNotificacoes } from '@/app/actions/configuracoes'
 import HistoricoAlteracoes from '@/components/historico-alteracoes'
-
-// "Tirar o limite do Bling de todos" passa cliente por cliente, ~1 s cada
-export const maxDuration = 120
 
 export default async function ConfiguracoesPage() {
   const perfil = await lerPerfil()
 
   if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) {
-    redirect('/admin/pedidos')
+    redirect('/admin')
   }
 
   const supabase = await createClient()
@@ -51,10 +42,8 @@ export default async function ConfiguracoesPage() {
     (usuarios?.users ?? []).map((u) => [u.id, u.email ?? ''])
   )
 
-  const [configPagamento, configNotificacoes, estadoBling, cartoes] = await Promise.all([
-    buscarConfigPagamento(),
+  const [configNotificacoes, cartoes] = await Promise.all([
     buscarConfigNotificacoes(),
-    lerEstadoBling(),
     listarCartoes(),
   ])
 
@@ -88,10 +77,9 @@ export default async function ConfiguracoesPage() {
 
       <div className="mt-8">
         <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mb-3 flex items-center gap-2">
-          PAGAMENTO
+          CARTÕES DA EMPRESA
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
-        <ConfigPagamento configAtual={configPagamento} />
         <CartoesCredito cartoes={cartoes} hoje={hojeBrasilia()} />
       </div>
 
@@ -108,7 +96,6 @@ export default async function ConfiguracoesPage() {
           INTEGRAÇÕES
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
-        <IntegracaoBling estado={estadoBling} />
         <IntegracaoIa configurada={!!process.env.ANTHROPIC_API_KEY} />
       </div>
 
@@ -117,7 +104,7 @@ export default async function ConfiguracoesPage() {
           HISTÓRICO
           <span className="flex-1 h-px bg-[#DDDCD5]" />
         </h2>
-        {/* Equipe e pagamento na mesma lista: é a pergunta que se faz aqui —
+        {/* Equipe, cartões e avisos na mesma lista: é a pergunta que se faz aqui —
             o que andou mudando nas configurações, e por quem */}
         <HistoricoAlteracoes
           entidade={['configuracao', 'equipe', 'cartao_credito']}

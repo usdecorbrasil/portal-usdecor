@@ -11,9 +11,9 @@ const ATALHOS = [7, 15, 30] as const
 type Periodo = (typeof ATALHOS)[number] | 'personalizado'
 
 /**
- * Card totalizador do Financeiro: contas a receber e a pagar que vencem no
- * período (próximos 7, 15 ou 30 dias, ou datas escolhidas), o saldo
- * previsto entre os dois, e o que já venceu, que não espera o período.
+ * Card totalizador do Financeiro: contas a pagar que vencem no período
+ * (próximos 7, 15 ou 30 dias, ou datas escolhidas) e o que já venceu, que não
+ * espera o período. O lado do que entra volta com os repasses dos marketplaces.
  */
 export default function FluxoCaixa({ inicial }: { inicial: ResumoFluxo }) {
   const [resumo, setResumo] = useState(inicial)
@@ -38,9 +38,7 @@ export default function FluxoCaixa({ inicial }: { inicial: ResumoFluxo }) {
     carregar(novoDe, novoAte)
   }
 
-  const saldo = Math.round((resumo.aReceber.periodo.valor - resumo.aPagar.periodo.valor) * 100) / 100
-  const saldoComVencidas =
-    Math.round((saldo + resumo.aReceber.vencidas.valor - resumo.aPagar.vencidas.valor) * 100) / 100
+  const comVencidas = Math.round((resumo.aPagar.periodo.valor + resumo.aPagar.vencidas.valor) * 100) / 100
 
   const botao = (ativo: boolean) =>
     'text-xs px-2.5 py-1.5 rounded-sm border ' +
@@ -50,7 +48,7 @@ export default function FluxoCaixa({ inicial }: { inicial: ResumoFluxo }) {
     <section className="mt-4 border-2 border-[#131A2E] rounded-sm bg-white">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 sm:px-5 py-3 border-b border-[#DDDCD5]">
         <div className="min-w-0 flex-1">
-          <h2 className="font-bold tracking-tight text-[#131A2E]">Contas a receber e a pagar</h2>
+          <h2 className="font-bold tracking-tight text-[#131A2E]">Contas a pagar</h2>
           <p className="text-xs text-[#6E6E68] mt-0.5">
             O que vence de {dataBr(resumo.de)} a {dataBr(resumo.ate)}{pendente ? ' · atualizando…' : ''}
           </p>
@@ -89,16 +87,7 @@ export default function FluxoCaixa({ inicial }: { inicial: ResumoFluxo }) {
         </form>
       )}
 
-      <div className={'grid grid-cols-1 sm:grid-cols-3 gap-2 p-4 sm:p-5 ' + (pendente ? 'opacity-60' : '')}>
-        <Bloco
-          rotulo="A receber no período"
-          t={resumo.aReceber.periodo}
-          cor="text-[#2E7D4F]"
-          rodape={[
-            resumo.aReceber.vencidas.qtd ? { texto: `${linha(resumo.aReceber.vencidas)} já vencida${resumo.aReceber.vencidas.qtd > 1 ? 's' : ''}`, alerta: true } : null,
-            resumo.aReceber.semVencimento.qtd ? { texto: `${linha(resumo.aReceber.semVencimento)} ainda sem vencimento (boleto a emitir)` } : null,
-          ]}
-        />
+      <div className={'grid grid-cols-1 sm:grid-cols-2 gap-2 p-4 sm:p-5 ' + (pendente ? 'opacity-60' : '')}>
         <Bloco
           rotulo="A pagar no período"
           t={resumo.aPagar.periodo}
@@ -106,16 +95,9 @@ export default function FluxoCaixa({ inicial }: { inicial: ResumoFluxo }) {
           rodape={[resumo.aPagar.vencidas.qtd ? { texto: `${linha(resumo.aPagar.vencidas)} já vencida${resumo.aPagar.vencidas.qtd > 1 ? 's' : ''}`, alerta: true } : null]}
         />
         <div className="border border-[#E4E3DC] rounded-sm px-3 py-2.5">
-          <p className="text-[9px] font-mono uppercase tracking-[0.14em] text-[#9B9A93]">Saldo previsto no período</p>
-          <p className={'font-mono text-lg font-semibold mt-0.5 ' + (saldo < 0 ? 'text-[#B00063]' : 'text-[#131A2E]')}>
-            {saldo < 0 ? '− ' : ''}R$ {brl(Math.abs(saldo))}
-          </p>
-          <p className="text-[11px] text-[#6E6E68] mt-1">a receber menos a pagar, só o que vence no período</p>
-          {(resumo.aReceber.vencidas.qtd > 0 || resumo.aPagar.vencidas.qtd > 0) && (
-            <p className="text-[11px] text-[#6E6E68] mt-1">
-              Contando o que já venceu: <span className={'font-mono font-semibold ' + (saldoComVencidas < 0 ? 'text-[#B00063]' : 'text-[#131A2E]')}>{saldoComVencidas < 0 ? '− ' : ''}R$ {brl(Math.abs(saldoComVencidas))}</span>
-            </p>
-          )}
+          <p className="text-[9px] font-mono uppercase tracking-[0.14em] text-[#9B9A93]">Total a desembolsar</p>
+          <p className="font-mono text-lg font-semibold mt-0.5 text-[#131A2E]">R$ {brl(comVencidas)}</p>
+          <p className="text-[11px] text-[#6E6E68] mt-1">o que vence no período mais o que já venceu e não foi pago</p>
         </div>
       </div>
     </section>

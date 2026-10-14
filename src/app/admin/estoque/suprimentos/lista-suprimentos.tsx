@@ -12,7 +12,6 @@ export type SuprimentoLinha = {
   nome: string
   unidade: string
   minimo: number
-  consumoPorMetro: number | null
   ativo: boolean
   categoriaId: string | null
   categoria: string | null
@@ -28,7 +27,6 @@ export type MovimentoSuprimento = {
   quantidade: number
   custoTotal: number | null
   observacao: string | null
-  pedidoNumero: number | null
   data: string
 }
 
@@ -43,8 +41,8 @@ const COR_TIPO = {
   ajuste: 'bg-[#E6EDEE] text-[#0090D8]',
 }
 
-type Form = { nome: string; unidade: (typeof UNIDADES)[number]; categoriaId: string; minimo: string; consumoPorMetro: string }
-const FORM_VAZIO: Form = { nome: '', unidade: 'un', categoriaId: '', minimo: '', consumoPorMetro: '' }
+type Form = { nome: string; unidade: (typeof UNIDADES)[number]; categoriaId: string; minimo: string }
+const FORM_VAZIO: Form = { nome: '', unidade: 'un', categoriaId: '', minimo: '' }
 
 const campo = 'border border-[#DDDCD5] rounded-sm px-2 py-1.5 text-sm outline-none focus:border-[#131A2E] bg-white'
 const botao = 'rounded-sm px-3 py-1.5 text-xs font-semibold tracking-wide disabled:opacity-50'
@@ -95,7 +93,6 @@ export default function ListaSuprimentos({
       unidade: form.unidade,
       categoriaId: form.categoriaId || null,
       minimo: form.minimo ? num(form.minimo) : 0,
-      consumoPorMetro: form.consumoPorMetro ? num(form.consumoPorMetro) : null,
     }
     iniciar(async () => depois(editando ? await editarSuprimento(editando, dados) : await criarSuprimento(dados)))
   }
@@ -108,17 +105,16 @@ export default function ListaSuprimentos({
       unidade: l.unidade as Form['unidade'],
       categoriaId: l.categoriaId ?? '',
       minimo: l.minimo ? String(l.minimo) : '',
-      consumoPorMetro: l.consumoPorMetro ? String(l.consumoPorMetro) : '',
     })
   }
 
   const abaixo = linhas.filter((l) => l.ativo && l.minimo > 0 && l.saldo <= l.minimo)
 
   const formulario = (
-    <div className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-3 mb-4 grid grid-cols-2 sm:grid-cols-6 gap-2">
+    <div className="bg-[#FAFAF7] border border-[#DDDCD5] rounded-sm p-3 mb-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
       <label className="col-span-2 text-[10px] font-mono tracking-wider text-[#6E6E68]">
         NOME
-        <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} className={campo + ' w-full mt-0.5'} placeholder="Ex.: Tinta ciano Epson" autoFocus />
+        <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} className={campo + ' w-full mt-0.5'} placeholder="Ex.: Zíper invisível 40 cm" autoFocus />
       </label>
       <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
         UNIDADE
@@ -137,15 +133,7 @@ export default function ListaSuprimentos({
         MÍNIMO (ALERTA)
         <input value={form.minimo} onChange={(e) => setForm({ ...form, minimo: e.target.value })} inputMode="decimal" className={campo + ' w-full mt-0.5'} placeholder="0" />
       </label>
-      <label className="text-[10px] font-mono tracking-wider text-[#6E6E68]">
-        CONSUMO / M ESTAMPADO
-        <input value={form.consumoPorMetro} onChange={(e) => setForm({ ...form, consumoPorMetro: e.target.value })} inputMode="decimal" className={campo + ' w-full mt-0.5'} placeholder="ex.: 1,05" />
-      </label>
-      <p className="col-span-2 sm:col-span-6 text-[11px] text-[#6E6E68] leading-relaxed">
-        Consumo por metro: quanto deste suprimento (na unidade dele) cada metro estampado gasta. Preenchido, o
-        romaneio baixa do estoque sozinho; em branco, o consumo é lançado à mão. Papel sublimático costuma ser ~1,05 m por metro.
-      </p>
-      <div className="col-span-2 sm:col-span-6 flex gap-2 justify-end">
+      <div className="col-span-2 sm:col-span-5 flex gap-2 justify-end">
         <button onClick={() => { setAbrirNovo(false); setEditando(null); setForm(FORM_VAZIO); setErro('') }} className={botao + ' border border-[#131A2E] bg-white'}>CANCELAR</button>
         <button onClick={salvarCadastro} disabled={pendente || form.nome.trim().length < 2} className={botao + ' bg-[#131A2E] text-white'}>
           {pendente ? 'SALVANDO…' : editando ? 'SALVAR' : 'CADASTRAR'}
@@ -159,7 +147,7 @@ export default function ListaSuprimentos({
       {abaixo.length > 0 && (
         <div className="bg-[#FBEAF0] border-l-4 border-[#B00063] rounded-r-sm p-3 mb-4">
           <p className="text-sm font-semibold text-[#B00063]">
-            {abaixo.length === 1 ? 'Suprimento no mínimo' : `${abaixo.length} suprimentos no mínimo`}
+            {abaixo.length === 1 ? 'Insumo no mínimo' : `${abaixo.length} insumos no mínimo`}
           </p>
           <p className="text-xs text-[#6E6E68] mt-0.5">
             {abaixo.map((l) => `${l.nome}: ${qtd(l.saldo)} ${l.unidade} (mín. ${qtd(l.minimo)})`).join(' · ')}
@@ -172,21 +160,20 @@ export default function ListaSuprimentos({
       {dono && !abrirNovo && (
         <div className="flex justify-end mb-3">
           <button onClick={() => { setAbrirNovo(true); setEditando(null); setForm(FORM_VAZIO) }} className={botao + ' bg-[#131A2E] text-white'}>
-            + NOVO SUPRIMENTO
+            + NOVO INSUMO
           </button>
         </div>
       )}
       {dono && abrirNovo && formulario}
 
       {linhas.length === 0 ? (
-        <div className={VAZIO} data-busca-vazio>Nenhum suprimento cadastrado{dono ? '. Cadastre o primeiro acima.' : '.'}</div>
+        <div className={VAZIO} data-busca-vazio>Nenhum insumo cadastrado{dono ? '. Cadastre o primeiro acima.' : '.'}</div>
       ) : (
         <div className={CAIXA} data-busca-grupo>
           <div className={CABECALHO}>
-            <span className="flex-1 min-w-0">Suprimento</span>
+            <span className="flex-1 min-w-0">Insumo</span>
             <span className="w-28 shrink-0 text-right">Saldo</span>
             <span className="w-24 shrink-0 text-right hidden sm:inline">Mínimo</span>
-            <span className="w-28 shrink-0 text-right hidden sm:inline">Consumo/m</span>
             <span className="w-24 shrink-0 text-right">Ações</span>
           </div>
           <div className={CORPO}>
@@ -208,9 +195,6 @@ export default function ListaSuprimentos({
                       {qtd(l.saldo)} {l.unidade}
                     </span>
                     <span className={NUM + ' w-24 shrink-0 text-right hidden sm:inline text-[#6E6E68]'}>{l.minimo ? qtd(l.minimo) : '—'}</span>
-                    <span className={NUM + ' w-28 shrink-0 text-right hidden sm:inline text-[#6E6E68]'}>
-                      {l.consumoPorMetro ? `${qtd(l.consumoPorMetro)} ${l.unidade}/m` : 'manual'}
-                    </span>
                     <span className="w-24 shrink-0 text-right text-xs space-x-2">
                       <button onClick={() => { setMovendo(movendo === l.id ? null : l.id); setErro('') }} className="text-[#0090D8] hover:underline">lançar</button>
                       {dono && <button onClick={() => abrirEdicao(l)} className="text-[#6E6E68] hover:underline">editar</button>}
@@ -266,7 +250,7 @@ export default function ListaSuprimentos({
                 <span className="flex-1 min-w-0">
                   <span className="text-sm truncate block">{m.suprimento}</span>
                   <span className="text-[11px] text-[#6E6E68] truncate block">
-                    {m.observacao ?? ''}{m.pedidoNumero ? ` · pedido #${m.pedidoNumero}` : ''}
+                    {m.observacao ?? ''}
                   </span>
                 </span>
                 <span className={ETIQUETA + ' ' + COR_TIPO[m.tipo]}>{ROTULO_TIPO[m.tipo]}</span>

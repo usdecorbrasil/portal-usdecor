@@ -3,19 +3,16 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
- * Trilha de alterações de cadastro — o que acontece fora do pedido.
- *
- * O pedido tem tabelas próprias (`pedido_ajustes`, `pedido_precos`,
- * `pedido_forma_pagamento_historico`, `pedido_nf_historico`), porque ali cada
- * mudança tem forma e consequência própria. Aqui é cadastro: a pergunta é
- * sempre "o que houve com este cliente / este usuário", e uma tabela genérica
- * responde isso sem multiplicar tabelas quase iguais.
+ * Trilha genérica de alterações (equipe, configurações, notas, insumos,
+ * contas, cartões, extratos): a pergunta é sempre "o que houve com este
+ * cadastro", e uma tabela só responde isso sem multiplicar tabelas quase
+ * iguais.
  *
  * As ações gravam com chave de serviço, então o autor **não** vem do banco
  * (`auth.uid()` não existe nessa conexão): é lido da sessão aqui.
  */
 
-export type Entidade = 'cliente' | 'equipe' | 'configuracao' | 'despesa' | 'suprimento' | 'pedido' | 'conta_pagar' | 'cartao_credito' | 'extrato'
+export type Entidade = 'equipe' | 'configuracao' | 'despesa' | 'suprimento' | 'conta_pagar' | 'cartao_credito' | 'extrato'
 
 export type Acao =
   | 'criou'
@@ -107,25 +104,6 @@ export async function registrar({
   } catch (e) {
     console.error('[auditoria]', entidade, acao, e)
   }
-}
-
-/** Rótulos do cadastro de cliente, na ordem em que aparecem no formulário. */
-export const ROTULOS_CLIENTE: Record<string, string> = {
-  razao_social: 'Razão social',
-  cnpj: 'CNPJ',
-  email: 'E-mail de acesso',
-  contato: 'Contato',
-  telefone: 'Telefone',
-  inscricao_estadual: 'Inscrição estadual',
-  indicador_ie: 'Indicador de IE',
-  cep: 'CEP',
-  endereco: 'Endereço',
-  numero: 'Número',
-  complemento: 'Complemento',
-  bairro: 'Bairro',
-  municipio: 'Município',
-  uf: 'UF',
-  formas_pagamento: 'Formas de pagamento',
 }
 
 /** Rótulos do cadastro de quem é da equipe. */

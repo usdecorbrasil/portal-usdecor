@@ -4,14 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 /**
- * Divisões do Estoque: tecido dos clientes (o que já existia), suprimentos
- * da estamparia e despesas por nota. Despesas só para quem vê valores.
+ * Divisões do Estoque: insumos e despesas por nota. Despesas só para quem
+ * vê valores. Tecido, capas e locais entram com os módulos novos.
  */
 export default function AbasEstoque({ dono }: { dono: boolean }) {
   const caminho = usePathname()
   const abas = [
-    { href: '/admin/estoque', label: 'Tecido dos clientes', ativa: caminho === '/admin/estoque' },
-    { href: '/admin/estoque/suprimentos', label: 'Suprimentos', ativa: caminho.startsWith('/admin/estoque/suprimentos') },
+    { href: '/admin/estoque/suprimentos', label: 'Insumos', ativa: caminho.startsWith('/admin/estoque/suprimentos') },
     ...(dono ? [{ href: '/admin/estoque/despesas', label: 'Despesas e notas', ativa: caminho.startsWith('/admin/estoque/despesas') }] : []),
   ]
   return (

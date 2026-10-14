@@ -5,11 +5,11 @@ name: Avisos diários
 #   1. resumo de pendências de contas a pagar para quem estiver em
 #      Configurações → Notificações (uma vez por dia; rodar à mão no mesmo
 #      dia não duplica);
-#   2. limpeza do armazenamento: artes vencidas e fotos de nota não salvas.
+#   2. limpeza do armazenamento: fotos de nota não salvas.
 #      Só conta (?simular=1) até a variável do repositório LIMPEZA_ATIVA ser
 #      "1" (Settings → Secrets and variables → Actions → Variables). Rodando
 #      à mão dá para escolher simular ou apagar.
-# Usa os mesmos secrets da baixa de pagamentos.
+# Usa os secrets SITE_URL e CRON_SECRET.
 
 on:
   schedule:

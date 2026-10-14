@@ -22,13 +22,7 @@ export default async function Home() {
     redirect('/sem-acesso')
   }
 
-  // Admin, funcionário e financeiro vão para o painel;
-  // dentro dele, o layout decide o que cada um vê.
-  if (perfil.role === 'admin' || perfil.role === 'funcionario' || perfil.role === 'financeiro') {
-    redirect('/admin')
-  }
-
-  // Cliente entra pelos pedidos: é o que ele vem acompanhar. O catálogo
-  // continua a um toque, na aba ao lado
-  redirect('/pedidos')
+  // Só há equipe no portal: admin, financeiro e funcionário vão para o
+  // painel, e dentro dele o layout decide o que cada um vê.
+  redirect('/admin')
 }

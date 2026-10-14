@@ -12,7 +12,6 @@ import { corrigirPelaChave, divergenciasDaChave } from '@/lib/despesas/chave'
 import { problemasDaLeitura, avisoDaEmissao } from '@/lib/despesas/conferir'
 import { lerXmlNfe } from '@/lib/despesas/xml-nfe'
 import { hojeBrasilia } from '@/lib/datas'
-import { aplicarCustosAutomaticos } from '@/lib/custos/compras'
 import { CONDICOES, quitadaNaCompra, validarParcelas, ROTULO_CURTO } from '@/lib/contas-pagar/condicoes'
 
 /**
@@ -61,19 +60,6 @@ export type Rascunho = {
   leituraOriginal?: DocumentoLido | null
 }
 
-/** Tecidos cadastrados e clientes ativos: a leitura usa para reconhecer nota de tecido de cliente. */
-async function cadastroTecidos(): Promise<{ tecidos: string[]; clientes: { nome: string; doc: string | null }[] }> {
-  const supabase = await createClient()
-  const [{ data: tecidos }, { data: clientes }] = await Promise.all([
-    supabase.from('tecidos').select('nome').eq('ativo', true).order('nome'),
-    supabase.from('clientes').select('razao_social, cnpj').eq('ativo', true).is('arquivado', false).order('razao_social'),
-  ])
-  return {
-    tecidos: (tecidos ?? []).map((t) => t.nome as string),
-    clientes: (clientes ?? []).map((c) => ({ nome: c.razao_social as string, doc: String(c.cnpj ?? '').replace(/\D/g, '') || null })),
-  }
-}
-
 async function lerComIa(
   conteudo: Buffer,
   mediaType: (typeof TIPOS_ARQUIVO)[number],
@@ -81,10 +67,9 @@ async function lerComIa(
   esforco?: 'low' | 'medium' | 'high'
 ) {
   const supabase = await createClient()
-  const [{ data: categorias }, { data: suprimentos }, cadastro] = await Promise.all([
+  const [{ data: categorias }, { data: suprimentos }] = await Promise.all([
     supabase.from('categorias_despesa').select('nome').eq('ativo', true).order('nome'),
     supabase.from('suprimentos').select('nome, unidade').eq('ativo', true).order('nome'),
-    cadastroTecidos(),
   ])
   return lerDocumento({
     conteudo,
@@ -93,8 +78,6 @@ async function lerComIa(
     esforco,
     categorias: (categorias ?? []).map((c) => c.nome as string),
     suprimentos: (suprimentos ?? []).map((s) => `${s.nome} (${s.unidade})`),
-    tecidos: cadastro.tecidos,
-    clientes: cadastro.clientes,
   })
 }
 
@@ -213,7 +196,7 @@ export async function importarXmlNfe(form: FormData): Promise<Resultado<{ rascun
   }
 
   const conteudo = Buffer.from(await arquivo.arrayBuffer())
-  const leitura = lerXmlNfe(conteudo.toString('utf8'), await cadastroTecidos())
+  const leitura = lerXmlNfe(conteudo.toString('utf8'))
   if (!leitura.ok) return { ok: false, erro: leitura.erro }
 
   const guardado = await guardarArquivo(conteudo, 'text/xml')
@@ -316,8 +299,6 @@ const schemaItem = z.object({
   categoriaId: z.string().uuid().nullable().optional(),
   suprimentoId: z.string().uuid().nullable().optional(),
   confianca: z.number().min(0).max(1).nullable().optional(),
-  /** Tecido de cliente: vira envio de tecido, não despesa. */
-  tecidoId: z.string().uuid().nullable().optional(),
 })
 
 const schemaDespesa = z.object({
@@ -357,8 +338,6 @@ const schemaDespesa = z.object({
   observacoes: z.string().trim().max(1000).nullable().optional(),
   confianca: z.record(z.string(), z.number()).nullable().optional(),
   itens: z.array(schemaItem).min(1, 'A nota precisa ter ao menos um item').max(200),
-  /** Dono do tecido, quando há item de tecido. */
-  tecidoClienteId: z.string().uuid().nullable().optional(),
   /** O que a IA leu, como veio (só para medir o acerto; não muda nada do que é gravado). */
   leituraIa: z
     .object({ documento: z.record(z.string(), z.unknown()), releitura: z.array(z.string()).nullable().optional() })
@@ -397,142 +376,15 @@ function camposAlterados(lido: Record<string, unknown>, d: z.output<typeof schem
   return comparacoes.filter(([, igual]) => !igual).map(([campo]) => campo)
 }
 
-/**
- * Itens de tecido de cliente viram envios de tecido (um por tecido), com a
- * nota como NF de remessa. O saldo do cliente só muda quando a equipe confere
- * a metragem — exatamente como um envio registrado à mão.
- */
-async function criarEnviosDeTecido(
-  perfilId: string,
-  clienteId: string,
-  itens: { descricao: string; quantidade: number; unidade: string | null | undefined; tecidoId: string }[],
-  nota: { numero: string | null | undefined; arquivoPath: string | null; fornecedor: string | null | undefined }
-): Promise<Resultado<{ envios: number; reaproveitados: string[] }>> {
-  const supabase = await createClient()
-  const admin = createAdminClient()
-
-  // O cliente pode já ter avisado este envio pelo portal, com o número da NF.
-  // Aí a nota lida não vira outro envio: é anexada ao que ele abriu (o banco
-  // recusaria a repetição de qualquer jeito — aqui a mensagem é melhor)
-  const nfNumero = (nota.numero ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '')
-  const reaproveitados: string[] = []
-  if (nfNumero) {
-    const { data: abertos } = await supabase
-      .from('tecido_envios')
-      .select('id, tecido_id, nf_numero, nf_caminho, metros_informados, situacao, criado_em, tecidos(nome)')
-      .eq('cliente_id', clienteId)
-      .neq('situacao', 'recusado')
-    const mesmaNf = (abertos ?? []).filter(
-      (e) => String(e.nf_numero ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '') === nfNumero
-    )
-    const conferido = mesmaNf.find((e) => e.situacao === 'conferido')
-    if (conferido) {
-      return {
-        ok: false,
-        erro: `A NF ${nfNumero} deste cliente já foi conferida em ${new Date(String(conferido.criado_em)).toLocaleDateString('pt-BR')}: o tecido já está no estoque dele. Não registre de novo.`,
-      }
-    }
-    for (const e of mesmaNf) {
-      // Mesmo tecido do envio aberto: anexa a nota e tira da lista de criação
-      const tecidoId = String(e.tecido_id)
-      if (!itens.some((i) => i.tecidoId === tecidoId)) continue
-      if (nota.arquivoPath && !e.nf_caminho) {
-        const { data } = await admin.storage.from(BUCKET).download(nota.arquivoPath)
-        if (data) {
-          const ext = nota.arquivoPath.slice(nota.arquivoPath.lastIndexOf('.') + 1)
-          const caminho = `tecidos/${clienteId}/${e.id}/nf-remessa.${ext}`
-          const tipo = ext === 'pdf' ? 'application/pdf' : ext === 'xml' ? 'text/xml' : ext === 'png' ? 'image/png' : 'image/jpeg'
-          const { error: erroUp } = await admin.storage.from('documentos').upload(caminho, data, { contentType: tipo, upsert: true })
-          if (!erroUp) await supabase.rpc('anexar_nf_envio_tecido', { p_envio_id: e.id, p_nf_numero: nfNumero, p_nf_caminho: caminho })
-        }
-      }
-      const nome = (e.tecidos as unknown as { nome: string } | null)?.nome ?? 'tecido'
-      reaproveitados.push(`${nome} — o cliente já tinha avisado ${Number(e.metros_informados).toLocaleString('pt-BR')} m em ${new Date(String(e.criado_em)).toLocaleDateString('pt-BR')}; a nota foi anexada a esse envio`)
-      itens = itens.filter((i) => i.tecidoId !== tecidoId)
-    }
-    if (!itens.length) {
-      revalidatePath('/admin/estoque')
-      return { ok: true, envios: 0, reaproveitados }
-    }
-  }
-
-  // Mesmo tecido em duas linhas: um envio só, com a metragem somada
-  const porTecido = new Map<string, { metros: number; descricoes: string[] }>()
-  for (const i of itens) {
-    const atual = porTecido.get(i.tecidoId) ?? { metros: 0, descricoes: [] }
-    atual.metros += i.quantidade
-    atual.descricoes.push(`${i.descricao} (${i.quantidade} ${i.unidade || 'm'})`)
-    porTecido.set(i.tecidoId, atual)
-  }
-
-  // A nota é o comprovante do envio: copia do bucket despesas para o bucket
-  // documentos, no caminho que o envio de tecido usa
-  let nfBytes: { conteudo: Blob; ext: string } | null = null
-  if (nota.arquivoPath) {
-    const { data } = await admin.storage.from(BUCKET).download(nota.arquivoPath)
-    if (data) nfBytes = { conteudo: data, ext: nota.arquivoPath.slice(nota.arquivoPath.lastIndexOf('.') + 1) }
-  }
-
-  let criados = 0
-  for (const [tecidoId, t] of porTecido) {
-    const { data: envio, error } = await supabase
-      .from('tecido_envios')
-      .insert({
-        cliente_id: clienteId,
-        tecido_id: tecidoId,
-        metros_informados: Math.round(t.metros * 1000) / 1000,
-        nf_numero: nota.numero || null,
-        observacao: `Lançado pela nota${nota.fornecedor ? ` de ${nota.fornecedor}` : ''}: ${t.descricoes.join('; ')}`.slice(0, 500),
-        criado_por: perfilId,
-      })
-      .select('id')
-      .single()
-    if (error || !envio) {
-      return { ok: false, erro: error?.hint === 'envio_duplicado' ? error.message : `Não deu para registrar o envio de tecido: ${error?.message ?? 'erro desconhecido'}` }
-    }
-    criados++
-
-    if (nfBytes) {
-      const caminho = `tecidos/${clienteId}/${envio.id}/nf-remessa.${nfBytes.ext}`
-      const tipo = nfBytes.ext === 'pdf' ? 'application/pdf' : nfBytes.ext === 'xml' ? 'text/xml' : nfBytes.ext === 'png' ? 'image/png' : 'image/jpeg'
-      const { error: erroUp } = await admin.storage.from('documentos').upload(caminho, nfBytes.conteudo, { contentType: tipo, upsert: true })
-      if (!erroUp) {
-        await supabase.rpc('anexar_nf_envio_tecido', { p_envio_id: envio.id, p_nf_numero: nota.numero || null, p_nf_caminho: caminho })
-      }
-    }
-  }
-  revalidatePath('/admin/estoque')
-  return { ok: true, envios: criados, reaproveitados }
-}
-
 export async function salvarDespesa(
   dados: DadosDespesa
-): Promise<Resultado<{ id: string | null; avisoCustos: string | null; envios: number; reaproveitados: string[] }> | { ok: false; erro: string; duplicata: DuplicataProvavel }> {
+): Promise<Resultado<{ id: string }> | { ok: false; erro: string; duplicata: DuplicataProvavel }> {
   const perfil = await exigirAdmin()
   if (!perfil) return { ok: false, erro: 'Acesso negado.' }
 
   const parsed = schemaDespesa.safeParse(dados)
   if (!parsed.success) return { ok: false, erro: parsed.error.issues[0].message }
   const d = parsed.data
-
-  // Tecido de cliente sai da despesa e vira envio de tecido
-  const itensTecido = d.itens.filter((i) => i.tecidoId)
-  const itensDespesa = d.itens.filter((i) => !i.tecidoId)
-  if (itensTecido.length && !d.tecidoClienteId) {
-    return { ok: false, erro: 'Esta nota tem tecido de cliente: escolha de qual cliente é o tecido.' }
-  }
-  if (itensTecido.length && !itensDespesa.length) {
-    // Nota só de tecido: nada é despesa da empresa, só o envio
-    const r = await criarEnviosDeTecido(
-      perfil.id,
-      d.tecidoClienteId!,
-      itensTecido.map((i) => ({ descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, tecidoId: i.tecidoId! })),
-      { numero: d.numero, arquivoPath: d.arquivoPath, fornecedor: d.fornecedorNome }
-    )
-    if (!r.ok) return r
-    return { ok: true, id: null, avisoCustos: null, envios: r.envios, reaproveitados: r.reaproveitados }
-  }
-  d.itens = itensDespesa
 
   const chave = soDigitos(d.chaveAcesso)
   if (chave && !chaveAcessoValida(chave)) return { ok: false, erro: 'Chave de acesso inválida: confira os 44 dígitos com o documento.' }
@@ -680,25 +532,6 @@ export async function salvarDespesa(
     return { ok: false, erro: erroItens.message }
   }
 
-  // Compra de suprimento pode mexer no custo por metro, se a opção estiver
-  // ligada em Financeiro → Custos. Nunca derruba o lançamento da nota
-  const avisoCustos = d.itens.some((i) => i.suprimentoId) ? await aplicarCustosAutomaticos(supabase) : null
-
-  // Nota mista: os itens de tecido viram envios, os demais ficaram na despesa
-  let envios = 0
-  let reaproveitados: string[] = []
-  if (itensTecido.length) {
-    const r = await criarEnviosDeTecido(
-      perfil.id,
-      d.tecidoClienteId!,
-      itensTecido.map((i) => ({ descricao: i.descricao, quantidade: i.quantidade, unidade: i.unidade, tecidoId: i.tecidoId! })),
-      { numero: d.numero, arquivoPath: d.arquivoPath, fornecedor: d.fornecedorNome }
-    )
-    if (!r.ok) return { ok: false, erro: `A despesa foi salva, mas ${r.erro.toLowerCase()} Registre o envio em Estoque → Tecidos.` }
-    envios = r.envios
-    reaproveitados = r.reaproveitados
-  }
-
   await registrar({
     entidade: 'despesa',
     entidadeId: despesa.id,
@@ -718,8 +551,7 @@ export async function salvarDespesa(
 
   revalidar()
   revalidatePath('/admin/financeiro/a-pagar')
-  if (avisoCustos) revalidatePath('/admin/financeiro/custos')
-  return { ok: true, id: despesa.id, avisoCustos, envios, reaproveitados }
+  return { ok: true, id: despesa.id }
 }
 
 export async function excluirDespesa(id: string, motivo: string): Promise<Resultado> {

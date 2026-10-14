@@ -11,7 +11,7 @@ const dataBr = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').revers
  * Financeiro → Conciliação: extratos bancários e faturas de cartão
  * importados, com quanto já foi conferido em cada um. Pedido do dono
  * (12/10/2026): provar que tudo o que passou na conta e no cartão está
- * lançado em A pagar / A receber.
+ * lançado em A pagar.
  */
 export default async function ConciliacaoPage() {
   const [extratos, cartoes] = await Promise.all([listarExtratos(), listarCartoes(true)])
@@ -20,9 +20,8 @@ export default async function ConciliacaoPage() {
   return (
     <div>
       <p className="text-sm text-[#6E6E68] leading-relaxed mb-4">
-        Importe o extrato da conta ou a fatura do cartão. O portal procura cada lançamento em A pagar
-        (saídas) e nas cobranças dos pedidos (entradas) e sugere o vínculo; você confirma, dá baixa se
-        ainda estiver em aberto, ignora o que não entra (tarifa, transferência entre contas) e fecha o
+        Importe o extrato da conta ou a fatura do cartão. O portal procura cada saída em A pagar e
+        sugere o vínculo; você confirma, dá baixa se ainda estiver em aberto, ignora o que não entra (tarifa, transferência entre contas) e fecha o
         extrato quando não sobra nada pendente.
       </p>
 

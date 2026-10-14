@@ -14,7 +14,7 @@ export const resend = new Resend(process.env.RESEND_API_KEY)
 export const REMETENTE = `US Decor <${process.env.RESEND_FROM ?? 'onboarding@resend.dev'}>`
 
 /**
- * Para onde vai a resposta do cliente. É aqui que entra uma caixa comum
+ * Para onde vai a resposta de quem recebe o e-mail. É aqui que entra uma caixa comum
  * (Gmail, por exemplo): o envio sai pelo domínio verificado, mas quem
  * responder cai numa caixa que alguém lê de verdade.
  */

@@ -8,7 +8,8 @@ type ParametrosEmail = {
   destinatario: string | string[]
   assunto: string
   html: string
-  pedidoId?: string
+  /** Chave de idempotência: com ela, o mesmo tipo não sai duas vezes. */
+  referenciaId?: string
   anexos?: { filename: string; content: Buffer }[]
 }
 
@@ -24,9 +25,9 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
     ? params.destinatario.join(', ')
     : params.destinatario
 
-  if (params.pedidoId) {
+  if (params.referenciaId) {
     const { data: jaEnviado } = await admin.rpc('email_ja_enviado', {
-      p_pedido_id: params.pedidoId,
+      p_referencia_id: params.referenciaId,
       p_tipo: params.tipo,
     })
 
@@ -47,7 +48,7 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
 
     if (error) {
       await admin.rpc('registrar_email_log', {
-        p_pedido_id: params.pedidoId ?? null,
+        p_referencia_id: params.referenciaId ?? null,
         p_tipo: params.tipo,
         p_destinatario: destinatarioLog,
         p_provider_id: null,
@@ -57,7 +58,7 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
     }
 
     await admin.rpc('registrar_email_log', {
-      p_pedido_id: params.pedidoId ?? null,
+      p_referencia_id: params.referenciaId ?? null,
       p_tipo: params.tipo,
       p_destinatario: destinatarioLog,
       p_provider_id: data?.id ?? null,
@@ -69,7 +70,7 @@ export async function enviarEmail(params: ParametrosEmail): Promise<ResultadoEnv
     const mensagem = err instanceof Error ? err.message : 'Erro desconhecido ao enviar e-mail'
 
     await admin.rpc('registrar_email_log', {
-      p_pedido_id: params.pedidoId ?? null,
+      p_referencia_id: params.referenciaId ?? null,
       p_tipo: params.tipo,
       p_destinatario: destinatarioLog,
       p_provider_id: null,

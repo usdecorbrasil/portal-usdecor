@@ -6,10 +6,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lerPerfil } from '@/lib/auth/perfil'
 import { registrar } from '@/lib/auditoria'
-import { buscarAguardandoRecebimento } from './clientes'
 import { lerOfx, decodificarOfx } from '@/lib/conciliacao/ofx'
 import { lerExtrato, VERSAO_PROMPT_EXTRATO } from '@/lib/conciliacao/ler-extrato'
-import { sugerirConta, sugerirCobranca, type ContaCandidata, type CobrancaCandidata, type Sugestao, type Certeza } from '@/lib/conciliacao/casar'
+import { sugerirConta, type ContaCandidata, type Sugestao, type Certeza } from '@/lib/conciliacao/casar'
 import type { ExtratoLido } from '@/lib/conciliacao/tipos'
 import { somarDias } from '@/lib/datas'
 import type { ModeloLeitura } from '@/lib/despesas/ler-documento'
@@ -17,8 +16,9 @@ import type { ModeloLeitura } from '@/lib/despesas/ler-documento'
 /**
  * Conciliação de extratos (Financeiro → Conciliação). Só admin/financeiro.
  * Importa o arquivo (OFX direto; PDF, imagem ou CSV pela IA), guarda os
- * lançamentos e, na tela, sugere o vínculo de cada um com conta a pagar ou
- * cobrança de pedido. Toda escrita de vínculo passa por RPC.
+ * lançamentos e, na tela, sugere o vínculo de cada saída com conta a pagar.
+ * Entradas ficam pendentes ou ignoradas até os repasses dos marketplaces
+ * (módulo de pedidos). Toda escrita de vínculo passa por RPC.
  */
 
 type Resultado<T = object> = ({ ok: true } & T) | { ok: false; erro: string }
@@ -206,12 +206,9 @@ export type Lancamento = {
   /** Com o que está vinculado, em texto, quando conciliado. */
   vinculo: string | null
   contaPagarId: string | null
-  pedidoId: string | null
-  numeroParcela: number | null
   /** Sugestões para os pendentes. */
   certeza: Certeza
   contas: Sugestao<ContaCandidata>[]
-  cobrancas: Sugestao<CobrancaCandidata>[]
 }
 
 export type ExtratoAberto = {
@@ -220,7 +217,6 @@ export type ExtratoAberto = {
   lancamentos: Lancamento[]
   /** Todas as candidatas do período, para a busca manual na tela. */
   contas: ContaCandidata[]
-  cobrancas: CobrancaCandidata[]
 }
 
 type LinhaConta = {
@@ -246,10 +242,10 @@ export async function carregarExtrato(id: string): Promise<ExtratoAberto | null>
   const { data: cab } = await supabase.from('extratos').select('cartao_id').eq('id', id).single()
 
   const datas = { de: resumo.periodoInicio, ate: resumo.periodoFim }
-  const [{ data: lancs, error }, { data: contasRaw }, cobrancasTodas] = await Promise.all([
+  const [{ data: lancs, error }, { data: contasRaw }] = await Promise.all([
     supabase
       .from('extrato_lancamentos')
-      .select('id, linha, data, descricao, valor, tipo, documento, situacao, observacao, conta_pagar_id, pedido_id, numero_parcela, contas_pagar(descricao, valor), pedidos(numero)')
+      .select('id, linha, data, descricao, valor, tipo, documento, situacao, observacao, conta_pagar_id, contas_pagar(descricao, valor)')
       .eq('extrato_id', id)
       .order('linha'),
     (() => {
@@ -258,7 +254,6 @@ export async function carregarExtrato(id: string): Promise<ExtratoAberto | null>
       if (datas.ate) q = q.lte('vencimento', somarDias(datas.ate, MARGEM_DIAS * 2))
       return q
     })(),
-    buscarAguardandoRecebimento(),
   ])
   if (error) throw new Error(error.message)
 
@@ -274,56 +269,42 @@ export async function carregarExtrato(id: string): Promise<ExtratoAberto | null>
     parcela: c.parcela,
     parcelas: c.parcelas,
   }))
-  const cobrancas: CobrancaCandidata[] = cobrancasTodas.map((p) => ({
-    pedidoId: p.pedidoId,
-    numero: p.numero,
-    clienteNome: p.clienteNome,
-    numeroParcela: p.numeroParcela,
-    valor: p.valor,
-    vencimento: p.vencimento,
-    pagoEm: p.pagoEm,
-  }))
 
   type LinhaL = {
     id: string; linha: number; data: string; descricao: string; valor: number | string; tipo: 'entrada' | 'saida'; documento: string | null
-    situacao: 'pendente' | 'conciliado' | 'ignorado'; observacao: string | null; conta_pagar_id: string | null; pedido_id: string | null; numero_parcela: number | null
-    contas_pagar: { descricao: string; valor: number | string } | null; pedidos: { numero: number } | null
+    situacao: 'pendente' | 'conciliado' | 'ignorado'; observacao: string | null; conta_pagar_id: string | null
+    contas_pagar: { descricao: string; valor: number | string } | null
   }
   const ctx = { tipo: resumo.tipo, cartaoId: (cab?.cartao_id as string | null) ?? null }
   const lancamentos: Lancamento[] = ((lancs ?? []) as unknown as LinhaL[]).map((l) => {
     const base = { data: l.data, descricao: l.descricao, valor: Number(l.valor), tipo: l.tipo, documento: l.documento }
     const sc = l.situacao === 'pendente' && l.tipo === 'saida' ? sugerirConta(base, contas, ctx) : null
-    const sb = l.situacao === 'pendente' && l.tipo === 'entrada' ? sugerirCobranca(base, cobrancas) : null
     return {
       id: l.id,
       linha: l.linha,
       ...base,
       situacao: l.situacao,
       observacao: l.observacao,
-      vinculo: l.contas_pagar ? `${l.contas_pagar.descricao} · R$ ${Number(l.contas_pagar.valor).toFixed(2).replace('.', ',')}` : l.pedidos ? `Pedido #${l.pedidos.numero}${l.numero_parcela ? ` · parcela ${l.numero_parcela}` : ''}` : null,
+      vinculo: l.contas_pagar ? `${l.contas_pagar.descricao} · R$ ${Number(l.contas_pagar.valor).toFixed(2).replace('.', ',')}` : null,
       contaPagarId: l.conta_pagar_id,
-      pedidoId: l.pedido_id,
-      numeroParcela: l.numero_parcela,
-      certeza: sc?.certeza ?? sb?.certeza ?? 'nenhuma',
+      certeza: sc?.certeza ?? 'nenhuma',
       contas: sc?.sugestoes ?? [],
-      cobrancas: sb?.sugestoes ?? [],
     }
   })
 
-  return { resumo, cartaoId: ctx.cartaoId, lancamentos, contas, cobrancas }
+  return { resumo, cartaoId: ctx.cartaoId, lancamentos, contas }
 }
 
 function revalidar(id?: string) {
   revalidatePath(CAMINHO)
   if (id) revalidatePath(`${CAMINHO}/${id}`)
   revalidatePath('/admin/financeiro/a-pagar')
-  revalidatePath('/admin/financeiro/a-receber')
   revalidatePath('/admin/financeiro')
 }
 
 export async function conciliarLancamento(
   id: string,
-  alvo: { contaPagarId: string } | { pedidoId: string; numeroParcela: number | null },
+  contaPagarId: string,
   baixar: boolean,
   obs: string | null,
   extratoId: string
@@ -333,9 +314,7 @@ export async function conciliarLancamento(
   const supabase = await createClient()
   const { error } = await supabase.rpc('admin_conciliar_lancamento', {
     p_id: id,
-    p_conta_pagar_id: 'contaPagarId' in alvo ? alvo.contaPagarId : null,
-    p_pedido_id: 'pedidoId' in alvo ? alvo.pedidoId : null,
-    p_numero_parcela: 'pedidoId' in alvo ? alvo.numeroParcela : null,
+    p_conta_pagar_id: contaPagarId,
     p_baixar: baixar,
     p_obs: obs?.trim() || null,
   })

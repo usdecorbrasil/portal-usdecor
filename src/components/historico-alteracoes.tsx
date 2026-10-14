@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 /**
  * Lista de alterações de cadastro, lida de `auditoria` (docs/sql/010).
  *
- * A mesma peça serve o cliente e as Configurações: o que muda é o filtro.
+ * A mesma peça serve qualquer cadastro e as Configurações: o que muda é o filtro.
  * Sem `entidadeId` mostra tudo da entidade — é o caso das Configurações, onde
  * a pergunta é "o que andou mudando aqui", não "neste registro".
  *

@@ -7,17 +7,17 @@ import { normalizar, type TipoNotificacao } from './config'
  * Manda um aviso interno para quem estiver configurado para aquele tipo.
  *
  * Um e-mail só, com todos os destinatários no "para": assim o registro em
- * `email_log` fica um por pedido + tipo, e a trava contra duplicidade
+ * `email_log` fica um por referência + tipo, e a trava contra duplicidade
  * continua funcionando. Mandar um por pessoa faria a segunda bater na trava
  * da primeira.
  *
  * Nunca lança. O aviso é conveniência da equipe; a operação que o disparou
- * (criar pedido, pedir cancelamento) já aconteceu e não pode falhar por causa
+ * (o resumo diário, por exemplo) já aconteceu e não pode falhar por causa
  * de e-mail.
  */
 export async function notificarEquipe(
   tipo: TipoNotificacao,
-  params: { assunto: string; html: string; pedidoId?: string }
+  params: { assunto: string; html: string; referenciaId?: string }
 ): Promise<void> {
   try {
     const admin = createAdminClient()
@@ -43,7 +43,7 @@ export async function notificarEquipe(
       destinatario: para,
       assunto: params.assunto,
       html: params.html,
-      pedidoId: params.pedidoId,
+      referenciaId: params.referenciaId,
     })
   } catch (e) {
     console.error('[notificacoes]', tipo, e)

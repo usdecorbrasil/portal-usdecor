@@ -4,7 +4,6 @@ import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { lerDespesa, relerDespesa, importarXmlNfe, salvarDespesa, type Rascunho, type DadosDespesa, type DuplicataProvavel } from '@/app/actions/despesas'
 import { criarSuprimento } from '@/app/actions/suprimentos'
-import { criarTecido } from '@/app/actions/estoque'
 import { criarCartao } from '@/app/actions/cartoes'
 import CameraNota from './camera-nota'
 import { comprimir } from '@/lib/despesas/comprimir'
@@ -39,12 +38,10 @@ import { chaveAcessoValida } from '@/lib/despesas/validar'
  */
 
 type Categoria = { id: string; nome: string }
-type Tecido = { id: string; nome: string }
-type ClienteOpcao = { id: string; nome: string }
 type Suprimento = { id: string; nome: string; unidade: string }
 
 /** Cadastro rápido de suprimento a partir de um item da nota. */
-type NovoSuprimento = { nome: string; unidade: Unidade; categoriaId: string; consumoPorMetro: string }
+type NovoSuprimento = { nome: string; unidade: Unidade; categoriaId: string }
 
 const NOVO = '__novo__'
 
@@ -79,9 +76,6 @@ type ItemForm = {
   origemVinculo: string
   /** Quem confere disse "não é este" para a sugestão. */
   semSugestao: boolean
-  /** Tecido de cliente: o item vira envio de tecido, não despesa. */
-  ehTecido: boolean
-  tecidoId: string
 }
 
 type Form = {
@@ -112,8 +106,6 @@ type Form = {
   total: string
   observacoes: string
   itens: ItemForm[]
-  /** Dono do tecido, quando há item de tecido. */
-  tecidoClienteId: string
 }
 
 const ROTULO_TIPO: Record<(typeof TIPOS_DOCUMENTO)[number], string> = {
@@ -136,15 +128,14 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2,
 
 const hoje = () => hojeBrasilia()
 
-const itemVazio = (): ItemForm => ({ descricao: '', codigo: '', quantidade: '1', unidade: 'un', valorUnitario: '', valorTotal: '', categoriaId: '', suprimentoId: '', confianca: null, origemVinculo: '', semSugestao: false, ehTecido: false, tecidoId: '' })
+const itemVazio = (): ItemForm => ({ descricao: '', codigo: '', quantidade: '1', unidade: 'un', valorUnitario: '', valorTotal: '', categoriaId: '', suprimentoId: '', confianca: null, origemVinculo: '', semSugestao: false })
 
-const NOVO_TECIDO = '__novo_tecido__'
 
 function formVazio(): Form {
   return {
     tipo: 'outro', fornecedorNome: '', fornecedorDoc: '', destinatarioNome: '', destinatarioDoc: '', numero: '', serie: '', chaveAcesso: '',
     emissao: hojeBrasilia(), formaPagamento: '', condicao: '', parcelas: [], cartaoId: '', subtotal: '', desconto: '', frete: '', impostos: '', total: '',
-    observacoes: '', itens: [itemVazio()], tecidoClienteId: '',
+    observacoes: '', itens: [itemVazio()],
   }
 }
 
@@ -156,8 +147,6 @@ export default function Captura({
   suprimentos: suprimentosIniciais,
   historico,
   destinatarios,
-  tecidos: tecidosIniciais,
-  clientes,
   cartoes: cartoesIniciais,
 }: {
   categorias: Categoria[]
@@ -165,23 +154,16 @@ export default function Captura({
   historico: VinculoAnterior[]
   /** CNPJ/CPF que já apareceram como comprador em notas salvas — a empresa. */
   destinatarios: string[]
-  /** Tecidos cadastrados (estoque dos clientes) e clientes ativos. */
-  tecidos: Tecido[]
-  clientes: ClienteOpcao[]
   /** Cartões de crédito ativos da empresa (Financeiro → Cartões). */
   cartoes: CartaoCredito[]
 }) {
   const router = useRouter()
   const [suprimentos, setSuprimentos] = useState<Suprimento[]>(suprimentosIniciais)
-  const [tecidos, setTecidos] = useState<Tecido[]>(tecidosIniciais)
   // Cartões: o cadastro rápido na própria conferência acrescenta aqui (dono, 12/10/2026)
   const [cartoes, setCartoes] = useState<CartaoCredito[]>(cartoesIniciais)
   const [novoCartao, setNovoCartao] = useState<{ nome: string; final: string; diaFechamento: string; diaVencimento: string } | null>(null)
   const [erroCartao, setErroCartao] = useState('')
   const [criandoCartao, setCriandoCartao] = useState(false)
-  /** Itens com o cadastro rápido de tecido aberto: nome digitado. */
-  const [novosTecidos, setNovosTecidos] = useState<Record<number, string>>({})
-  const [criandoTecido, setCriandoTecido] = useState<number | null>(null)
   /** Itens com o cadastro rápido aberto, pelo índice. */
   const [novos, setNovos] = useState<Record<number, NovoSuprimento>>({})
   const [erroNovo, setErroNovo] = useState<Record<number, string>>({})
@@ -280,7 +262,6 @@ export default function Captura({
         impostos: txt(d.impostos),
         total: txt(d.total),
         observacoes: d.observacoes ?? '',
-        tecidoClienteId: porNome(d.tecido_cliente, clientes),
         itens: d.itens.length
           ? d.itens.map((i): ItemForm => ({
               descricao: i.descricao,
@@ -294,8 +275,6 @@ export default function Captura({
               confianca: i.confianca,
               origemVinculo: porNome(i.suprimento, suprimentos) ? 'reconhecido na leitura da nota' : '',
               semSugestao: false,
-              ehTecido: !!i.tecido_de_cliente,
-              tecidoId: i.tecido_de_cliente ? porNome(i.tecido, tecidos) : '',
             })).map((it) => {
               if (it.suprimentoId) return it
               // Sem vínculo da leitura: certeza alta (histórico ou nome inteiro) já vincula
@@ -305,15 +284,6 @@ export default function Captura({
           : [itemVazio()],
       })
       setConfianca(d.confianca)
-      // Sem vínculo da leitura, tenta o nome do tecido na descrição
-      setForm((f) => ({
-        ...f,
-        itens: f.itens.map((it) =>
-          it.ehTecido && !it.tecidoId
-            ? { ...it, tecidoId: tecidos.find((t) => it.descricao.toLowerCase().includes(t.nome.toLowerCase()))?.id ?? '' }
-            : it
-        ),
-      }))
     } else {
       setForm(formVazio())
       setConfianca({})
@@ -385,11 +355,7 @@ export default function Captura({
     aplicarRascunho(r.rascunho)
   }
 
-  // Tecido de cliente não é despesa: sai da conta e do pagamento
-  const itensTecido = form.itens.filter((i) => i.ehTecido)
-  const itensDespesa = form.itens.filter((i) => !i.ehTecido)
-  const soTecido = itensTecido.length > 0 && itensDespesa.length === 0
-  const somaItens = itensDespesa.reduce((s, i) => s + num(i.valorTotal), 0)
+  const somaItens = form.itens.reduce((s, i) => s + num(i.valorTotal), 0)
   const totalCalculado = somaItens - num(form.desconto) + num(form.frete) + num(form.impostos)
   const totalInformado = num(form.total)
   const diferenca = Math.round((totalInformado - totalCalculado) * 100) / 100
@@ -491,7 +457,7 @@ export default function Captura({
     const i = form.itens[idx]
     setNovos((n) => ({
       ...n,
-      [idx]: { nome: i.descricao.slice(0, 120), unidade: unidadeDoEstoque(i.unidade), categoriaId: i.categoriaId, consumoPorMetro: '' },
+      [idx]: { nome: i.descricao.slice(0, 120), unidade: unidadeDoEstoque(i.unidade), categoriaId: i.categoriaId },
     }))
     setErroNovo((e) => ({ ...e, [idx]: '' }))
   }
@@ -514,7 +480,6 @@ export default function Captura({
       unidade: n.unidade,
       categoriaId: n.categoriaId || null,
       minimo: 0,
-      consumoPorMetro: n.consumoPorMetro ? num(n.consumoPorMetro) : null,
     })
     setCriando(null)
     if (!r.ok) {
@@ -546,23 +511,15 @@ export default function Captura({
       setErro(bloqueio)
       return
     }
-    if (itensTecido.length && !form.tecidoClienteId) {
-      setErro('Esta nota tem tecido de cliente: escolha de qual cliente é o tecido.')
-      return
-    }
-    if (itensTecido.some((i) => !i.tecidoId)) {
-      setErro('Todo item de tecido precisa de um tecido cadastrado (ou cadastre um novo no próprio item).')
-      return
-    }
-    if (!soTecido && !form.condicao) {
+    if (!form.condicao) {
       setErro('Escolha como a nota foi paga (seção Pagamento).')
       return
     }
-    if (!soTecido && faltaCartao) {
+    if (faltaCartao) {
       setErro('Compra no crédito exige o cartão: escolha um ou cadastre o cartão usado (seção Pagamento).')
       return
     }
-    if (!soTecido && erroParcelas) {
+    if (erroParcelas) {
       setErro(erroParcelas)
       return
     }
@@ -588,17 +545,15 @@ export default function Captura({
       chaveAcesso: form.chaveAcesso || null,
       emissao: form.emissao,
       formaPagamento: form.formaPagamento || null,
-      // Nota só de tecido não gera conta a pagar: a condição é só para o schema
-      condicao: (soTecido ? 'pago' : form.condicao) as Condicao,
-      parcelas: soTecido ? [] : parcelasNum,
-      cartaoId: !soTecido && form.condicao === 'credito' ? form.cartaoId || null : null,
+      condicao: form.condicao as Condicao,
+      parcelas: parcelasNum,
+      cartaoId: form.condicao === 'credito' ? form.cartaoId || null : null,
       subtotal: form.subtotal ? num(form.subtotal) : null,
       desconto: num(form.desconto),
       frete: num(form.frete),
       impostos: num(form.impostos),
-      total: soTecido ? form.itens.reduce((s, i) => s + num(i.valorTotal), 0) || 1 : totalInformado,
+      total: totalInformado,
       observacoes: form.observacoes || null,
-      tecidoClienteId: form.tecidoClienteId || null,
       confianca: Object.keys(confianca).length ? confianca : null,
       itens: form.itens
         .filter((i) => i.descricao.trim() || i.valorTotal)
@@ -609,10 +564,9 @@ export default function Captura({
           unidade: i.unidade || null,
           valorUnitario: i.valorUnitario ? num(i.valorUnitario) : null,
           valorTotal: num(i.valorTotal),
-          categoriaId: i.ehTecido ? null : i.categoriaId || null,
-          suprimentoId: i.ehTecido ? null : i.suprimentoId || null,
+          categoriaId: i.categoriaId || null,
+          suprimentoId: i.suprimentoId || null,
           confianca: i.confianca,
-          tecidoId: i.ehTecido ? i.tecidoId || null : null,
         })),
       leituraIa:
         rascunho?.modo === 'ia' && rascunho.leituraOriginal
@@ -627,25 +581,9 @@ export default function Captura({
         else setErro(r.erro)
         return
       }
-      // O cliente já tinha avisado o envio: a nota foi anexada a ele, nada duplicou
-      if (r.reaproveitados.length) window.alert('Envio já avisado pelo cliente:\n\n' + r.reaproveitados.join('\n'))
-      // Nota só de tecido vai para a conferência de envios, não para despesas
-      router.push(r.id ? '/admin/estoque/despesas' : `/admin/estoque?cliente=${form.tecidoClienteId}`)
+      router.push('/admin/estoque/despesas')
       router.refresh()
     })
-  }
-
-  async function cadastrarTecido(idx: number) {
-    const nome = (novosTecidos[idx] ?? '').trim()
-    if (nome.length < 2) return setErro('Nome do tecido muito curto.')
-    setCriandoTecido(idx)
-    const r = await criarTecido(nome)
-    setCriandoTecido(null)
-    if (!r.ok) return setErro(r.erro)
-    const novo = { id: r.id, nome }
-    setTecidos((l) => [...l, novo].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
-    setItem(idx, { tecidoId: r.id })
-    setNovosTecidos((n) => { const c = { ...n }; delete c[idx]; return c })
   }
 
   // Sugestão para itens ainda sem vínculo (recalcula quando a descrição muda)
@@ -850,22 +788,6 @@ export default function Captura({
           )}
         </div>
 
-        {itensTecido.length > 0 && (
-          <div className={'mt-4 rounded-sm p-3 border ' + (form.tecidoClienteId ? 'bg-[#E3F0E8] border-[#2E7D4F]' : 'bg-[#FFFBEE] border-[#C79600]')}>
-            <label className={rotulo}>DE QUAL CLIENTE É O TECIDO
-              <select value={form.tecidoClienteId} onChange={(e) => setForm({ ...form, tecidoClienteId: e.target.value })} className={campo + ' ' + (form.tecidoClienteId ? normal : duvida)}>
-                <option value="">— escolher o cliente —</option>
-                {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
-            </label>
-            <p className="text-xs text-[#131A2E] mt-1.5 leading-relaxed">
-              {soTecido
-                ? 'Esta nota é só de tecido de cliente: não vira despesa nem conta a pagar. Ao salvar, o portal registra o envio de tecido com a nota como NF de remessa, para a equipe conferir a metragem em Estoque → Tecidos.'
-                : 'Os itens marcados como tecido saem da despesa e viram envio de tecido deste cliente; os demais seguem como despesa normal.'}
-            </p>
-          </div>
-        )}
-
         <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-5 mb-2 flex items-center gap-2">
           ITENS <span className="flex-1 h-px bg-[#DDDCD5]" />
           <span className="font-mono normal-case tracking-normal text-[#9B9A93]">{form.itens.length}</span>
@@ -890,56 +812,12 @@ export default function Captura({
                 <label className={rotulo + ' col-span-3 sm:col-span-2'}>TOTAL
                   <input value={i.valorTotal} onChange={(e) => setItem(idx, { valorTotal: e.target.value })} inputMode="decimal" className={campo + ' ' + (incerto ? duvida : normal) + ' font-semibold'} />
                 </label>
-                <label className="col-span-6 sm:col-span-12 flex items-center gap-2 text-xs text-[#131A2E] cursor-pointer mt-0.5">
-                  <input
-                    type="checkbox"
-                    checked={i.ehTecido}
-                    onChange={(e) => setItem(idx, { ehTecido: e.target.checked, tecidoId: e.target.checked ? i.tecidoId : '' })}
-                    className="accent-[#131A2E]"
-                  />
-                  Tecido de cliente <span className="text-[#6E6E68]">(não é despesa — entra no estoque do cliente)</span>
-                </label>
-                {i.ehTecido ? (
-                  <label className={rotulo + ' col-span-6 sm:col-span-12'}>TECIDO
-                    <select
-                      value={novosTecidos[idx] !== undefined ? NOVO_TECIDO : i.tecidoId}
-                      onChange={(e) => {
-                        if (e.target.value === NOVO_TECIDO) return setNovosTecidos((n) => ({ ...n, [idx]: i.descricao.slice(0, 80) }))
-                        setNovosTecidos((n) => { const c = { ...n }; delete c[idx]; return c })
-                        setItem(idx, { tecidoId: e.target.value })
-                      }}
-                      className={campo + ' ' + (i.tecidoId || novosTecidos[idx] !== undefined ? normal : duvida)}
-                    >
-                      <option value="">— escolher o tecido —</option>
-                      {tecidos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-                      <option value={NOVO_TECIDO}>+ cadastrar novo tecido…</option>
-                    </select>
-                  </label>
-                ) : (
                 <label className={rotulo + ' col-span-3 sm:col-span-5'}>CATEGORIA DO GASTO
                   <select value={i.categoriaId} onChange={(e) => setItem(idx, { categoriaId: e.target.value })} className={campo + ' ' + (i.categoriaId ? normal : duvida)}>
                     <option value="">— escolher —</option>
                     {categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
                 </label>
-                )}
-                {i.ehTecido && novosTecidos[idx] !== undefined && (
-                  <div className="col-span-6 sm:col-span-12 border border-dashed border-[#131A2E] rounded-sm p-2 bg-[#FAFAF7] flex flex-wrap items-end gap-2">
-                    <label className={rotulo + ' flex-1 min-w-[12rem]'}>NOVO TECIDO
-                      <input value={novosTecidos[idx]} onChange={(e) => setNovosTecidos((n) => ({ ...n, [idx]: e.target.value }))} className={campo + ' ' + normal} placeholder="ex.: Oxford, Tactel, Malha PV" />
-                    </label>
-                    <button onClick={() => cadastrarTecido(idx)} disabled={criandoTecido === idx} className="bg-[#131A2E] text-white rounded-sm px-3 py-1.5 text-[11px] font-semibold tracking-wide disabled:opacity-50">
-                      {criandoTecido === idx ? 'CADASTRANDO…' : 'CADASTRAR E VINCULAR'}
-                    </button>
-                    <button onClick={() => setNovosTecidos((n) => { const c = { ...n }; delete c[idx]; return c })} className="text-xs text-[#6E6E68] underline pb-2">cancelar</button>
-                  </div>
-                )}
-                {i.ehTecido && (
-                  <p className="col-span-6 sm:col-span-12 text-xs text-[#6E6E68]">
-                    Vira um <strong>envio de tecido</strong> de {clientes.find((c) => c.id === form.tecidoClienteId)?.nome ?? 'cliente a escolher'} com {i.quantidade || '?'} {i.unidade || 'm'} informados; o saldo entra quando a equipe conferir a metragem.
-                  </p>
-                )}
-                {!i.ehTecido && (
                 <label className={rotulo + ' col-span-3 sm:col-span-6'}>ENTRA NO ESTOQUE COMO
                   <select
                     value={novos[idx] ? NOVO : i.suprimentoId}
@@ -952,19 +830,18 @@ export default function Captura({
                   >
                     <option value="">— só despesa —</option>
                     {suprimentos.map((s) => <option key={s.id} value={s.id}>{s.nome} ({s.unidade})</option>)}
-                    <option value={NOVO}>+ cadastrar novo suprimento…</option>
+                    <option value={NOVO}>+ cadastrar novo insumo…</option>
                   </select>
                 </label>
-                )}
                 <div className="col-span-6 sm:col-span-1 flex items-end justify-end">
                   <button onClick={() => removerItem(idx)} className="text-xs text-[#B00063] hover:underline" title="remover item">remover</button>
                 </div>
-                {!i.ehTecido && i.suprimentoId && i.origemVinculo && !novos[idx] && (
+                {i.suprimentoId && i.origemVinculo && !novos[idx] && (
                   <p className="col-span-6 sm:col-span-12 text-xs text-[#2E7D4F]">
                     ✓ Vinculado sozinho a <strong>{suprimentos.find((x) => x.id === i.suprimentoId)?.nome}</strong> ({i.origemVinculo}). Confira; se não for, troque na lista.
                   </p>
                 )}
-                {!i.ehTecido && !i.suprimentoId && !novos[idx] && sugestoes[idx] && (
+                {!i.suprimentoId && !novos[idx] && sugestoes[idx] && (
                   <div className="col-span-6 sm:col-span-12 text-xs bg-[#FFFBEE] border border-[#C79600] rounded-sm px-2 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span>
                       Parece ser <strong>{suprimentos.find((x) => x.id === sugestoes[idx]!.suprimentoId)?.nome}</strong>{' '}
@@ -978,7 +855,7 @@ export default function Captura({
                     </button>
                   </div>
                 )}
-                {!i.ehTecido && !i.suprimentoId && !novos[idx] && !sugestoes[idx] && ehDeEstoque(nomeCategoria(i.categoriaId)) && (
+                {!i.suprimentoId && !novos[idx] && !sugestoes[idx] && ehDeEstoque(nomeCategoria(i.categoriaId)) && (
                   <p className="col-span-6 sm:col-span-12 text-xs text-[#8A6100]">
                     Este item não está ligado a nenhum suprimento. Escolha um da lista para vincular, ou{' '}
                     <button onClick={() => abrirNovo(idx)} className="underline font-semibold">cadastre um novo</button>.
@@ -1010,9 +887,6 @@ export default function Captura({
                           {categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </label>
-                      <label className={rotulo + ' col-span-6 sm:col-span-2'}>CONSUMO/METRO
-                        <input value={novos[idx].consumoPorMetro} onChange={(e) => setNovos({ ...novos, [idx]: { ...novos[idx], consumoPorMetro: e.target.value } })} inputMode="decimal" placeholder="opcional" className={campo + ' ' + normal} />
-                      </label>
                     </div>
                     {(() => {
                       const ja = parecidos(novos[idx].nome, suprimentos)
@@ -1038,7 +912,7 @@ export default function Captura({
                       ) : null
                     })()}
                     <p className="text-xs text-[#6E6E68] mt-1.5">
-                      Papel em metros (m) e tinta em litros (L ou mL) entram na média de custos. Consumo por metro é quanto se gasta por metro estampado, na unidade do suprimento.
+                      Use a unidade em que o insumo é comprado e consumido (un, m, rolo…): a entrada da nota soma no saldo nessa unidade.
                     </p>
                     {erroNovo[idx] && <p className="text-xs text-[#B00063] mt-1">{erroNovo[idx]}</p>}
                     <div className="flex gap-3 mt-2">
@@ -1055,7 +929,6 @@ export default function Captura({
         </div>
         <button onClick={() => setForm({ ...form, itens: [...form.itens, itemVazio()] })} className="mt-2 text-xs text-[#0090D8] hover:underline">+ adicionar item</button>
 
-        {!soTecido && (<>
         <div className="bg-white border border-[#DDDCD5] rounded-sm p-3 mt-5 grid grid-cols-2 sm:grid-cols-5 gap-2">
           <label className={rotulo}>SUBTOTAL
             <input value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: e.target.value })} inputMode="decimal" className={campo + ' ' + normal} />
@@ -1194,11 +1067,9 @@ export default function Captura({
           )}
         </div>
 
-        </>)}
-
         <div className="flex flex-col sm:flex-row gap-2 mt-4">
-          <button onClick={() => salvar()} disabled={pendente || (!soTecido && totalInformado <= 0) || !!bloqueio} title={bloqueio || undefined} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
-            {pendente ? 'SALVANDO…' : soTecido ? 'REGISTRAR ENVIO DE TECIDO' : itensTecido.length ? 'SALVAR DESPESA E ENVIO DE TECIDO' : 'SALVAR DESPESA'}
+          <button onClick={() => salvar()} disabled={pendente || totalInformado <= 0 || !!bloqueio} title={bloqueio || undefined} className={botao + ' flex-1 bg-[#131A2E] text-white'}>
+            {pendente ? 'SALVANDO…' : 'SALVAR DESPESA'}
           </button>
           <button onClick={() => { setEtapa('captura'); setErro('') }} disabled={pendente} className={botao + ' border border-[#131A2E] bg-white'}>
             VOLTAR

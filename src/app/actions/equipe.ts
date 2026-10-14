@@ -80,7 +80,6 @@ export async function criarMembro(
   const { error: erroPerfil } = await admin.from('profiles').insert({
     id: novo.user.id,
     role: papel,
-    cliente_id: null,
     nome,
   })
 
@@ -119,8 +118,8 @@ export async function criarMembro(
 }
 
 /**
- * Manda ao membro um link para criar a própria senha — mesmo modelo do
- * cliente. Ninguém vê nem transporta a senha; o link é de uso único e vale
+ * Manda ao membro um link para criar a própria senha. Ninguém vê nem
+ * transporta a senha; o link é de uso único e vale
  * uma hora.
  */
 export async function redefinirSenhaMembro(

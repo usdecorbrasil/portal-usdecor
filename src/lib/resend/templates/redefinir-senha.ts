@@ -1,8 +1,8 @@
 /**
- * Link para criar nova senha, pedido pela equipe na tela do cliente.
+ * Link para criar nova senha, pedido pelo administrador em Configurações → Equipe.
  *
  * Substitui o modelo antigo de "senha provisória gerada e mostrada na tela":
- * ninguém da equipe vê nem transporta a senha — o cliente cria a dele.
+ * ninguém da equipe vê nem transporta a senha — a própria pessoa cria a dela.
  */
 export function templateRedefinirSenha({
   nome,

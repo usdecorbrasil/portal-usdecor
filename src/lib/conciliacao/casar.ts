@@ -1,11 +1,12 @@
 /**
  * Casamento entre lançamentos do extrato e o que o portal tem lançado:
- * saída ↔ conta a pagar, entrada ↔ cobrança de pedido. Puro.
+ * saída ↔ conta a pagar. Puro. (Entrada ↔ repasse de marketplace vem com o
+ * módulo de pedidos.)
  *
  * Regra: valor igual (1 centavo de tolerância) é obrigatório; a data decide
  * a confiança — no banco, perto do vencimento ou da data de pagamento; na
  * fatura de cartão, perto da data da compra (a fatura mostra a compra, não o
- * vencimento). Nome do fornecedor/cliente na descrição desempata. Dois
+ * vencimento). Nome do fornecedor na descrição desempata. Dois
  * candidatos igualmente bons não geram sugestão automática: a tela lista os
  * dois e a equipe escolhe.
  */
@@ -22,16 +23,6 @@ export type ContaCandidata = {
   cartaoId: string | null
   parcela: number
   parcelas: number
-}
-
-export type CobrancaCandidata = {
-  pedidoId: string
-  numero: number
-  clienteNome: string
-  numeroParcela: number | null
-  valor: number
-  vencimento: string | null
-  pagoEm: string | null
 }
 
 export type Sugestao<T> = { candidato: T; pontos: number; motivo: string }
@@ -97,22 +88,6 @@ export function sugerirConta(l: LancamentoLido, contas: ContaCandidata[], extrat
   return { certeza: certezaDe(sugestoes), sugestoes: sugestoes.slice(0, 5) }
 }
 
-export function sugerirCobranca(l: LancamentoLido, cobrancas: CobrancaCandidata[]): { certeza: Certeza; sugestoes: Sugestao<CobrancaCandidata>[] } {
-  const sugestoes: Sugestao<CobrancaCandidata>[] = []
-  for (const c of cobrancas) {
-    if (!valorIgual(c.valor, l.valor)) continue
-    const refs = [c.pagoEm, c.vencimento].filter(Boolean) as string[]
-    const d = refs.length ? Math.min(...refs.map((r) => dias(l.data, r))) : DIAS_BANCO * 2
-    if (d > DIAS_BANCO * 4) continue
-    let pontos = 50 + Math.max(0, DIAS_BANCO - d) * (40 / DIAS_BANCO)
-    const nome = afinidadeNome(c.clienteNome, l.descricao)
-    pontos += nome * 30
-    const motivo = ['mesmo valor', refs.length ? (d === 0 ? 'mesma data' : `${d} dia${d > 1 ? 's' : ''} de diferença`) : 'sem vencimento', nome >= 0.5 ? 'cliente bate' : null].filter(Boolean).join(', ')
-    sugestoes.push({ candidato: c, pontos: Math.round(pontos), motivo })
-  }
-  sugestoes.sort((a, b) => b.pontos - a.pontos)
-  return { certeza: certezaDe(sugestoes), sugestoes: sugestoes.slice(0, 5) }
-}
 
 function certezaDe(s: { pontos: number }[]): Certeza {
   if (!s.length) return 'nenhuma'

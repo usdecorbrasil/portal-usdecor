@@ -19,7 +19,7 @@ import { hojeBrasilia } from '@/lib/datas'
  *
  * Uma vez por dia no máximo: a data do último envio fica em
  * `configuracoes.avisos_diarios`, e rodar de novo no mesmo dia só responde
- * "já enviado". (O `email_log` não serve de trava aqui: ele é por pedido.)
+ * "já enviado". (O `email_log` não serve de trava aqui: ele trava por referência, não por dia.)
  */
 
 export const dynamic = 'force-dynamic'

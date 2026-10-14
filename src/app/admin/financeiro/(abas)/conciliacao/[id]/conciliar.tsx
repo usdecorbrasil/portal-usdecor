@@ -5,7 +5,7 @@ import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CAIXA, CABECALHO, CORPO, ETIQUETA, NUM, NOME, VAZIO } from '@/components/estilo-lista'
 import { conciliarLancamento, desfazerConciliacao, excluirExtrato, fecharExtrato, ignorarLancamento, type ExtratoAberto, type Lancamento } from '@/app/actions/conciliacao'
-import type { ContaCandidata, CobrancaCandidata } from '@/lib/conciliacao/casar'
+import type { ContaCandidata } from '@/lib/conciliacao/casar'
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const dataBr = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—')
@@ -16,8 +16,6 @@ type Filtro = 'pendentes' | 'conciliados' | 'ignorados' | 'todos'
 
 const rotuloConta = (c: ContaCandidata) =>
   `${c.descricao}${c.parcelas > 1 ? ` (${c.parcela}/${c.parcelas})` : ''} · R$ ${brl(c.valor)} · vence ${dataBr(c.vencimento)}${c.pagoEm ? ` · paga ${dataBr(c.pagoEm)}` : ' · em aberto'}`
-const rotuloCobranca = (c: CobrancaCandidata) =>
-  `Pedido #${c.numero}${c.numeroParcela ? ` parcela ${c.numeroParcela}` : ''} · ${c.clienteNome} · R$ ${brl(c.valor)}${c.vencimento ? ` · vence ${dataBr(c.vencimento)}` : ''}${c.pagoEm ? ' · já recebida' : ' · em aberto'}`
 
 /**
  * Tela de um extrato: lançamento a lançamento, com a sugestão do portal
@@ -131,7 +129,7 @@ function Quadro({ rotulo, valor, detalhe, cor }: { rotulo: string; valor: string
 function Linha({ l, extrato, fechado, pendente, executar }: { l: Lancamento; extrato: ExtratoAberto; fechado: boolean; pendente: boolean; executar: (acao: () => Promise<{ ok: true } | { ok: false; erro: string }>, depois?: () => void) => void }) {
   const [aberta, setAberta] = useState(l.situacao === 'pendente' && l.certeza !== 'nenhuma')
   const [modo, setModo] = useState<'vincular' | 'ignorar' | null>(null)
-  const [escolha, setEscolha] = useState<string>(() => (l.tipo === 'saida' ? l.contas[0]?.candidato.id ?? '' : l.cobrancas[0] ? chaveCobranca(l.cobrancas[0].candidato) : ''))
+  const [escolha, setEscolha] = useState<string>(() => l.contas[0]?.candidato.id ?? '')
   const [busca, setBusca] = useState('')
   const [baixar, setBaixar] = useState(true)
   const [texto, setTexto] = useState('')
@@ -152,21 +150,16 @@ function Linha({ l, extrato, fechado, pendente, executar }: { l: Lancamento; ext
   // Candidatas para a busca manual (além das sugeridas)
   const q = busca.trim().toLowerCase()
   const contasBusca = q.length >= 2 ? extrato.contas.filter((c) => `${c.descricao} ${c.fornecedor ?? ''} ${c.valor}`.toLowerCase().includes(q)).slice(0, 15) : []
-  const cobrancasBusca = q.length >= 2 ? extrato.cobrancas.filter((c) => `${c.numero} ${c.clienteNome} ${c.valor}`.toLowerCase().includes(q)).slice(0, 15) : []
 
   const sugeridasContas = l.contas.map((s) => s.candidato)
-  const sugeridasCobrancas = l.cobrancas.map((s) => s.candidato)
   const opcoesContas = [...sugeridasContas, ...contasBusca.filter((c) => !sugeridasContas.some((s) => s.id === c.id))]
-  const opcoesCobrancas = [...sugeridasCobrancas, ...cobrancasBusca.filter((c) => !sugeridasCobrancas.some((s) => chaveCobranca(s) === chaveCobranca(c)))]
   const alvoConta = l.tipo === 'saida' ? opcoesContas.find((c) => c.id === escolha) : undefined
-  const alvoCobranca = l.tipo === 'entrada' ? opcoesCobrancas.find((c) => chaveCobranca(c) === escolha) : undefined
-  const alvoAberto = alvoConta ? !alvoConta.pagoEm : alvoCobranca ? !alvoCobranca.pagoEm : false
+  const alvoAberto = alvoConta ? !alvoConta.pagoEm : false
 
   function vincular() {
-    if (l.tipo === 'saida' && !alvoConta) return
-    if (l.tipo === 'entrada' && !alvoCobranca) return
+    if (!alvoConta) return
     executar(
-      () => conciliarLancamento(l.id, alvoConta ? { contaPagarId: alvoConta.id } : { pedidoId: alvoCobranca!.pedidoId, numeroParcela: alvoCobranca!.numeroParcela }, baixar && alvoAberto, obs || null, extrato.resumo.id),
+      () => conciliarLancamento(l.id, alvoConta.id, baixar && alvoAberto, obs || null, extrato.resumo.id),
       () => { setModo(null); setAberta(false) }
     )
   }
@@ -183,7 +176,7 @@ function Linha({ l, extrato, fechado, pendente, executar }: { l: Lancamento; ext
             {l.situacao === 'ignorado' && l.observacao && <span className="block text-[11px] text-[#6E6E68] truncate">↳ {l.observacao}</span>}
             {l.situacao === 'pendente' && l.certeza !== 'nenhuma' && (
               <span className="block text-[11px] text-[#6E6E68] truncate">
-                ↳ {l.tipo === 'saida' ? rotuloConta(l.contas[0].candidato) : rotuloCobranca(l.cobrancas[0].candidato)}
+                ↳ {rotuloConta(l.contas[0].candidato)}
               </span>
             )}
           </span>
@@ -203,25 +196,30 @@ function Linha({ l, extrato, fechado, pendente, executar }: { l: Lancamento; ext
               <button disabled={pendente} onClick={() => executar(() => desfazerConciliacao(l.id, extrato.resumo.id))} className="text-[#B00063] hover:underline">
                 desfazer {l.situacao === 'conciliado' ? 'vínculo' : 'ignorar'}
               </button>
-              {l.situacao === 'conciliado' && <span className="text-[#9B9A93]">a baixa feita na conta ou cobrança fica; estorne em A pagar ou no pedido se precisar</span>}
+              {l.situacao === 'conciliado' && <span className="text-[#9B9A93]">a baixa feita na conta fica; estorne em A pagar se precisar</span>}
             </div>
           )}
 
           {l.situacao === 'pendente' && !fechado && (
             <>
               <div className="flex flex-wrap gap-3 text-xs mb-2">
-                <button onClick={() => setModo(modo === 'vincular' ? null : 'vincular')} className={modo === 'vincular' ? 'font-bold underline' : 'text-[#0090D8] hover:underline'}>
-                  {l.tipo === 'saida' ? 'vincular a uma conta a pagar' : 'vincular a uma cobrança de pedido'}
-                </button>
+                {l.tipo === 'saida' ? (
+                  <button onClick={() => setModo(modo === 'vincular' ? null : 'vincular')} className={modo === 'vincular' ? 'font-bold underline' : 'text-[#0090D8] hover:underline'}>
+                    vincular a uma conta a pagar
+                  </button>
+                ) : (
+                  // Entradas casam com os repasses dos marketplaces quando o módulo de pedidos chegar
+                  <span className="text-[#9B9A93]">entrada: o vínculo com repasses dos marketplaces vem com o módulo de pedidos</span>
+                )}
                 <button onClick={() => setModo(modo === 'ignorar' ? null : 'ignorar')} className={modo === 'ignorar' ? 'font-bold underline' : 'text-[#6E6E68] hover:underline'}>ignorar (não entra)</button>
                 {l.tipo === 'saida' && (
                   <Link href="/admin/estoque/despesas/nova" target="_blank" className="text-[#6E6E68] hover:underline">não está lançado: lançar nota ↗</Link>
                 )}
               </div>
 
-              {(modo === 'vincular' || (modo === null && l.certeza !== 'nenhuma')) && (
+              {l.tipo === 'saida' && (modo === 'vincular' || (modo === null && l.certeza !== 'nenhuma')) && (
                 <div className="space-y-2">
-                  {l.tipo === 'saida' && opcoesContas.length > 0 && (
+                  {opcoesContas.length > 0 && (
                     <select value={escolha} onChange={(e) => setEscolha(e.target.value)} className={campo}>
                       {opcoesContas.map((c) => {
                         const s = l.contas.find((x) => x.candidato.id === c.id)
@@ -229,28 +227,20 @@ function Linha({ l, extrato, fechado, pendente, executar }: { l: Lancamento; ext
                       })}
                     </select>
                   )}
-                  {l.tipo === 'entrada' && opcoesCobrancas.length > 0 && (
-                    <select value={escolha} onChange={(e) => setEscolha(e.target.value)} className={campo}>
-                      {opcoesCobrancas.map((c) => {
-                        const s = l.cobrancas.find((x) => chaveCobranca(x.candidato) === chaveCobranca(c))
-                        return <option key={chaveCobranca(c)} value={chaveCobranca(c)}>{rotuloCobranca(c)}{s ? ` — ${s.motivo}` : ''}</option>
-                      })}
-                    </select>
-                  )}
-                  <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={l.tipo === 'saida' ? 'procurar outra conta (fornecedor, descrição, valor)…' : 'procurar outra cobrança (nº do pedido, cliente, valor)…'} className={campo} />
-                  {q.length >= 2 && (l.tipo === 'saida' ? contasBusca.length === 0 : cobrancasBusca.length === 0) && (
-                    <p className="text-[11px] text-[#8A6100]">Nada encontrado com esse texto. {l.tipo === 'saida' ? 'Se a compra não foi lançada, lance a nota primeiro.' : 'Se a cobrança não existe, o pedido ainda não foi faturado.'}</p>
+                  <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="procurar outra conta (fornecedor, descrição, valor)…" className={campo} />
+                  {q.length >= 2 && contasBusca.length === 0 && (
+                    <p className="text-[11px] text-[#8A6100]">Nada encontrado com esse texto. Se a compra não foi lançada, lance a nota primeiro.</p>
                   )}
                   <div className="flex flex-wrap items-center gap-3">
                     {alvoAberto && (
                       <label className="text-xs flex items-center gap-1.5">
                         <input type="checkbox" checked={baixar} onChange={(e) => setBaixar(e.target.checked)} className="accent-[#131A2E]" />
-                        {l.tipo === 'saida' ? 'dar baixa na conta' : 'confirmar o recebimento'} com a data e o valor do extrato
+                        dar baixa na conta com a data e o valor do extrato
                       </label>
                     )}
-                    {(alvoConta || alvoCobranca) && !alvoAberto && <span className="text-xs text-[#6E6E68]">já estava {l.tipo === 'saida' ? 'paga' : 'recebida'}: só vincula</span>}
+                    {alvoConta && !alvoAberto && <span className="text-xs text-[#6E6E68]">já estava paga: só vincula</span>}
                     <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="observação (opcional)" className={campo + ' sm:w-64'} />
-                    <button disabled={pendente || !(alvoConta || alvoCobranca)} onClick={vincular} className={botao + ' bg-[#131A2E] text-white'}>
+                    <button disabled={pendente || !alvoConta} onClick={vincular} className={botao + ' bg-[#131A2E] text-white'}>
                       {pendente ? 'SALVANDO…' : 'VINCULAR'}
                     </button>
                   </div>
@@ -273,4 +263,3 @@ function Linha({ l, extrato, fechado, pendente, executar }: { l: Lancamento; ext
   )
 }
 
-const chaveCobranca = (c: CobrancaCandidata) => `${c.pedidoId}:${c.numeroParcela ?? 0}`

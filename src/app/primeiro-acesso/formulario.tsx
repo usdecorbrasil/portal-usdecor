@@ -9,7 +9,7 @@ import CampoSenha from '@/components/campo-senha'
 
 /**
  * Formulário do primeiro acesso. Quem entrou com a senha do convite passa por
- * aqui antes de qualquer outra tela — vale para equipe e para cliente, porque
+ * aqui antes de qualquer outra tela — vale para toda a equipe, porque
  * a senha do e-mail não é de ninguém enquanto estiver na caixa de entrada.
  *
  * Mostra em que conta a pessoa está e deixa sair: a sessão sobrevive ao

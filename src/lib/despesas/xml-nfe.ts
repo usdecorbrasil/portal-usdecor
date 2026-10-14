@@ -10,10 +10,10 @@
 import type { DocumentoLido } from './ler-documento'
 
 const CATEGORIA_POR_DESCRICAO: [RegExp, string][] = [
-  [/tinta|ink|sublim[aá]tic[ao]\s*(tinta)?/i, 'Tinta'],
-  [/papel|transfer|bobina/i, 'Papel sublimático'],
-  [/tecido|malha|poli[eé]ster|oxford|tactel|helanca|suplex|crepe/i, 'Tecido'],
-  [/embalag|saco|caixa|fita|pl[aá]stico|bobina pl/i, 'Embalagem'],
+  [/tecido|malha|poli[eé]ster|oxford|linho|veludo|suede|jacquard|tactel|microfibra/i, 'Tecido'],
+  [/z[ií]per|linha|bot[aã]o|vi[eé]s|enchimento|fibra siliconada/i, 'Aviamentos'],
+  [/etiqueta|\btag\b/i, 'Etiquetas'],
+  [/embalag|saco|caixa|fita|pl[aá]stico|envelope/i, 'Embalagem'],
 ]
 
 /** Texto de uma tag direta (sem namespace), ou null. */
@@ -81,15 +81,7 @@ const ROTULO_PAG: Record<string, string> = {
 
 export type ResultadoXml = { ok: true; documento: DocumentoLido } | { ok: false; erro: string }
 
-const TECIDO_RE = /tecido|malha|poli[eé]ster|oxford|tactel|helanca|suplex|crepe|cetim|viscose|microfibra|chiffon/i
-
-/** Nome do tecido cadastrado que aparece na descrição do item, ou null. */
-function tecidoNaDescricao(descricao: string, tecidos: string[]): string | null {
-  const d = descricao.toLowerCase()
-  return tecidos.find((t) => t.length >= 3 && d.includes(t.toLowerCase())) ?? null
-}
-
-export function lerXmlNfe(xml: string, cadastro: { tecidos?: string[]; clientes?: { nome: string; doc: string | null }[] } = {}): ResultadoXml {
+export function lerXmlNfe(xml: string): ResultadoXml {
   if (!/<infNFe[\s>]/.test(xml)) {
     return { ok: false, erro: 'Este XML não é uma NF-e ou NFC-e (não tem o bloco infNFe).' }
   }
@@ -112,10 +104,7 @@ export function lerXmlNfe(xml: string, cadastro: { tecidos?: string[]; clientes?
     const prod = bloco(det, 'prod') ?? det
     const descricao = tag(prod, 'xProd') ?? ''
     const categoria = CATEGORIA_POR_DESCRICAO.find(([re]) => re.test(descricao))?.[1] ?? null
-    const tecidoDeCliente = TECIDO_RE.test(descricao)
     return {
-      tecido_de_cliente: tecidoDeCliente,
-      tecido: tecidoDeCliente ? tecidoNaDescricao(descricao, cadastro.tecidos ?? []) : null,
       descricao,
       codigo: tag(prod, 'cProd'),
       quantidade: numero(tag(prod, 'qCom')) ?? 1,
@@ -149,17 +138,7 @@ export function lerXmlNfe(xml: string, cadastro: { tecidos?: string[]; clientes?
   const docEmit = tag(emit, 'CNPJ') ?? tag(emit, 'CPF')
   const docDest = tag(dest, 'CNPJ') ?? tag(dest, 'CPF')
 
-  // De quem é o tecido: o cliente cujo CNPJ é o emitente (remessa do cliente)
-  // ou o destinatário, ou cujo nome aparece nas observações
   const infCpl = tag(bloco(inf, 'infAdic') ?? '', 'infCpl') ?? ''
-  const temTecido = itens.some((i) => i.tecido_de_cliente)
-  const clienteDoTecido = temTecido
-    ? (cadastro.clientes ?? []).find(
-        (c) =>
-          (c.doc && (c.doc === docEmit || c.doc === docDest)) ||
-          infCpl.toLowerCase().includes(c.nome.toLowerCase())
-      )?.nome ?? null
-    : null
   const enderEmit = bloco(emit, 'enderEmit') ?? ''
   const observacoes = [
     infCpl || null,
@@ -174,7 +153,6 @@ export function lerXmlNfe(xml: string, cadastro: { tecidos?: string[]; clientes?
       fornecedor_doc: docEmit,
       destinatario_nome: tag(dest, 'xNome'),
       destinatario_doc: docDest,
-      tecido_cliente: clienteDoTecido,
       numero: tag(ide, 'nNF'),
       serie: tag(ide, 'serie'),
       chave_acesso: chave,

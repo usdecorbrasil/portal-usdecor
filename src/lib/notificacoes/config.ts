@@ -1,7 +1,7 @@
 /**
  * Avisos internos: quem da equipe recebe e-mail quando algo acontece.
  *
- * Puro de propósito (sem Supabase), como `pagamento/config.ts`: a tela de
+ * Puro de propósito (sem Supabase): a tela de
  * Configurações roda no navegador e precisa das mesmas regras que o servidor
  * usa para validar.
  *
@@ -10,41 +10,11 @@
  * deploy toda vez que entrasse um segundo administrador.
  */
 
-export const TIPOS = [
-  'pedido_novo',
-  'pedido_bloqueado_credito',
-  'pedido_cancelado',
-  'cancelamento_solicitado',
-  'tecido_enviado',
-  'contas_pagar_pendencias',
-] as const
+export const TIPOS = ['contas_pagar_pendencias'] as const
 
 export type TipoNotificacao = (typeof TIPOS)[number]
 
 export const ROTULOS: Record<TipoNotificacao, { titulo: string; descricao: string }> = {
-  pedido_novo: {
-    titulo: 'Pedido novo',
-    descricao: 'Quando qualquer cliente envia um pedido pelo carrinho.',
-  },
-  pedido_bloqueado_credito: {
-    titulo: 'Pedido bloqueado por limite de crédito',
-    descricao:
-      'Quando, no Faturar, o boleto escolhido passa do limite de crédito do cliente e o pedido fica aguardando liberação ou outra forma. Exige decisão.',
-  },
-  pedido_cancelado: {
-    titulo: 'Pedido cancelado pelo cliente',
-    descricao:
-      'Quando o cliente cancela um pedido que ainda aguardava confirmação. Não exige resposta.',
-  },
-  cancelamento_solicitado: {
-    titulo: 'Cancelamento solicitado',
-    descricao: 'Quando um cliente pede para cancelar um pedido já confirmado. Exige resposta.',
-  },
-  tecido_enviado: {
-    titulo: 'Tecido enviado',
-    descricao:
-      'Quando um cliente avisa que mandou tecido. O saldo só entra depois da conferência na aba Estoque.',
-  },
   contas_pagar_pendencias: {
     titulo: 'Pendências de contas a pagar (resumo diário)',
     descricao:
@@ -55,11 +25,6 @@ export const ROTULOS: Record<TipoNotificacao, { titulo: string; descricao: strin
 export type ConfigNotificacoes = Record<TipoNotificacao, string[]>
 
 export const PADRAO: ConfigNotificacoes = {
-  pedido_novo: [],
-  pedido_bloqueado_credito: [],
-  pedido_cancelado: [],
-  cancelamento_solicitado: [],
-  tecido_enviado: [],
   contas_pagar_pendencias: [],
 }
 

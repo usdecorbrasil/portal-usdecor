@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { lerPerfil } from '@/lib/auth/perfil'
-import FiltroPeriodo from './filtro-periodo'
 import Avisos, { type Aviso } from './avisos'
 import { PRAZO_COMPROVANTE_DIAS } from '@/lib/contas-pagar/condicoes'
 import { hojeBrasilia } from '@/lib/datas'
@@ -10,130 +9,24 @@ import { hojeBrasilia } from '@/lib/datas'
 const brl = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// Corte/costura vem depois do faturamento e fica fora deste bloco
-const EM_PRODUCAO = ['recebido', 'impressao', 'estampando', 'pronto']
-
-// "Em andamento" termina em Pedido pronto. Faturar já emite nota e cobrança,
-// então daí em diante o pedido é assunto do financeiro e do Bling, não deste bloco
-
-const MESES = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
-]
-
-type ResumoCliente = {
-  nome: string
-  total: number
-  metros: number
-  pedidos: number
-}
-
-function iso(d: Date) {
-  const ano = d.getFullYear()
-  const mes = String(d.getMonth() + 1).padStart(2, '0')
-  const dia = String(d.getDate()).padStart(2, '0')
-  return `${ano}-${mes}-${dia}`
-}
-
-const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
-
-function dataValida(s: string | undefined): string | null {
-  if (!s || !DATA_ISO.test(s)) return null
-  return isNaN(new Date(s + 'T00:00:00').getTime()) ? null : s
-}
-
-function dataCurta(s: string) {
-  return new Date(s + 'T00:00:00').toLocaleDateString('pt-BR')
-}
-
 /**
- * Período de comparação. Quando o filtro começa no dia 1, compara com o mês
- * anterior **até o mesmo dia**: no dia 5, o faturamento de 1 a 5 contra o de
- * 1 a 5 do mês passado — comparar com o mês passado inteiro faria o mês
- * corrente parecer sempre pior. Com datas soltas, usa a janela de mesmo
- * tamanho imediatamente antes.
+ * Dashboard do dono e do financeiro. Por ora só os avisos do que já existe
+ * (contas a pagar, notas sem comprovante, insumos no mínimo). Resultado por
+ * canal e estoque por local entram com os módulos de pedidos e estoque.
  */
-function periodoAnterior(de: Date, ate: Date) {
-  if (de.getDate() === 1) {
-    const inicio = new Date(de.getFullYear(), de.getMonth() - 1, 1)
-    const ultimoDia = new Date(de.getFullYear(), de.getMonth(), 0).getDate()
-    // Dia 31 num mês de 30: fica no último dia que o mês anterior tem
-    const dia = Math.min(ate.getDate(), ultimoDia)
-    return {
-      de: inicio,
-      ate: new Date(inicio.getFullYear(), inicio.getMonth(), dia),
-      rotulo: `1 a ${dia} de ${MESES[inicio.getMonth()].slice(0, 3)}`,
-    }
-  }
-
-  const dias = Math.round((ate.getTime() - de.getTime()) / 86_400_000) + 1
-  const inicio = new Date(de)
-  inicio.setDate(inicio.getDate() - dias)
-  const fim = new Date(de)
-  fim.setDate(fim.getDate() - 1)
-  return { de: inicio, ate: fim, rotulo: `${dias} dias antes` }
-}
-
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ de?: string; ate?: string }>
-}) {
+export default async function DashboardPage() {
   const perfil = await lerPerfil()
 
-  if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) redirect('/admin/pedidos')
-
-  const params = await searchParams
-  const hoje = new Date()
-
-  // Sem filtro, o mês corrente. Data inválida ou invertida cai no padrão
-  let dataDe = dataValida(params.de) ?? iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
-  let dataAte = dataValida(params.ate) ?? iso(hoje)
-  if (dataDe > dataAte) {
-    dataDe = iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
-    dataAte = iso(hoje)
-  }
-
-  const inicio = new Date(dataDe + 'T00:00:00')
-  const fim = new Date(dataAte + 'T23:59:59.999')
-  const anterior = periodoAnterior(inicio, new Date(dataAte + 'T00:00:00'))
-  const inicioAnterior = anterior.de
-  const fimAnterior = new Date(iso(anterior.ate) + 'T23:59:59.999')
-
-  const mesCalendario =
-    inicio.getDate() === 1 &&
-    (dataAte === iso(new Date(inicio.getFullYear(), inicio.getMonth() + 1, 0)) ||
-      (inicio.getFullYear() === hoje.getFullYear() &&
-        inicio.getMonth() === hoje.getMonth() &&
-        dataAte === iso(hoje)))
-  const tituloPeriodo = mesCalendario
-    ? `${MESES[inicio.getMonth()]} de ${inicio.getFullYear()}`
-    : `${dataCurta(dataDe)} a ${dataCurta(dataAte)}`
+  if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'financeiro')) redirect('/admin')
 
   const supabase = await createClient()
-
-  // A contagem de clientes não depende dos pedidos: busca junto
-  // Contas a pagar vencidas, para o atalho (data de hoje em Brasília)
-  const hojeBr = hojeBrasilia(hoje)
+  const agora = new Date()
+  // Contas a pagar vencidas, pela data de hoje em Brasília
+  const hojeBr = hojeBrasilia(agora)
   // Notas lançadas sem foto/PDF há mais do prazo: aviso vermelho até anexarem
-  const limiteComprovante = new Date(hoje.getTime() - PRAZO_COMPROVANTE_DIAS * 24 * 60 * 60 * 1000).toISOString()
-  const [{ data: pedidos }, { count: clientesAtivos }, { data: travados }, { data: contasVencidas }, { data: notasSemArquivo }] = await Promise.all([
-    supabase
-    .from('pedidos')
-    .select(`
-      id, numero, total, created_at, cancelado_em, metragem_impressa, bloqueado_credito,
-      clientes(id, razao_social),
-      pedido_status_historico(status, created_at),
-      pedido_solicitacoes(id, status)
-    `)
-    // Cancelados eram trazidos e descartados aqui mesmo: filtra no banco
-    .is('cancelado_em', null)
-    .order('created_at', { ascending: false }),
-    supabase
-      .from('clientes')
-      .select('*', { count: 'exact', head: true })
-      .eq('ativo', true),
-    supabase.rpc('clientes_bloqueados_por_atraso'),
+  const limiteComprovante = new Date(agora.getTime() - PRAZO_COMPROVANTE_DIAS * 24 * 60 * 60 * 1000).toISOString()
+
+  const [{ data: contasVencidas }, { data: notasSemArquivo }, { data: insumos }, { data: saldos }] = await Promise.all([
     supabase
       .from('contas_pagar')
       .select('valor')
@@ -147,109 +40,21 @@ export default async function DashboardPage({
       .is('excluido_em', null)
       .not('condicao_pagamento', 'is', null)
       .lt('criado_em', limiteComprovante),
+    supabase.from('suprimentos').select('id, nome, minimo').eq('ativo', true).gt('minimo', 0),
+    supabase.from('suprimento_saldos').select('suprimento_id, saldo'),
   ])
+
   const semComprovante = (notasSemArquivo ?? []) as { total: number | string }[]
   const valorSemComprovante = semComprovante.reduce((s, d) => s + Number(d.total), 0)
   const vencidasPagar = (contasVencidas ?? []) as { valor: number | string }[]
   const valorVencidasPagar = vencidasPagar.reduce((s, c) => s + Number(c.valor), 0)
-
-  const clientesTravados = new Set<string>(((travados ?? []) as any[]).map(String))
-
-  const lista = ((pedidos ?? []) as any[]).map((p) => {
-    const hist = (p.pedido_status_historico ?? [])
-      .slice()
-      .sort(
-        (a: any, b: any) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-    return {
-      id: p.id,
-      numero: p.numero,
-      total: Number(p.total),
-      // Metragem real, informada no romaneio ao finalizar a estampa
-      metros: p.metragem_impressa != null ? Number(p.metragem_impressa) : 0,
-      clienteId: p.clientes?.id ?? '',
-      cliente: p.clientes?.razao_social ?? '—',
-      status: hist[0]?.status ?? 'aguardando',
-      cancelado: !!p.cancelado_em,
-      bloqueadoCredito: p.bloqueado_credito === true,
-      bloqueadoAtraso: clientesTravados.has(String(p.clientes?.id ?? '')),
-      criado: new Date(p.created_at),
-      temSolicitacao: (p.pedido_solicitacoes ?? []).some(
-        (s: any) => s.status === 'aberta'
-      ),
-    }
-  })
-
-  const validos = lista.filter((p) => !p.cancelado)
-
-  // Pedidos aguardando confirmação não entram no faturamento
-  const confirmados = validos.filter((p) => p.status !== 'aguardando')
-
-  const doPeriodo = confirmados.filter((p) => p.criado >= inicio && p.criado <= fim)
-  const doAnterior = confirmados.filter(
-    (p) => p.criado >= inicioAnterior && p.criado <= fimAnterior
+  const saldoDe = new Map(((saldos ?? []) as { suprimento_id: string; saldo: number | string }[]).map((s) => [s.suprimento_id, Number(s.saldo)]))
+  const noMinimo = ((insumos ?? []) as { id: string; nome: string; minimo: number | string }[]).filter(
+    (i) => (saldoDe.get(i.id) ?? 0) <= Number(i.minimo)
   )
-
-  const fatPeriodo = doPeriodo.reduce((a, p) => a + p.total, 0)
-  const fatAnterior = doAnterior.reduce((a, p) => a + p.total, 0)
-  const variacao =
-    fatAnterior > 0 ? ((fatPeriodo - fatAnterior) / fatAnterior) * 100 : null
-
-  const metrosPeriodo = doPeriodo.reduce((a, p) => a + p.metros, 0)
-  const ticket = doPeriodo.length > 0 ? fatPeriodo / doPeriodo.length : 0
-
-  /* ---- em andamento: até pedido pronto, qualquer que seja a data ---- */
-  const aguardando = validos.filter((p) => p.status === 'aguardando')
-  // Bloqueio por crédito acontece no Faturar (pedido em "pronto"), quando a
-  // forma de pagamento é escolhida; pedidos anteriores a 07/10/2026 podiam
-  // nascer bloqueados em "aguardando". A tela mostra os dois casos
-  const bloqueados = validos.filter((p) => p.bloqueadoCredito)
-  // Cliente com boleto vencido há mais de 5 dias úteis: os pedidos dele
-  // (ainda não fechados) não andam até o pagamento ou a liberação
-  const travadosAtraso = validos.filter((p) => p.bloqueadoAtraso && p.status !== 'fechado')
-  const clientesAtraso = [...new Set(travadosAtraso.map((p) => p.clienteId))]
-  const solicitacoes = validos.filter((p) => p.temSolicitacao)
-  const valorAguardando = aguardando.reduce((a, p) => a + p.total, 0)
-
-  const emProducao = validos.filter((p) => EM_PRODUCAO.includes(p.status))
-  const metrosProducao = emProducao.reduce((a, p) => a + p.metros, 0)
-  const valorProducao = emProducao.reduce((a, p) => a + p.total, 0)
-
-
-  const porCliente: Record<string, ResumoCliente> = {}
-
-  doPeriodo.forEach((p) => {
-    if (!porCliente[p.clienteId]) {
-      porCliente[p.clienteId] = {
-        nome: p.cliente,
-        total: 0,
-        metros: 0,
-        pedidos: 0,
-      }
-    }
-    porCliente[p.clienteId].total += p.total
-    porCliente[p.clienteId].metros += p.metros
-    porCliente[p.clienteId].pedidos += 1
-  })
-
-  const ranking = Object.values(porCliente)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5)
-
-  const maiorValor = ranking[0]?.total ?? 1
 
   const s = (n: number, um: string, varios: string) => (n === 1 ? um : varios)
   const avisos: Aviso[] = []
-  if (travadosAtraso.length)
-    avisos.push({
-      nivel: 'urgente',
-      titulo: `${travadosAtraso.length} ${s(travadosAtraso.length, 'pedido travado', 'pedidos travados')} por boleto em atraso`,
-      detalhe: `#${travadosAtraso.map((b) => b.numero).join(', #')} · ${
-        clientesAtraso.length === 1 ? travadosAtraso[0].cliente : `${clientesAtraso.length} clientes`
-      } com boleto vencido há mais de 5 dias úteis`,
-      href: clientesAtraso.length === 1 ? `/admin/clientes/${clientesAtraso[0]}` : '/admin/financeiro/a-receber',
-    })
   if (semComprovante.length)
     avisos.push({
       nivel: 'urgente',
@@ -264,26 +69,12 @@ export default async function DashboardPage({
       detalhe: `R$ ${brl(valorVencidasPagar)} · registre o pagamento ou ajuste o vencimento`,
       href: '/admin/financeiro/a-pagar',
     })
-  if (solicitacoes.length)
-    avisos.push({
-      nivel: 'urgente',
-      titulo: `${solicitacoes.length} ${s(solicitacoes.length, 'solicitação', 'solicitações')} de cancelamento`,
-      detalhe: `${s(solicitacoes.length, 'Pedido', 'Pedidos')} #${solicitacoes.map((x) => x.numero).join(', #')} · o cliente aguarda resposta`,
-      href: '/admin/pedidos',
-    })
-  if (bloqueados.length)
+  if (noMinimo.length)
     avisos.push({
       nivel: 'atencao',
-      titulo: `${bloqueados.length} ${s(bloqueados.length, 'pedido bloqueado', 'pedidos bloqueados')} por limite de crédito`,
-      detalhe: `#${bloqueados.map((b) => b.numero).join(', #')} · no Faturar: libere com motivo ou escolha outra forma`,
-      href: bloqueados.length === 1 ? `/admin/pedidos/${bloqueados[0].id}` : '/admin/pedidos',
-    })
-  if (aguardando.length)
-    avisos.push({
-      nivel: 'info',
-      titulo: `${aguardando.length} ${s(aguardando.length, 'pedido aguardando', 'pedidos aguardando')} confirmação`,
-      detalhe: `R$ ${brl(valorAguardando)} · o cliente ainda pode cancelar`,
-      href: '/admin/pedidos?etapa=aguardando',
+      titulo: `${noMinimo.length} ${s(noMinimo.length, 'insumo no mínimo', 'insumos no mínimo')}`,
+      detalhe: noMinimo.map((i) => i.nome).join(' · '),
+      href: '/admin/estoque/suprimentos',
     })
 
   return (
@@ -292,10 +83,6 @@ export default async function DashboardPage({
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-[#131A2E]">Dashboard</h1>
-          <p className="text-sm text-[#6E6E68] mt-1">
-            {tituloPeriodo}
-            {clientesAtivos ? ` · ${clientesAtivos} cliente${clientesAtivos > 1 ? 's' : ''} ativo${clientesAtivos > 1 ? 's' : ''}` : ''}
-          </p>
         </div>
         {/* Conta a pagar só nasce da nota: o atalho é o lançamento da nota */}
         <Link
@@ -309,175 +96,16 @@ export default async function DashboardPage({
 
       <Avisos avisos={avisos} />
 
-      <FiltroPeriodo de={dataDe} ate={dataAte} />
-
-      {/* ---- indicadores do período ---- */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-3">
-        <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
-          <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
-            FATURAMENTO NO PERÍODO
-          </div>
-          <div className="font-mono font-semibold text-base sm:text-xl mt-0.5 sm:mt-1">
-            R$ {brl(fatPeriodo)}
-          </div>
-          {variacao !== null ? (
-            <div
-              className={`text-[9px] sm:text-[10px] font-mono mt-0.5 sm:mt-1 ${
-                variacao >= 0 ? 'text-[#2E7D4F]' : 'text-[#B00063]'
-              }`}
-            >
-              {variacao >= 0 ? '↑' : '↓'} {Math.abs(variacao).toFixed(1)}% vs{' '}
-              {anterior.rotulo}
-            </div>
-          ) : (
-            // Sem base de comparação a linha some sem explicar; melhor dizer
-            <div className="text-[9px] sm:text-[10px] font-mono mt-0.5 sm:mt-1 text-[#6E6E68]">
-              sem faturamento em {anterior.rotulo} para comparar
-            </div>
-          )}
-        </div>
-
-        <Cartao rotulo="PEDIDOS NO PERÍODO" valor={String(doPeriodo.length)} />
-        <Cartao rotulo="TICKET MÉDIO" valor={`R$ ${brl(ticket)}`} />
-        <Cartao rotulo="METRAGEM NO PERÍODO" valor={`${brl(metrosPeriodo)} m`} />
-      </div>
-
-      {/* ---- em andamento: não depende do período ---- */}
-      <Titulo>EM ANDAMENTO — QUALQUER DATA</Titulo>
-
-      <div className="grid sm:grid-cols-2 gap-2 sm:gap-3">
-        <Link
-          href="/admin/pedidos?etapa=aguardando"
-          className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
-        >
-          <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
-            AGUARDANDO CONFIRMAÇÃO
-          </div>
-          <div className="flex items-baseline justify-between gap-2 mt-0.5 sm:mt-1">
-            <span className="font-mono font-semibold text-base sm:text-xl">
-              {aguardando.length}
-            </span>
-            <span className="font-mono text-xs sm:text-sm text-[#6E6E68]">
-              R$ {brl(valorAguardando)}
-            </span>
-          </div>
-        </Link>
-
-        <Link
-          href="/admin/pedidos"
-          className="block bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4 hover:border-[#131A2E]"
-        >
-          <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
-            EM PRODUÇÃO
-          </div>
-          <div className="flex items-baseline justify-between gap-2 mt-0.5 sm:mt-1">
-            <span className="font-mono font-semibold text-base sm:text-xl">
-              {emProducao.length}
-            </span>
-            <span className="font-mono text-xs sm:text-sm text-[#6E6E68]">
-              R$ {brl(valorProducao)}
-            </span>
-          </div>
-          <div className="text-[10px] sm:text-xs text-[#6E6E68] mt-1 font-mono">
-            {brl(metrosProducao)} m a estampar
-          </div>
-          <div className="mt-2 pt-2 border-t border-[#DDDCD5] flex flex-wrap gap-x-3 gap-y-1">
-            {EM_PRODUCAO.map((e) => {
-              const n = emProducao.filter((p) => p.status === e).length
-              if (n === 0) return null
-              return (
-                <span key={e} className="text-[10px] sm:text-xs text-[#6E6E68]">
-                  {rotuloEtapa(e)}{' '}
-                  <strong className="font-mono text-[#131A2E]">{n}</strong>
-                </span>
-              )
-            })}
-            {emProducao.length === 0 && (
-              <span className="text-[10px] sm:text-xs text-[#6E6E68]">nada em produção</span>
-            )}
-          </div>
-        </Link>
-
-      </div>
-
-      {/* ---- ranking ---- */}
-      <Titulo>PRINCIPAIS CLIENTES NO PERÍODO</Titulo>
-
-      {ranking.length === 0 ? (
-        <div className="border border-dashed border-[#DDDCD5] rounded-sm py-10 text-center">
-          <p className="text-sm text-[#6E6E68]">
-            Nenhum pedido confirmado neste período.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-1.5 sm:space-y-2">
-          {ranking.map((c, i) => (
-            <div
-              key={c.nome}
-              className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-mono text-[10px] sm:text-xs text-[#6E6E68] shrink-0">
-                    {i + 1}º
-                  </span>
-                  <span className="font-semibold tracking-tight text-sm sm:text-base truncate">
-                    {c.nome}
-                  </span>
-                </div>
-                <span className="font-mono font-semibold text-sm sm:text-base whitespace-nowrap">
-                  R$ {brl(c.total)}
-                </span>
-              </div>
-
-              <div className="h-1 sm:h-1.5 bg-[#EEEDE7] rounded-full mt-1.5 sm:mt-2.5 overflow-hidden">
-                <div
-                  className="h-full bg-[#B00063] rounded-full"
-                  style={{ width: `${(c.total / maiorValor) * 100}%` }}
-                />
-              </div>
-
-              <div className="flex justify-between text-[10px] sm:text-xs text-[#6E6E68] mt-1 sm:mt-1.5">
-                <span>
-                  {c.pedidos} pedido{c.pedidos > 1 ? 's' : ''}
-                </span>
-                <span className="font-mono">{brl(c.metros)} m</span>
-              </div>
-            </div>
-          ))}
-        </div>
+      {avisos.length === 0 && (
+        <p className="text-sm text-[#6E6E68] mb-5">Nenhuma pendência no momento.</p>
       )}
-    </div>
-  )
-}
 
-function rotuloEtapa(e: string) {
-  const r: Record<string, string> = {
-    recebido: 'Confirmado',
-    impressao: 'Impressão',
-    estampando: 'Estampando',
-    pronto: 'Estampa pronta',
-    corte_costura: 'Corte/costura',
-  }
-  return r[e] ?? e
-}
-
-function Cartao({ rotulo, valor }: { rotulo: string; valor: string }) {
-  return (
-    <div className="bg-white border border-[#DDDCD5] rounded-sm p-2.5 sm:p-4">
-      <div className="text-[9px] sm:text-[10px] tracking-[0.13em] text-[#6E6E68]">
-        {rotulo}
+      <div className="border border-dashed border-[#DDDCD5] rounded-sm py-10 px-5 text-center">
+        <p className="text-sm text-[#6E6E68] leading-relaxed">
+          Resultado por canal e estoque por local aparecem aqui quando entrarem os módulos de
+          produtos, estoque e pedidos dos marketplaces.
+        </p>
       </div>
-      <div className="font-mono font-semibold text-base sm:text-xl mt-0.5 sm:mt-1">{valor}</div>
     </div>
-  )
-}
-
-function Titulo({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[10px] tracking-[0.16em] text-[#6E6E68] mt-7 mb-3 flex items-center gap-2">
-      {children}
-      <span className="flex-1 h-px bg-[#DDDCD5]" />
-    </h2>
   )
 }

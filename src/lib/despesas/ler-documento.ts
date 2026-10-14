@@ -18,7 +18,7 @@ export { TIPOS_DOCUMENTO }
 /**
  * Esquema "de fio": o que a IA devolve. A API de saída estruturada aceita no
  * máximo 16 campos com união de tipos (nullable é união) e este documento
- * passou de 24 quando entraram destinatário e tecido — a leitura quebrava com
+ * passou de 24 quando entraram destinatário e tecido de cliente — a leitura quebrava com
  * HTTP 400 antes de ler a foto. Por isso aqui NADA é nullable: texto ausente
  * vem como "", número ausente como 0 e condição desconhecida como
  * "nao_informado". `normalizar()` converte para o `DocumentoLido` com null,
@@ -36,12 +36,8 @@ const ItemFio = z.object({
   valor_total: z.number(),
   /** Nome exato de uma categoria da lista enviada, ou "" se não der para dizer. */
   categoria: z.string(),
-  /** Nome exato de um suprimento cadastrado que corresponde ao item, ou "". */
+  /** Nome exato de um insumo cadastrado (tabela `suprimentos`) que corresponde ao item, ou "". */
   suprimento: z.string(),
-  /** Item é tecido de cliente (matéria-prima que o cliente manda estampar), não compra da empresa. */
-  tecido_de_cliente: z.boolean(),
-  /** Nome exato de um tecido cadastrado que corresponde ao item, ou "". */
-  tecido: z.string(),
   confianca: z.number().min(0).max(1),
 })
 
@@ -56,8 +52,6 @@ const DocumentoFio = z.object({
   destinatario_nome: z.string(),
   /** CNPJ ou CPF do comprador, só dígitos, ou "". */
   destinatario_doc: z.string(),
-  /** Quando a nota é de tecido de cliente: nome exato do cliente da lista, ou "". */
-  tecido_cliente: z.string(),
   numero: z.string(),
   serie: z.string(),
   /** Chave de acesso de 44 dígitos, ou "". */
@@ -95,18 +89,17 @@ const DocumentoFio = z.object({
 })
 
 /** O documento como o resto do app o conhece: campo ausente é null. */
-export type ItemLido = Omit<z.infer<typeof ItemFio>, 'codigo' | 'unidade' | 'valor_unitario' | 'categoria' | 'suprimento' | 'tecido'> & {
+export type ItemLido = Omit<z.infer<typeof ItemFio>, 'codigo' | 'unidade' | 'valor_unitario' | 'categoria' | 'suprimento'> & {
   codigo: string | null
   unidade: string | null
   valor_unitario: number | null
   categoria: string | null
   suprimento: string | null
-  tecido: string | null
 }
 
 export type DocumentoLido = Omit<
   z.infer<typeof DocumentoFio>,
-  | 'fornecedor_nome' | 'fornecedor_doc' | 'destinatario_nome' | 'destinatario_doc' | 'tecido_cliente'
+  | 'fornecedor_nome' | 'fornecedor_doc' | 'destinatario_nome' | 'destinatario_doc'
   | 'numero' | 'serie' | 'chave_acesso' | 'emissao' | 'forma_pagamento' | 'condicao_pagamento'
   | 'duplicatas' | 'subtotal' | 'desconto' | 'frete' | 'impostos' | 'total' | 'itens' | 'observacoes'
 > & {
@@ -114,7 +107,6 @@ export type DocumentoLido = Omit<
   fornecedor_doc: string | null
   destinatario_nome: string | null
   destinatario_doc: string | null
-  tecido_cliente: string | null
   numero: string | null
   serie: string | null
   chave_acesso: string | null
@@ -142,7 +134,6 @@ export function normalizar(d: z.infer<typeof DocumentoFio>): DocumentoLido {
     fornecedor_doc: texto(d.fornecedor_doc),
     destinatario_nome: texto(d.destinatario_nome),
     destinatario_doc: texto(d.destinatario_doc),
-    tecido_cliente: texto(d.tecido_cliente),
     numero: texto(d.numero),
     serie: texto(d.serie),
     chave_acesso: texto(d.chave_acesso),
@@ -163,7 +154,6 @@ export function normalizar(d: z.infer<typeof DocumentoFio>): DocumentoLido {
       valor_unitario: valor(i.valor_unitario),
       categoria: texto(i.categoria),
       suprimento: texto(i.suprimento),
-      tecido: texto(i.tecido),
     })),
   }
 }
@@ -174,12 +164,8 @@ export type EntradaLeitura = {
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'
   /** Nomes das categorias de gasto cadastradas, para a IA classificar. */
   categorias: string[]
-  /** Nomes dos suprimentos cadastrados (com unidade), para casar itens. */
+  /** Nomes dos insumos cadastrados (com unidade), para casar itens. */
   suprimentos: string[]
-  /** Tecidos cadastrados (estoque dos clientes), para reconhecer nota de tecido. */
-  tecidos?: string[]
-  /** Clientes ativos (razão social e CNPJ), para dizer de quem é o tecido. */
-  clientes?: { nome: string; doc: string | null }[]
   /**
    * rapido = Haiku (padrão, ~R$ 0,01 por página); preciso = Opus (~R$ 0,40),
    * para reler uma nota que o rápido não entendeu.
@@ -195,7 +181,7 @@ export type ModeloLeitura = 'rapido' | 'preciso'
  * Versão das instruções abaixo. Vai gravada com cada nota (`despesas.versao_prompt`)
  * para comparar a taxa de acerto quando o texto mudar — mudou o texto, suba a versão.
  */
-export const VERSAO_PROMPT = 'v5-2026-10-12'
+export const VERSAO_PROMPT = 'v6-2026-10-14'
 
 export const MODELOS: Record<ModeloLeitura, { id: string; rotulo: string }> = {
   rapido: { id: 'claude-haiku-5-5', rotulo: 'rápido (Haiku)' },
@@ -208,13 +194,13 @@ export type ResultadoLeitura =
 
 /**
  * Instrução fixa. Vai em cache: só a imagem muda de uma leitura para outra.
- * Escrita para documentos brasileiros de uma estamparia por sublimação, com
+ * Escrita para documentos brasileiros de uma fabricante de capas de almofada, com
  * as armadilhas que mais confundem leitura automática (vírgula decimal,
  * valor por item × total, desconto na última linha, nº do cupom × COO,
  * CNPJ do emitente × do destinatário).
  */
-function instrucoes(categorias: string[], suprimentos: string[], tecidos: string[], clientes: { nome: string; doc: string | null }[]) {
-  return `Você é o leitor de documentos de compra e despesa de uma estamparia por sublimação no Brasil (impressão de tecidos). Receberá a foto ou o PDF de UM documento e devolverá os dados dele, só os dados: nada de comentários.
+function instrucoes(categorias: string[], suprimentos: string[]) {
+  return `Você é o leitor de documentos de compra e despesa de uma fabricante de capas de almofada no Brasil, que vende pela Amazon, Mercado Livre e Shopee. Receberá a foto ou o PDF de UM documento e devolverá os dados dele, só os dados: nada de comentários.
 
 CAMPO AUSENTE
 - Nenhum campo aceita null. Texto que o documento não traz = "" (string vazia). Número que o documento não traz = 0. condicao_pagamento desconhecida = "nao_informado". Nunca invente valor para preencher.
@@ -230,7 +216,7 @@ TIPOS DE DOCUMENTO
 
 QUEM É O FORNECEDOR
 - O fornecedor é o EMITENTE (quem vendeu/prestou), nunca o destinatário/tomador. Em DANFE o emitente está no cabeçalho; "DESTINATÁRIO/REMETENTE" é o comprador — ignore.
-- A estamparia (compradora) pode aparecer como destinatário; não a devolva como fornecedor.
+- A empresa (compradora) pode aparecer como destinatário; não a devolva como fornecedor.
 - destinatario_nome / destinatario_doc: o comprador ("DESTINATÁRIO/REMETENTE" na DANFE, "CONSUMIDOR"/"CPF/CNPJ do consumidor" na NFC-e, "TOMADOR" na NFS-e), só dígitos no documento. Sem comprador identificado, "" nos dois.
 - fornecedor_doc: CNPJ (14 dígitos) ou CPF (11 dígitos), SÓ DÍGITOS. Se houver dois CNPJs, o do emitente. Se não estiver legível por inteiro, devolva "" — nunca complete dígitos.
 
@@ -246,14 +232,8 @@ ITENS
 - Em cupom de supermercado/papelaria a linha costuma ser "descrição  qtd x unitário  total"; a quantidade pode vir na linha de cima ou de baixo.
 - Desconto que aparece numa linha própria ("DESCONTO", "DESC.") NÃO é item: vai em desconto. Mesmo para "FRETE" (vai em frete) e "ACRÉSCIMO/JUROS" (some em impostos e diga em observacoes).
 - Se o documento não tem itens (NFS-e, recibo, boleto), crie UM item com a descrição do serviço/despesa e o total.
-- categoria: escolha UMA da lista abaixo pelo que o item é, não pelo fornecedor. Tinta de impressora/sublimática → Tinta; papel sublimático/transfer/bobina → Papel sublimático; tecido, malha, poliéster, oxford → Tecido; plástico, saco, caixa, fita → Embalagem; conta de luz → Energia; mão de obra, serviço, costura terceirizada → Serviços de terceiros. Se nenhuma couber, "".
-- suprimento: se o item for claramente o MESMO produto de um dos suprimentos cadastrados (mesmo tipo e, quando houver, mesma cor/modelo), devolva o nome exato do suprimento; na dúvida, "". Nunca marque suprimento em serviço, energia ou aluguel.
-
-TECIDO DE CLIENTE
-- A estamparia estampa tecido que o CLIENTE manda (oxford, tactel, malha, poliéster, helanca, suplex, crepe, cetim…). Esse tecido NÃO é compra da empresa: é matéria-prima do cliente, que entra no estoque dele.
-- tecido_de_cliente = true no item quando ele é tecido (metragem ou rolo de tecido). Tinta, papel, embalagem e serviço são sempre false.
-- tecido: se o item for um dos tecidos cadastrados (mesmo nome ou nome claramente equivalente — "OXFORD 100% POL" é "Oxford"), devolva o nome exato da lista; senão "".
-- tecido_cliente (no cabeçalho): quando há item de tecido, diga de qual cliente é. Procure o nome ou o CNPJ de um cliente da lista no destinatário, no remetente, nas observações ("tecido de", "ref. cliente", "p/") ou no próprio nome do emitente (o cliente pode ser quem emite a remessa). Devolva o nome exato da lista; se nenhum bater, "". Sem item de tecido, "".
+- categoria: escolha UMA da lista abaixo pelo que o item é, não pelo fornecedor. tecido, malha, poliéster, linho, veludo, suede, jacquard → Tecido (tecido comprado é matéria-prima da empresa, compra normal); zíper, linha, botão, viés, enchimento → Aviamentos; etiqueta, tag → Etiquetas; plástico, saco, caixa, fita, envelope → Embalagem; estampa, sublimação ou costura feita por terceiros → Serviços de terceiros; conta de luz → Energia. Se nenhuma couber, "".
+- suprimento: se o item for claramente o MESMO produto de um dos insumos cadastrados (mesmo tipo e, quando houver, mesma cor/modelo/medida), devolva o nome exato do insumo; na dúvida, "". Nunca marque suprimento em serviço, energia ou aluguel.
 
 TOTAIS
 - subtotal, desconto, frete e impostos: 0 quando o documento não traz. subtotal = soma dos itens antes de desconto/frete; total = valor final a pagar impresso no documento ("VALOR TOTAL", "TOTAL A PAGAR", "VALOR LÍQUIDO"). Nunca calcule o total: copie o impresso.
@@ -277,12 +257,10 @@ CONFIANÇA (0 a 1), por campo e por item
 - Foto borrada, inclinada, com reflexo ou cortada: baixe a confiança dos campos afetados. Não invente nada para "completar" o documento.
 
 Categorias de gasto disponíveis (nome exato ou ""): ${categorias.join('; ')}.
-${tecidos.length ? `Tecidos cadastrados (nome exato ou ""): ${tecidos.join('; ')}.` : 'Não há tecidos cadastrados: devolva "" em "tecido" (tecido_de_cliente continua valendo).'}
-${clientes.length ? `Clientes da estamparia (nome exato ou "" em tecido_cliente): ${clientes.map((c) => (c.doc ? `${c.nome} (CNPJ ${c.doc})` : c.nome)).join('; ')}.` : ''}
 ${
   suprimentos.length
-    ? `Suprimentos cadastrados (nome exato ou ""): ${suprimentos.join('; ')}.`
-    : 'Não há suprimentos cadastrados: devolva "" em "suprimento" em todos os itens.'
+    ? `Insumos cadastrados (nome exato ou "" em "suprimento"): ${suprimentos.join('; ')}.`
+    : 'Não há insumos cadastrados: devolva "" em "suprimento" em todos os itens.'
 }`
 }
 
@@ -306,7 +284,7 @@ export async function lerDocumento(entrada: EntradaLeitura): Promise<ResultadoLe
       max_tokens: 16000,
       // Rápido: esforço baixo (custo por página na casa do centavo). Preciso: alto.
       output_config: { effort: entrada.esforco ?? (modelo === 'preciso' ? 'high' : 'low'), format: zodOutputFormat(DocumentoFio) },
-      system: [{ type: 'text', text: instrucoes(entrada.categorias, entrada.suprimentos, entrada.tecidos ?? [], entrada.clientes ?? []), cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: instrucoes(entrada.categorias, entrada.suprimentos), cache_control: { type: 'ephemeral' } }],
       messages: [
         {
           role: 'user',

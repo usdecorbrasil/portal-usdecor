@@ -2,12 +2,11 @@ import 'server-only'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
-export type Papel = 'admin' | 'funcionario' | 'cliente' | 'financeiro'
+export type Papel = 'admin' | 'funcionario' | 'financeiro'
 
 export type Perfil = {
   id: string
   papel: Papel
-  clienteId: string | null
   nome: string | null
   /** Admin e financeiro enxergam preços, totais e faturamento */
   veValores: boolean
@@ -35,18 +34,19 @@ export const lerPerfil = cache(async (): Promise<Perfil | null> => {
 
   const { data } = await supabase
     .from('profiles')
-    .select('id, role, cliente_id, nome, ativo')
+    .select('id, role, nome, ativo')
     .eq('id', user.id)
     .single()
 
   if (!data || !data.ativo) return null
 
+  // Portal só da equipe: qualquer outro papel não entra
+  if (!['admin', 'funcionario', 'financeiro'].includes(data.role)) return null
   const papel = data.role as Papel
 
   return {
     id: data.id,
     papel,
-    clienteId: data.cliente_id,
     nome: data.nome,
     veValores: papel === 'admin' || papel === 'financeiro',
   }
