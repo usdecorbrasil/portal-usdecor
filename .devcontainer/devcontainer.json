@@ -1,5 +1,5 @@
 {
-  "name": "Portal Bello Tecido",
+  "name": "Portal US Decor",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
   "postCreateCommand": "npm install",
   "forwardPorts": [3000],

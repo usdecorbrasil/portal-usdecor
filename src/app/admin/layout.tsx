@@ -58,7 +58,7 @@ export default async function AdminLayout({
           <Link href={abas[0].href} aria-label="Página inicial" className="shrink-0">
             <Image
               src="/logo-horizontal.png"
-              alt="Best Color Tecidos"
+              alt="US Decor"
               width={483}
               height={120}
               priority

@@ -26,7 +26,7 @@ export function templateConviteAcesso({
         <table width="480" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF; border-radius:4px; overflow:hidden;">
           <tr>
             <td style="background:linear-gradient(103deg,#D8007A 0%,#B4005F 100%); padding: 24px 32px;">
-              <span style="color:#FFFFFF; font-size:20px; font-weight:bold; letter-spacing:-0.5px;">Best Color Tecidos</span>
+              <span style="color:#FFFFFF; font-size:20px; font-weight:bold; letter-spacing:-0.5px;">US Decor</span>
             </td>
           </tr>
           <tr>
@@ -35,8 +35,8 @@ export function templateConviteAcesso({
               <p style="font-size:14px; color:#131A2E; line-height:1.6; margin: 0 0 20px;">
                 ${
                   redefinida
-                    ? 'Sua senha de acesso ao portal Best Color Tecidos foi redefinida. Use os dados abaixo para entrar:'
-                    : 'Seu acesso ao portal Best Color Tecidos foi criado. Use os dados abaixo para entrar:'
+                    ? 'Sua senha de acesso ao portal US Decor foi redefinida. Use os dados abaixo para entrar:'
+                    : 'Seu acesso ao portal US Decor foi criado. Use os dados abaixo para entrar:'
                 }
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#FAFAF7; border:1px solid #DDDCD5; border-radius:4px; margin-bottom:24px;">

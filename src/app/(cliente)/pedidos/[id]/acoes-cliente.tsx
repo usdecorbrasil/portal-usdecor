@@ -33,7 +33,7 @@ export default function AcoesCliente({
           Cancelamento solicitado
         </p>
         <p className="text-sm text-[#6E6E68] mt-1.5 leading-relaxed">
-          Sua solicitação foi enviada à Best Color Tecidos. Você recebe o retorno por
+          Sua solicitação foi enviada à US Decor. Você recebe o retorno por
           e-mail e aqui no portal.
         </p>
       </div>
@@ -80,7 +80,7 @@ export default function AcoesCliente({
         </button>
         {!aguardando && (
           <p className="text-xs text-[#6E6E68] text-center mt-2 leading-relaxed">
-            Este pedido já foi confirmado. A Best Color Tecidos avalia a solicitação.
+            Este pedido já foi confirmado. A US Decor avalia a solicitação.
           </p>
         )}
       </div>
@@ -94,7 +94,7 @@ export default function AcoesCliente({
           Cancelar o pedido #{numero}?
         </strong>
         <p className="text-sm text-[#6E6E68] mt-1.5 leading-relaxed">
-          O pedido será cancelado imediatamente e a Best Color Tecidos será avisada.
+          O pedido será cancelado imediatamente e a US Decor será avisada.
           Esta ação não pode ser desfeita.
         </p>
 

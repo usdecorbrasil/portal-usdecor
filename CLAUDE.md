@@ -1,1167 +1,204 @@
-# Portal Best Color Tecidos — Contexto do Projeto
+# Portal US Decor — Contexto do Projeto
 
-Portal web B2B para clientes de uma empresa de estamparia por sublimação. Cada cliente
-acessa uma área restrita, vê apenas o próprio catálogo/preços, monta pedido em carrinho
-e acompanha o status até a entrega.
+Sistema **interno** de gestão da US Decor, fabricante e vendedora de **capas de almofada**
+em marketplaces. Não há área de cliente: quem compra está na Amazon, no Mercado Livre e na
+Shopee. Quem usa o portal é só a equipe.
 
-## Stack
+Derivado do portal da Best Color Tecidos (`usdecorbrasil/portal-bestcolortecidos`), de
+onde vem o código base. Responda e escreva commits, PRs e comentários **em português do
+Brasil**.
 
-| Camada | Tecnologia |
+## Stack (igual à Best Color)
+
+- Next.js 16 (App Router), código em `src/app`, Server Actions em `src/app/actions/*.ts`
+- Supabase (Postgres com RLS, Auth, Storage) — projeto próprio da US Decor
+- Resend para e-mail; Anthropic API para leitura de documentos e análise de estoque
+- Bling: **conta própria da US Decor**, separada da Best Color. Só para nota fiscal, se e
+  quando precisar. Pedidos **não** passam pelo Bling (gera muito erro): ligação direta com
+  os marketplaces.
+- Deploy na Vercel, automático a cada push na `main`
+
+## Estado do repositório
+
+Nasce como cópia do portal da Best Color com o histórico. Primeira tarefa: a **poda**.
+
+### Fica (reaproveitado como está)
+- Login, primeiro acesso com senha provisória, papéis `admin` (dono), `financeiro` (mesmo
+  acesso do dono) e `funcionario` (**nunca vê valores**, em tela nem em resposta do servidor)
+- Financeiro inteiro: notas e recibos lidos por IA e XML, contas a pagar, cartões de
+  crédito da empresa (fechamento/vencimento), A receber, A pagar, baixa em lote, edição
+  com motivo, conciliação de extratos (OFX sem IA; PDF/imagem/CSV por IA), totalizador de
+  fluxo de caixa, custos por compras (média ponderada das notas)
+- Auditoria genérica, notificações à equipe, crons diários, padrão visual de listas
+  densas, busca, carregamento, componentes
+
+### Sai
+- Área do cliente inteira: catálogo, carrinho, envio de artes, "meus pedidos", login de
+  cliente
+- Estamparia: metragem, romaneio, ajuste de metragem, tecido **de cliente**, etapas de
+  produção, impressão, fila, painel de crédito de cliente, limite de crédito
+- Pedido de venda no Bling, cobrança/boleto/Pix do Bling, NF pelo Faturar
+- Marca: "Best Color" → "US Decor" em todo o código, e-mails e remetente
+
+### Entra (módulos novos, nesta ordem)
+1. Produtos, tecidos, insumos, ficha técnica e custo
+2. Estoque por local e lançamentos manuais
+3. Pedidos e repasses por canal (fase 1: relatórios exportados; fase 2: API)
+4. Sugestão de produção e reposição + análise global por IA
+5. Integração direta com os marketplaces
+
+## Canais de venda (7)
+
+| Canal | Logística |
 |---|---|
-| Front-end e back-end | Next.js (App Router) |
-| Banco de dados e autenticação | Supabase |
-| E-mails transacionais | Resend |
-| ERP / gestão de pedidos | Bling (API v3, OAuth 2.0) |
-| Hospedagem | Vercel |
-| Pagamento (boleto) | Bling Conta |
+| Amazon B2C | envio próprio e FBA |
+| Amazon B2B | pela própria Amazon |
+| Mercado Livre | envio próprio e Full |
+| Shopee | envio próprio e Full |
 
-Repositório: `usdecorbrasil/portal-bello-tecido` (GitHub)
+- **Expedição do envio próprio não entra no portal**: é feita nos próprios portais dos
+  marketplaces. O portal só registra a venda e a baixa de estoque.
+- Cada SKU tem um **de-para por canal** (ASIN/SKU Amazon, item e variação no ML, item e
+  modelo na Shopee). É o cruzamento que o Bling errava; aqui é cadastro explícito.
 
-## Papéis de acesso
+## Produtos, tecidos e custo
 
-- **Cliente** (externo): login/senha, sem auto-cadastro (conta criada pelo admin). Só vê
-  o próprio catálogo, preços e pedidos.
-- **Dono** (interno): acesso total, cadastra clientes/catálogos/preços, relatórios,
-  configurações.
-- **Funcionário** (interno): acesso operacional, mas **nunca vê valores monetários** nas
-  telas (mesma regra em todas as telas, inclusive relatórios).
-- **Financeiro** (interno): papel `financeiro`, com **exatamente o mesmo acesso** que o
-  Dono (`admin`) — ver "Papéis: admin e financeiro são o mesmo acesso". Define limite de
-  crédito, controla boletos, parcelamentos, cobranças e contas a pagar.
+### Cadastros
+- **Tecido** (matéria-prima): nome, estoque em metros, **custo médio do metro** calculado
+  das notas de compra cujos itens estão vinculados a ele (mesma média ponderada com janela
+  30/60/90 dias que a Best Color usa em Custos). Assume-se que o tecido entra já
+  estampado, pronto para cortar (corrigir se não for).
+- **Insumo**: zíper, linha, etiqueta, embalagem… com unidade e custo médio pelas notas,
+  igual ao tecido.
+- **Capa (SKU)**: nome, variação (tamanho, estampa), tipo de capa, de-para por canal, e a
+  **ficha técnica**.
+- **Local de estoque**: galpão US Decor, FBA, Full Mercado Livre, Full Shopee. Saldo por
+  SKU por local.
 
-## Catálogo
+### Ficha técnica (por capa)
+Consumo **estimado** por unidade, declarado, não medido. Componentes, cada um opcional
+conforme o tipo de capa:
 
-- Grade estilo marketplace: imagem, SKU, nome do desenho, tecido (fixo por produto, sem
-  seleção pelo cliente), quantidade (repetições — único campo de quantidade), preço
-  conforme tabela do cliente logado.
-- Quantidade editável direto na listagem, com botão "adicionar ao carrinho" no card.
-- Isolamento total entre clientes.
-- Todo item de catálogo tem status **ativo/inativo** controlado pelo admin. Inativos não
-  ficam disponíveis para pedido.
-
-## Envio de artes pelo cliente
-
-- Fluxo separado do pedido, aba própria ao lado do catálogo.
-- Cliente cola link de pasta compartilhada (Drive/Dropbox) com acesso já liberado.
-- Arquivos devem ter nome igual ao SKU (ex.: `ABC-1234.png`); fora do padrão não são
-  processados.
-- Gera notificação ao admin → admin baixa, cadastra no catálogo do cliente → produto
-  fica ativo.
-- Cliente vê histórico dos envios e status (recebido / cadastrado).
-
-## Pedido, carrinho e pagamento
-
-- Carrinho: itens + quantidade + subtotal, total pela tabela de preços do cliente,
-  campo de notas livre.
-- Confirmação grava no banco e cria **pedido de venda** no Bling (não orçamento).
-- **O cliente não escolhe forma de pagamento** (decidido pelo dono em 07/10/2026). O
-  carrinho só tem artes, quantidades e notas; o pedido nasce com `forma_pagamento` e
-  `parcelas_solicitadas` nulos. Quem decide é **admin/financeiro, no botão Faturar**
-  (pedido individual ou agrupador), com o valor real em mãos: boleto à vista, boleto
-  parcelado (nº de parcelas e 1º vencimento), Pix, cartão de crédito ou débito. A RPC
-  `admin_definir_forma_pagamento_faturamento` valida forma ativa, permitida ao cliente,
-  teto e mínimo de parcelas pelo valor real e limite de crédito, grava e registra em
-  `pedido_forma_pagamento_historico` ("Definida no faturamento"). O Faturar abre um
-  resumo de confirmação antes de gravar qualquer coisa. Pedidos antigos, que já tinham
-  forma, chegam com ela pré-selecionada e podem trocar.
-- **Limite de crédito**: conferido **no Faturar**, quando a forma é escolhida (antes era
-  na criação). Boleto que passa do limite, ou parcelado sem crédito, é recusado pela
-  RPC (`hint = 'limite_credito'`); o pedido fica marcado `bloqueado_credito` para o
-  dashboard e a equipe recebe o aviso. Saídas: liberar com motivo no próprio bloco
-  Faturar (`admin_liberar_bloqueio_credito`, que deixou de exigir pedido já marcado) ou
-  escolher outra forma. Pix e cartão não passam por limite.
-- Ajuste de quantidade: permitido aumentar ou reduzir livremente até o lançamento do
-  status "Impressão" (janela de ajuste fecha ali). Exige motivo obrigatório e fica
-  registrado em auditoria. Só o **Dono** tem permissão de alterar quantidade
-  (funcionário não tem).
-- Parcela atrasada: só gera alerta ao financeiro, não trava o fluxo do pedido.
-- Quando todas as parcelas são pagas, o pedido **avança sozinho** para "Pedido fechado".
-
-## Status do pedido — 9 etapas (histórico, não sequência fixa)
-
-| # | Status | Origem |
+| Componente | Informado como | Custo |
 |---|---|---|
-| 1 | Pedido recebido | Automático (criação do pedido) |
-| 2 | Impressão | Manual — painel |
-| 3 | Estampando | Manual — painel |
-| 4 | Estampa pronta (chave `pronto`) | Manual — painel |
-| 5 | Faturado | Botão Faturar (Bling + cobrança + NF) |
-| 6 | Nota fiscal emitida | Faturar |
-| 7 | Expedido | Bling |
-| 8 | Entregue | Bling |
-| 9 | Pedido fechado | Painel (Fechar pedido), sem depender da baixa |
-
-**Corte/costura não existe mais** (08/10/2026): `validar_status_pedido` recusa
-qualquer lançamento da etapa; o valor fica no enum só pelo histórico. Os pedidos
-que estavam nela foram movidos para Estampa pronta pela migration
-`20261008120000`. `admin_ajustar_metragem` só aceita Estampando.
-
-**Faturar faz tudo** (pedido no Bling, cobrança, etapa, nota). O card
-"Documentos do faturamento" na tela do pedido é só leitura; nota ou cobrança
-pendentes se concluem pelo botão "Concluir faturamento" no bloco Pedido faturado,
-que chama `faturarPedido` de novo (retomável).
-
-Importante:
-- O pedido **não** precisa passar por todas as etapas (ex.: retirada em balcão pula
-  Expedido).
-- **Implicação técnica**: a coluna `status` em `pedidos` é **derivada** do último
-  registro em `pedido_status_historico`, não é mais um campo independente atualizado à
-  mão.
-- Admin escolhe a próxima etapa entre as ainda não lançadas e pode desfazer o último
-  lançamento manual.
-- **Arrastar e soltar em `/admin/pedidos`**: arrasta-se a própria linha do pedido (o
-  punho à esquerda foi removido a pedido do dono). No mouse o arraste só começa depois
-  de andar 6px, para o clique continuar abrindo o pedido; no toque exige segurar 350ms
-  parado (tolerância de 10px), para não brigar com a rolagem. Os ouvintes de mouse são
-  presos no próprio `pointerdown`, não num efeito — num efeito, os primeiros movimentos
-  se perdiam esperando o React renderizar. No toque são eventos nativos não-passivos
-  (`preventDefault` no `touchmove`), com `contextmenu` bloqueado e
-  `-webkit-touch-callout: none` na linha, senão o menu de contexto do Android e a prévia
-  de link do iOS cancelam o gesto. Rolagem automática perto das bordas. Destinos vêm de
-  `destinosPermitidos()` em `src/app/admin/pedidos/estagios.ts` e espelham a regra do
-  painel do pedido: uma etapa por vez. Tentar arrastar uma linha que não se move (aguardando confirmação, ou já
-  em etapa do Bling) mostra o motivo (`motivoSemDestino()`) em vez de ignorar.
-- A listagem é densa, em linhas com cabeçalho de colunas por etapa. A coluna
-  **"Parado há"** conta dias desde o **último lançamento de status**, não desde a
-  criação do pedido — a data de criação está na coluna "Entrou", visível também no
-  celular (pedido do dono em 08/10/2026).
-- Toda mudança por arraste **pede confirmação antes de gravar**, e quando a etapa exige
-  dados eles são preenchidos no próprio pop-up: Estampando abre o acerto de metragem e
-  quantidades (gera o romaneio), Impressão abre a conferência de quantidade para o dono.
-  Os modais são os mesmos das duas telas — `src/app/admin/pedidos/modais-status.tsx`.
-
-## E-mails automáticos
-
-Disparo ao cliente em 4 momentos: Pedido recebido, Impressão, Pedido pronto (cobrança +
-boleto + resumo), Nota fiscal emitida (+ PDF da NF).
-
-Outros disparos (ver `project-decisoes_consolidadas.txt` para a lista completa de 14
-gatilhos, incluindo avisos internos à equipe, cancelamentos, envio de artes rejeitado,
-primeiro acesso, recuperação de senha).
-
-`email_log` tem chave única por pedido + tipo → evita disparo duplicado (idempotência).
-
-**Remetente e resposta são coisas separadas.** `RESEND_FROM` precisa ser de um domínio
-verificado no Resend (`@bestcolortecidos.com.br`) — o provedor recusa enviar como
-`@gmail.com`, e o e-mail falharia em SPF/DKIM de qualquer jeito. Para a resposta do
-cliente cair numa caixa que alguém lê, existe `RESEND_REPLY_TO`, aplicado como
-`replyTo` em `src/lib/resend/enviar.ts`; aí sim pode ser Gmail.
-
-## Banco de dados (Supabase) — pontos de atenção
-
-- Schema `public`. Ao investigar estrutura, consultar `information_schema.tables` /
-  `information_schema.columns` antes de assumir nomes de tabela/coluna (o projeto já
-  passou por renomes).
-- Tabelas conhecidas: `pedidos`, `pedido_itens`, `pedido_status_historico`,
-  `pedido_parcelas`, `clientes`, `cliente_limite_historico`, `configuracoes`,
-  `email_log`, `profiles` (usuários/papéis).
-- RLS (Row Level Security) ativo — checar `pg_policies` ao debugar acesso negado.
-- Ao criar relação nova, atualizar o schema cache do PostgREST (Supabase) — erros de
-  relação "não encontrada" logo após criar FK costumam ser isso.
-- Regra transversal: **funcionário nunca deve ver valores monetários** — aplicar em toda
-  query/tela nova, inclusive relatórios.
-
-## Busca e navegação
-
-- **Busca geral** (pedidos + clientes + artes) vive **atrás de uma lupa** no cabeçalho,
-  tanto no painel quanto na área do cliente. Abre em sobreposição, `Esc` fecha.
-- **Busca da página**: campo ao lado do título de cada tela, que filtra a própria página
-  na hora, sem recarregar e sem tirar o usuário de onde ele está. Componente genérico
-  `src/components/busca-pagina.tsx`; a página só marca o conteúdo com atributos:
-  `data-busca` (item), `data-busca-grupo` (bloco que some quando vazio),
-  `data-busca-contagem` (contador do grupo) e `data-busca-vazio` (aviso de nada
-  encontrado). Convive com os filtros de URL da tela (cliente, período, etapa):
-  o servidor filtra primeiro, a busca da página filtra por cima.
-  Cuidados que já deram problema: o `MutationObserver` que reaplica o filtro após
-  `router.refresh()` só pode escrever no DOM o que mudou (reescrever o mesmo
-  `textContent` conta como mutação e vira laço infinito, travando a aba), e a contagem
-  de resultados fica **dentro** da caixa do campo — posicionada abaixo dele, no celular
-  caía em cima da linha seguinte.
-
-## Carregamento entre páginas
-
-Cada área tem um `loading.tsx` (`app/loading.tsx`, `app/admin/`, `app/(cliente)/`) que
-renderiza `src/components/carregando.tsx`: logo pulsando, barra indeterminada e a
-palavra "carregando". O Next troca só o miolo — cabeçalho e navegação continuam na
-tela, então dá para clicar em outra aba sem esperar. As animações (`respira`,
-`desliza`) estão em `globals.css`, com `prefers-reduced-motion` desligando ambas.
-
-Além disso, as abas mostram um pontinho no link clicado enquanto a navegação está
-pendente (`src/components/link-carregando.tsx`, via `useLinkStatus` do Next) — resposta
-imediata ao clique, antes mesmo de o `loading.tsx` entrar. Por causa disso as abas do
-painel viraram client component (`src/app/admin/abas.tsx`).
-
-## Padrão visual das listas
-
-Decidido em 12/09/2026: as telas de lista deixaram de ser cartões espaçados e
-coloridos e passaram a ser **listas densas com cabeçalho de colunas**, com cara de
-sistema de gestão. A cor do estágio continua, mas como sinal (tarja lateral de 1px,
-etiqueta curta), não como fundo de bloco.
-
-O vocabulário está em `src/components/estilo-lista.ts` (`CAIXA`, `CABECALHO`, `CORPO`,
-`LINHA`, `NUM`, `NOME`, `ETIQUETA`, `TITULO_GRUPO`, `VAZIO`) — strings de classe, não
-componentes, porque cada tela tem colunas próprias; o que precisa ser igual é moldura,
-densidade e tipografia. Já aplicado em Pedidos, Fila de impressão, Clientes,
-Financeiro/Boletos, Arquivados, Catálogos e "Meus pedidos" do cliente. Nas grades de
-arte (catálogo), densidade veio de cartão menor e mais colunas, não de virar linha —
-ali a imagem é o conteúdo.
-
-## Catálogo paginado
-
-- Catálogo do cliente e detalhe do catálogo no admin mostram no máximo **24 artes por
-  página** (`POR_PAGINA` em `lista-catalogo.tsx` / `lista-artes.tsx`), com o paginador
-  de `src/components/paginacao.tsx`.
-- **A busca varre o catálogo inteiro, não a página aberta.** Para isso `BuscaPagina`
-  tem um modo controlado: com `ProvedorBusca` (`src/components/busca-contexto.tsx`) em
-  volta, ela só publica o texto e recebe de volta a contagem; quem filtra é a lista.
-  Sem provedor, segue filtrando o DOM por atributos como nas demais telas.
-- A página corrente fica guardada junto do termo que a produziu, então busca nova
-  recomeça da primeira página sem efeito nem setState em cascata.
-
-## Painel do Dono — extras
-
-- **Aba Produção**: gestão operacional dos status.
-- **Aba Relatórios** (a construir): Faturamento, Pedidos, Por cliente, Metragem
-  produzida, Retrabalho, Ajustes de quantidade, Cancelamentos, Artes mais pedidas.
-  Filtro por período (com atalhos) e por cliente, exportação CSV/PDF, exclusivo do Dono.
-  Pedidos cancelados ficam fora dos totais de faturamento.
-- **Configurações** (a construir): tabela `configuracoes` (uma linha por chave), lida
-  pelo servidor, alterações logadas em auditoria. Segurança: sessões ativas, histórico
-  de acessos, exportação de dados (LGPD).
-
-## Integração com o Bling — o que já existe
-
-- **Cliente do portal espelha no Bling** (`src/lib/bling/contato.ts`), no cadastro **e
-  em toda edição**. O portal guarda os campos fiscais necessários para nota fiscal
-  (`inscricao_estadual`, `indicador_ie`, endereço completo — `docs/sql/005`), então ele é
-  a fonte desses dados.
-  - Atualização faz **GET, mescla e PUT**: o PUT do Bling substitui o contato inteiro, e
-    o ERP tem campos que o portal não conhece (vendedor, código, extras). Sem mesclar,
-    eles se perderiam. O bloco `endereco` é mesclado à parte, senão o endereço de
-    cobrança sumiria.
-  - Endereço só é enviado quando há CEP **e** logradouro: mandar bloco vazio apagaria
-    endereço existente.
-  - `indicador_ie` 1 = contribuinte, 2 = isento, 9 = não contribuinte (padrão). Sem ele
-    o Bling recusa pessoa jurídica.
-  - Os 4 clientes reais tiveram os dados fiscais **importados do Bling em 12/09/2026**
-    (IE, indicador, endereço completo) e já estão vinculados por `bling_contato_id`.
-    Foi uma importação pontual, feita por script; não existe tela para isso.
-- **Limite de crédito só no portal** (decisão do dono, 09/10/2026). O contato no Bling tem
-  limite próprio, que soma tudo o que o Bling tem em aberto para o cliente (inclusive
-  contas que o portal não conhece) e recusou o pedido #1025 ("O limite de crédito do
-  cliente não permite a inclusão deste pedido"). Quando o Bling recusa por limite,
-  `criarPedidoNoBling` chama `liberarLimiteNoBling` (`src/lib/bling/contato.ts`: GET,
-  mescla e PUT com `financeiro.limiteCredito = 0`), registra em `auditoria` e tenta o
-  pedido uma vez de novo. Se ainda barrar, a mensagem manda marcar "Limite ilimitado" no
-  contato do Bling. Para limpar de uma vez, Configurações → Bling → "Tirar o limite do
-  Bling de todos os clientes" (`tirarLimitesNoBling` em `actions/bling.ts`): passa por
-  todos os clientes (vínculo gravado ou busca por CNPJ), pula quem já está sem limite e
-  registra cada mudança na auditoria do cliente. Cliente novo ou editado no portal já vai
-  ao Bling com `financeiro.limiteCredito = 0` (`corpoDoContato`, com o bloco `financeiro`
-  mesclado como o `endereco`).
-- **Limite de crédito não é alterável por fora.** Há trava no banco exigindo
-  `atualizar_limite_credito()`, e a função identifica quem chama pela sessão — chave de
-  serviço não passa. Só pelo portal, logado como admin/financeiro, e com motivo, que vai
-  para `cliente_limite_historico`. Confirmado em 13/09/2026: a alteração pelo portal
-  funciona.
-- **Pedido de venda criado no Faturar** (`faturarPedido` → `src/lib/bling/pedido.ts`),
-  não na confirmação nem ao lançar "Estampa pronta": o valor é metragem × preço/metro e a metragem só existe depois da
-  estampa. Vai com **uma linha de metragem** (produto genérico `ESTAMPA`, unidade `m`),
-  não uma por arte — no portal a quantidade de peças serve à produção, não ao preço, e
-  somar peças não fecharia com o total nem com os boletos. A taxa da forma de pagamento
-  entra em `outrasDespesas`.
-- Configuração em `configuracoes.bling` (JSON): `produtoEstampaCodigo`,
-  `formaPagamentoId` (11079000 = "Boleto - Bling Conta") e `formaPagamentoPixId`
-  (11079001 = "Pix - Bling Conta"). **É a forma de pagamento da parcela que faz o Bling
-  gerar boleto ou Pix.**
-- **Os links de pagamento não ficam no pedido de venda.** Nascem nas contas a receber
-  que o Bling cria a partir dele, em `linkQRCodePix` e `linkBoleto`
-  (`src/lib/bling/cobranca.ts`). A busca é por contato e casa parcela por
-  **vencimento + valor**, porque o vínculo com o pedido não é exposto de forma
-  confiável — a conta que inspecionei tinha `origem` zerado.
-- **Boleto à vista com vencimento escolhido** (08/10/2026): no Faturar o campo
-  "Vencimento" vem com o padrão de 4 dias úteis e pode ser alterado até **30 dias
-  corridos** (`PRAZO_MAXIMO_BOLETO_AVISTA_DIAS` em `config.ts`, espelhado na RPC
-  `admin_definir_forma_pagamento_faturamento`, migration `20261008180000`). A RPC grava
-  `pedidos.vencimento_avista`, que `criarPedidoNoBling` e a cobrança já usavam.
-- **Teto de parcelas é 4** (decidido em 13/09/2026), em três lugares que precisam
-  concordar: `MAX_PARCELAS` em `src/lib/pagamento/config.ts`, os schemas zod das
-  actions, e o CHECK `pedidos_parcelas_solicitadas_check` no banco. Já houve
-  descompasso: o CHECK estava em 3 enquanto a tela oferecia mais, e o pedido seria
-  recusado só na hora de gravar.
-- `pedidos.forma_pagamento` é `text` com CHECK (`pedidos_forma_pagamento_check`), não
-  enum — valor novo exige recriar a restrição (`docs/sql/006`).
-- **A API limita 3 requisições por segundo** — daí as pausas entre chamadas.
-- Falha de sincronia **nunca** derruba a operação do portal: fica em
-  `pedidos.bling_erro` / `bling_sync_status` e aparece na tela do pedido, com botão
-  **tentar de novo** (`reenviarPedidoAoBling`) — antes só dava para relançar a etapa de
-  produção, mexendo no histórico por causa de falha de integração. No cadastro e na
-  edição de cliente, aparece como aviso no próprio formulário.
-- Já verificado nesta conta: os SKUs do portal **são** os códigos de produto do Bling
-  (`D10409` etc.).
-
-**Validação contra o ERP, em ordem de custo de reverter:**
-
-1. ~~Editar cliente que já existe no Bling~~ — **funcionou em 13/09/2026**: alterar o
-   e-mail de um cliente no portal atualizou o contato no Bling. O caminho
-   `GET` + mescla + `PUT` está provado.
-2. Cadastrar cliente novo (`POST /contatos`) — **não testado**. Será feito depois da
-   limpeza dos dados de teste, junto do fluxo completo.
-3. Levar um pedido até "Pedido pronto" (`POST /pedidos/vendas`, e-mail de cobrança e
-   parcelas com taxa de uma vez) — **não testado**.
-
-Os dois que faltam estão escritos a partir do formato observado em leitura e podem
-esbarrar em campo obrigatório não previsto. O erro do Bling aparece na própria tela.
-
-## Integração com o Bling
-
-- API v3, OAuth 2.0. Credenciais na área de aplicativos do painel Bling.
-- Pedido faturado no portal (botão Faturar) → criado no Bling como pedido de venda.
-- Sincronização de volta: Nota fiscal emitida, Expedido, Entregue, baixa financeira
-  (gatilho de "Pedido fechado").
-- Desligar o envio automático de NF no painel do Bling (o portal controla isso).
-
-## Pendências conhecidas (checar status atual antes de assumir resolvido)
-
-- ~~Registrar e configurar `bestcolortecidos.com.br`~~ — **feito em 12/09/2026**.
-  A zona é hospedada no próprio Registro.br (`d.sec.dns.br` / `e.sec.dns.br`, SOA
-  `hostmaster.registro.br`), com DNSSEC ativo. Registros criados: `portal` CNAME para o
-  alvo específico do projeto na Vercel (`e9f1570091ff32a5.vercel-dns-017.com`, **não** o
-  genérico `cname.vercel-dns.com`), mais `send`/`rsend` CNAME e `resend._domainkey` TXT
-  do Resend e `_dmarc`.
-  - **E-mail validado ponta a ponta em 12/09/2026**: domínio verificado no Resend, envio
-    real de `pedidos@bestcolortecidos.com.br` chegou na **caixa de entrada** (não spam),
-    e a resposta do cliente voltou para `bestcolortecidos@gmail.com` via `Reply-To`.
-    O DMARC está em `p=none` (só monitora) — se um dia cair em spam, é o primeiro lugar
-    a apertar.
-  - A `RESEND_API_KEY` é restrita a envio: consultas à API de domínios são recusadas com
-    `restricted_api_key`. Para ver status de domínio, só pelo painel.
-  - **O domínio raiz e o `www` continuam sem registro** — quem digita
-    `bestcolortecidos.com.br` não chega a lugar nenhum. O site institucional não está
-    nessa zona.
-  - **Site institucional a fazer** (anotado em 13/09/2026): não existe nada em
-    `bestcolortecidos.com.br`. O portal fica no subdomínio e não muda de lugar; o site
-    é projeto separado, e quando existir é ele que ocupa a raiz e o `www`.
-- ~~Migrar do `.vercel.app` para o domínio próprio~~ — **feito em 12/09/2026**. O portal
-  está em `https://portal.bestcolortecidos.com.br`, com certificado emitido. As
-  variáveis na Vercel (`SITE_URL`, `BLING_REDIRECT_URI`, `RESEND_FROM`,
-  `RESEND_REPLY_TO`) e a URL de redirecionamento no painel do Bling apontam para o
-  endereço novo, e a conexão com o Bling foi testada com HTTP 200 depois da troca.
-  O refresh do token **não** usa `redirect_uri` (só `grant_type=refresh_token` com
-  Basic auth), então trocar o endereço não invalida o token existente.
-- **Portal ficará em `portal.bestcolortecidos.com.br`** (subdomínio, não subpasta).
-  Subpasta exigiria proxy reverso no servidor do site institucional, com risco conhecido
-  em cookie de sessão, além de `basePath` no Next.
-- ~~Conectar o Bling~~ — **feito em 09/09/2026**. OAuth concluído, token gravado em
-  `integracao_bling`, teste de conexão retornando HTTP 200. Configurações mostra o
-  status e permite testar. Falta tudo o que vem depois do OAuth (ver abaixo).
-- **Bling usa dois hosts** — `www.bling.com.br` só para OAuth (authorize/token) e
-  `api.bling.com.br` para as chamadas de recurso. Chamar recurso em `www` devolve
-  403 FORBIDDEN. Separado em `src/lib/bling/cliente.ts` (`BASE_OAUTH` / `BASE_API`).
-- ~~Migração JWT do Bling~~ — **feito em 08/10/2026** (aviso do Bling: tokens opacos
-  desligados em 15/10/2026). `CABECALHO_JWT` (`enable-jwt: 1`) vai no POST
-  `/oauth/token` no callback e no refresh (`src/lib/bling/cliente.ts`). Configurações
-  mostra "Formato do token: JWT / opaco"; o opaco vira JWT na próxima renovação ou ao
-  reconectar. Nas chamadas de recurso o cabeçalho não é enviado: token JWT funciona
-  sem ele, e token opaco com ele devolve 401.
-- Abrir Bling Conta / habilitar boletos.
-- Definir prazo padrão de vencimento do boleto.
-- Criar produto genérico de estampa no Bling.
-- Definir gateway de pagamento para cartão de crédito/débito.
-- ~~Limpeza dos anexos de envio de arte não existe~~ — **feito em 09/10/2026**:
-  `/api/cron/limpeza`, chamada todo dia pelo workflow `avisos-diarios.yml`. Apaga do
-  bucket `envios-arte` o **original** enviado pelo cliente 25 dias depois de o envio ser
-  marcado como cadastrado (`arquivos_expiram_em`; nunca antes de 15 dias, e envio em
-  análise ou rejeitado nunca sai) — o catálogo guarda só a miniatura de até 500 KB no
-  bucket `artes`, que a limpeza não toca; a equipe precisa guardar o original antes do
-  prazo (decisão do dono, 09/10/2026). Do bucket `despesas`, apaga as fotos/PDFs com mais
-  de 15 dias que nenhuma nota usa. Registros ficam para o histórico. `?simular=1` só conta; o
-  agendamento só simula até a variável do repositório `LIMPEZA_ATIVA` ser `1`, e rodando à
-  mão escolhe-se simular ou apagar.
-- ~~Integração com o Bling existe só no OAuth~~ — **superado**: o Faturar cria o pedido
-  de venda, a cobrança e a NF; a baixa de pagamento vem de hora em hora
-  (`/api/cron/pagamentos`); "Pedido fechado" se lança no painel. Expedido/Entregue
-  vindos do Bling ainda não são lidos.
-- **E-mails: 4 dos 14 gatilhos** implementados (`convite_acesso`, `pedido_recebido`,
-  `em_producao`, `pedido_pronto`). Falta NF emitida, cancelamentos, ajuste de
-  quantidade, artes rejeitadas, recuperação de senha e todos os avisos internos à
-  equipe.
-  - A **cobrança** (antes `pedido_pronto`, disparada em `lancarStatus`) hoje sai no
-    **Faturar**, junto com o pedido no Bling. Traz metragem, mercadoria, taxa da forma de pagamento,
-    total e as parcelas com vencimento. Falhar no e-mail **não** derruba o lançamento da
-    etapa — produção não pode travar porque a mensagem não saiu, e `email_log` garante
-    que o reenvio não duplica.
-  - Enquanto os boletos não são emitidos pelo Bling, a linha digitável vem nula e o
-    e-mail avisa que os boletos chegam em seguida, em vez de mostrar espaço vazio.
-- Pedidos estampados antes da migração de custos não têm custo gravado e aparecem na
-  Apuração com lucro igual à receita inteira.
-- **Limpar os dados de teste do banco** (anotado em 12/09/2026). Situação em 12/09:
-  9 clientes, dos quais **5 são de teste** — "Cliente Top", "Cliente Numero Dois",
-  "Cliente Tres", "cliente quatri", "cliente estampa", criados entre 14 e 24/08. Os de
-  26/08 (ROSA D'COR, Mirela Tramare, Ju Decor, Influence) são reais e existem no Bling.
-  Volume total: 19 pedidos, 41 itens, 17 parcelas, 63 lançamentos de status, 20 linhas
-  de `email_log`, 412 produtos, 6 catálogos, 12 profiles.
-  - **Não é um `delete` simples.** Apagar cliente atinge `profiles` **e o usuário em
-    `auth.users`** (que o cascade do banco não alcança — tem que ir pela Admin API),
-    além de `catalogos`, `produtos`, `envios_arte` e todos os pedidos com seus itens,
-    parcelas, histórico e `email_log`.
-  - **Fazer isso antes de a integração começar a escrever no Bling.** Hoje nenhum
-    pedido tem `bling_pedido_id` e nenhum cliente tem `bling_contato_id`, então apagar
-    não deixa órfão no ERP. Depois do primeiro pedido sincronizado, cada exclusão no
-    portal passa a exigir decidir o que fazer com o correspondente no Bling.
-  - Conferir também se algum produto/catálogo pertence só a cliente de teste antes de
-    apagar — 412 produtos é catálogo real de cliente real na maior parte.
-- ~~Aviso interno de pedido novo~~ — **feito em 13/09/2026**. Configurações → Notificações
-  ("Avisos para a equipe"): lista de e-mails por tipo, em `configuracoes.notificacoes`
-  (JSON, `docs/sql/014` cria a linha já com `bestcolortecidos@gmail.com`). Tipos hoje:
-  `pedido_novo` (dispara em `criarPedido`, depois de o pedido existir),
-  `pedido_cancelado` (em `clienteCancelar` — cliente cancela pedido ainda aguardando
-  confirmação; não exige resposta) e `cancelamento_solicitado` (em
-  `solicitarCancelamento` — pedido já confirmado; exige resposta). São dois eventos
-  distintos no banco (`cliente_cancelar_pedido` × `cliente_solicitar_cancelamento`), por
-  isso dois avisos. Regras em
-  `src/lib/notificacoes/config.ts` (puro) e envio em `src/lib/notificacoes/enviar.ts`.
-  - **Um e-mail só, com todos os destinatários no "para"**: assim `email_log` fica com uma
-    linha por pedido + tipo e a trava de duplicidade continua valendo. `enviarEmail`
-    passou a aceitar lista em `destinatario`.
-  - **Nunca derruba a operação.** Falha de aviso vai para o log do servidor.
-  - Quem não está na lista não recebe — inclusive o administrador. Tipo novo = adicionar
-    em `TIPOS`/`ROTULOS` e chamar `notificarEquipe` no ponto certo; a tela se ajusta.
-- **Setup de automação / editor de etapas (a construir)** — decidido em 12/09/2026:
-  área dentro de Configurações para **incluir, excluir e editar os status/estágios** do
-  pedido. Hoje as etapas são constantes espalhadas pelo código
-  (`src/app/admin/pedidos/estagios.ts`, `ETAPAS_MANUAIS` em `app/actions/producao.ts` e
-  o enum aceito pela RPC `admin_lancar_status`); tornar isso configurável exige mover as
-  etapas para o banco e ajustar essas três pontas juntas.
-
-## Totalizador de contas a receber e a pagar (12/10/2026)
-
-Card no topo do Financeiro (`financeiro/card-fluxo.tsx` servidor + `fluxo-caixa.tsx` cliente,
-incluído em `financeiro/(abas)/layout.tsx`): a receber e a pagar **que vencem no período**
-(atalhos 7 / 15 / 30 dias a partir de hoje, ou datas personalizadas), saldo previsto
-(receber − pagar) e, à parte, o que **já venceu** de cada lado e as cobranças ainda sem
-vencimento (boleto a emitir). Dados de `resumoFluxoCaixa(de, ate)` em
-`actions/fluxo-caixa.ts`: a receber vem de `parcelas_a_receber` (pedidos), a pagar de
-`contas_pagar` abertas. O layout não recebe `searchParams`, por isso o período fica em
-estado do cliente e a troca chama a action. Sem migration.
-
-## Conciliação de extratos (12/10/2026, migration `20261012140000`)
-
-Financeiro → **Conciliação** (aba do card Contas, `financeiro/(abas)/conciliacao`). Pedido do
-dono: provar que tudo o que passou na conta corrente e no cartão está lançado.
-
-- **Importar** (`importarExtrato` em `actions/conciliacao.ts`): tipo banco ou fatura de cartão
-  (exige o cartão de `cartoes_credito`). **OFX** é lido sem IA (`src/lib/conciliacao/ofx.ts`,
-  puro: `<STMTTRN>`, 1.x SGML ou 2.x XML, ISO-8859-1 por padrão, `TRNAMT` com vírgula aceito).
-  PDF, imagem ou CSV passam por `src/lib/conciliacao/ler-extrato.ts` (IA, esquema de fio sem
-  null como o das notas, `VERSAO_PROMPT_EXTRATO`, CSV vai como texto; `max_tokens` estourado
-  devolve "divida o período"). Arquivo no bucket `extratos`; tabelas `extratos` e
-  `extrato_lancamentos` (só leitura para `authenticated`; escrita por chave de serviço e RPCs).
-- **Casamento** (`src/lib/conciliacao/casar.ts`, puro): valor igual é obrigatório (1 centavo);
-  data perto do vencimento/pagamento (banco, 7 dias) ou da **data da compra** (cartão, 5 dias);
-  nome do fornecedor/cliente na descrição pontua; `PARC 02/03` na fatura precisa bater com a
-  parcela da conta. Certeza **alta** (≥85 e 15 à frente), **média**, ou **nenhuma** (sem
-  candidata, ou duas empatadas — a tela lista e a equipe escolhe). Saída ↔ `contas_pagar`
-  (não canceladas, vencimento no período ± margem); entrada ↔ `parcelas_a_receber`.
-- **Tela** (`conciliacao/[id]/conciliar.tsx`): quadros entradas/saídas/conciliados/pendentes/
-  ignorados, filtro, cada lançamento com a sugestão, seletor com as 5 melhores + busca manual,
-  **"dar baixa/confirmar recebimento com a data e o valor do extrato"** (marcado por padrão
-  quando a conta/cobrança está em aberto), ignorar com motivo (tarifa, transferência, pagamento
-  da fatura), desfazer (a baixa feita **fica** — estorna-se em A pagar / no pedido), link
-  "lançar nota" para saída não lançada. **Fechar** só sem pendente; reabrir volta a aceitar
-  mudanças; excluir só sem nada conciliado (apaga o arquivo do bucket).
-- **RPCs**: `admin_conciliar_lancamento` (saída exige conta, entrada exige pedido; com
-  `p_baixar` chama `admin_baixar_conta_pagar` / `admin_registrar_recebimento` na data e valor
-  do extrato; índices únicos parciais impedem a mesma conta/cobrança em dois lançamentos),
-  `admin_ignorar_lancamento`, `admin_desfazer_conciliacao`, `admin_fechar_extrato`,
-  `admin_excluir_extrato`. Auditoria entidade `extrato`.
-- **Etiqueta nas listas**: conta a pagar ou cobrança conciliada aparece com `✓ extrato` em A pagar
-  e A receber (consulta a `extrato_lancamentos` conciliados por `conta_pagar_id` /
-  `pedido_id + numero_parcela`), o detalhe mostra a data do lançamento e o link para o extrato,
-  e o CSV de A pagar leva a coluna "Extrato".
-
-## Baixa manual: confirmar recebimento e pagamento (12/10/2026, migration `20261012130000`)
-
-Pedido do dono: controle financeiro nas listas. Em **A receber** e **A pagar**, cada
-cobrança/conta em aberto tem **caixa de seleção**; marcadas, aparece a barra fixa com data,
-observação e "Confirmar recebimento/pagamento" em lote. Abrir a linha mostra o detalhe com
-o mesmo botão (A pagar já tinha "registrar pagamento"; A receber ganhou o painel, com link
-para o pedido). `a-receber/lista-receber.tsx` substituiu `filtro-status.tsx`.
-
-- **A receber**: RPC `admin_registrar_recebimento(p_pedido_id, p_numero_parcela, p_recebido_em,
-  p_valor, p_obs)` — parcelado é parcela por parcela (`pedido_parcelas.pago_em`; com a última,
-  `pedidos.pago_em`/`valor_pago`); à vista é o pedido (valor = o listado, senão
-  `valor_cobranca_pedido`). Data futura, pedido cancelado, à vista em pedido parcelado e
-  parcela já recebida são recusados. Deixa rastro no andamento com origem **`sistema`**
-  ("Recebimento confirmado pelo financeiro (parcela n) por Fulano: obs") — origem `admin`
-  seria barrada por `status_bloquear_por_atraso`, e receber é o que destrava. A baixa
-  automática do Bling continua. Action `confirmarRecebimentos` em `actions/recebimentos.ts`
-  (uma RPC por item, auditoria `pedido`/`pagou`, erros por item sem derrubar o lote).
-- **A pagar**: `baixarContasPagarEmLote(ids, pagoEm, obs)` chama `admin_baixar_conta_pagar`
-  por conta, **pelo valor da conta** — juros/desconto continuam pelo detalhe.
-- **Edição geral** (dono, 12/10/2026, migration `20261012160000`): em A pagar, "editar a
-  conta" (só em aberto) muda descrição, categoria, **forma** (crédito/boleto/a pagar — pago,
-  Pix e débito entram quitados, então não), **cartão** (obrigatório no crédito, limpo fora
-  dele), vencimento e valor, com motivo ≥ 10; `admin_alterar_conta_pagar` ganhou os campos
-  novos (a assinatura antiga de 4 parâmetros foi removida) e anota "Alterada (antes: …)" em
-  `observacao` + auditoria. Em A receber, "editar vencimento ou valor" da parcela (à vista
-  só o vencimento, `pedidos.vencimento_avista`) pela RPC `admin_alterar_cobranca_pedido`,
-  que recusa parcela/pedido já recebido e deixa rastro no andamento (origem `sistema`);
-  **boleto/Pix já emitido no Bling não muda** — a tela avisa.
-
-## Painel de crédito (08/10/2026)
-
-Financeiro → **Crédito** (`src/app/admin/financeiro/credito`; **card próprio** abaixo dos
-cards de abas, não uma aba — pedido do dono em 08/10/2026; as abas vivem no grupo de rota
-`financeiro/(abas)`). Desde 08/10/2026 as abas ficam em dois cards (`financeiro/abas.tsx`):
-**Contas** — A receber (o antigo Boletos, rota `a-receber`; `/admin/financeiro/boletos`
-redireciona) e A pagar — e **Custos e resultados** — Custos, Apuração, Relatórios. O card
-da aba aberta mostra o conteúdo; o outro fica só com as abas. Painel de crédito: por cliente, limite,
-crédito em uso (`credito_em_uso`), histórico de boletos (parcelas + boleto à vista de
-`pedidos`), **score 0–100** e sugestão de limite, com CSV. A regra é pura em
-`src/lib/credito/score.ts` (pontualidade de −50 a +50 — pago com atraso ou vencido
-**desconta**, decidido em 08/10/2026 — + volume 30 + frequência 20 − 10 por vencido
-aberto, score preso entre 0 e 100); os pesos estão em `decisoes-atualizadas.md`. A sugestão nunca grava sozinha: o
-botão "Aplicar sugestão" só pré-preenche o ajuste, que segue pela
-`atualizarLimiteCredito` com motivo. Mudanças de limite são lidas de `auditoria`
-(campo "Limite de crédito"). Sem migration. A ficha lista os boletos em três blocos —
-em aberto (vencidos primeiro), **a emitir** (pedidos em boleto sem parcela nem cobrança
-gerada, `carregarPrevistos`, espelho da 2ª metade de `credito_em_uso`) e pagos — para o
-"em boletos hoje" fechar com o que está listado.
-
-## Despesas por nota e estoque de suprimentos (08/10/2026)
-
-Pedido do dono: fotografar ou anexar a nota de compra, a IA lê e pré-preenche, a equipe
-confere e salva; controle de gastos por categoria e estoque de suprimentos (tinta, papel)
-com consumo manual ou automático por metro estampado. Migration `20261008150000`.
-
-- **Onde**: Estoque ganhou divisões — Tecido dos clientes (o que existia), **Suprimentos**
-  (`/admin/estoque/suprimentos`, equipe inteira; custo só para quem vê valores) e
-  **Despesas e notas** (`/admin/estoque/despesas`, só admin/financeiro).
-- **Leitura por IA** em `src/lib/despesas/ler-documento.ts` (`messages.parse` com saída
-  estruturada por zod): dois modelos — **rápido** = `claude-haiku-5-5`, padrão, esforço
-  baixo, ~R$ 0,01 por página (o dono pediu a opção mais barata em 08/10/2026; as
-  alternativas de outros fornecedores ficam na mesma fração de centavo); **preciso** =
-  `claude-opus-5-5`, esforço alto, ~R$ 0,40, acionado pelo botão "Reler com o modelo
-  preciso" sobre o mesmo arquivo já guardado (`relerDespesa`). O modelo usado fica em
-  `despesas.modelo_ia` para comparar a taxa de acerto. A instrução fixa (em cache) é
-  longa de propósito: emitente × destinatário, vírgula decimal, desconto/frete em linha
-  própria, nº × COO, impostos inclusos × destacados, regras de categoria para
-  suprimentos de sublimação. Exige `ANTHROPIC_API_KEY`; sem ela a tela só aceita à mão.
-  Configurações → Integrações → **Leitura de notas por IA** (`integracao-ia.tsx`) mostra se
-  a chave existe, explica como ligar e testa com `testarChaveIa()` (pergunta mínima ao
-  modelo rápido, fração de centavo).
-  `src/lib/despesas/validar.ts` confere dígito verificador de CNPJ/CPF e da chave de
-  acesso antes de gravar. **A IA nunca grava**: `lerDespesa` guarda o arquivo no bucket
-  `despesas` e devolve um rascunho; a tela de conferência (`despesas/nova/captura.tsx`)
-  é a mesma com ou sem IA, campo com confiança < 0,7 fica amarelo, e `salvarDespesa`
-  grava documento + itens.
-- **Câmera com moldura** (`despesas/nova/camera-nota.tsx`): "Tirar foto" abre a câmera
-  traseira dentro do portal (`getUserMedia`, tela cheia) com moldura Nota (A4) ou Cupom,
-  fora dela escurecido, lanterna quando o aparelho deixa, e prévia "tirar outra / usar
-  esta foto". A foto sai recortada na moldura (+4% de margem), convertendo a moldura da
-  tela para pixels do vídeo em `object-cover`. Sem permissão ou suporte, botão "usar a
-  câmera do celular" cai no input de arquivo de antes.
-- **Compressão no aparelho**: a foto é reduzida no navegador (lado maior 1600 px,
-  JPEG 82%, `createImageBitmap` com orientação do EXIF) antes de subir. O original não
-  sobe. `next.config.ts` tem `serverActions.bodySizeLimit: 12mb` por isso.
-- **Tabelas**: `categorias_despesa` (semeadas: Tinta, Papel sublimático…), `despesas`
-  (chave de acesso única entre as não excluídas; exclusão lógica com motivo pela RPC
-  `admin_excluir_despesa`), `despesa_itens` (categoria + `suprimento_id` opcional),
-  `suprimentos` (unidade, mínimo, `consumo_por_metro`), `suprimento_movimentos`
-  (entrada | consumo | ajuste) e a view `suprimento_saldos`.
-- **Item sem suprimento na conferência** (08/10/2026): o seletor "Entra no estoque como"
-  vincula a um suprimento existente ou abre "+ cadastrar novo suprimento…", um cadastro
-  rápido no próprio item (nome da descrição, unidade da nota traduzida — LT→L, RL→rolo,
-  MTS→m —, categoria, consumo por metro) que chama `criarSuprimento` e já vincula. Item de
-  categoria de estoque (tinta, papel, embalagem) sem vínculo fica amarelo com o aviso, e
-  unidade da nota diferente da do suprimento avisa que a QTD entra na unidade do estoque.
-- **Sugestão de vínculo** (`src/lib/suprimentos/sugerir-vinculo.ts`, puro): para item sem
-  suprimento, procura primeiro no histórico de notas salvas (mesmo código do mesmo
-  fornecedor, ou mesma descrição — aprende a cada nota) e depois pelo nome do suprimento
-  dentro da descrição, com sinônimos de nota (SUBLIM, LT, MTS, GR…) e números pesando em
-  dobro (1 L × 5 L). Certeza alta vincula sozinho com o aviso verde "vinculado sozinho…
-  confira"; média mostra "Parece ser X · vincular · não é este". Empate entre dois
-  candidatos não sugere. O cadastro rápido avisa "já existe parecido" antes de duplicar.
-- **Quem lê o quê** (migration `20261009100000`): `suprimento_movimentos` é só de
-  admin/financeiro (tem `custo_total`); a produção lê `suprimento_movimentos_producao`
-  (view sem custo, com `pedido_numero`). `suprimento_saldos` só responde para a equipe
-  interna. `saldo_tecido()` não é chamável pela API — só pelas funções do banco.
-- **Item de nota com suprimento vira entrada no estoque** (gatilho
-  `despesa_item_entrada_suprimento`, com o custo). Excluir a nota lança o ajuste inverso.
-- **Custos pelas compras** (08/10/2026): Financeiro → Custos mostra a média
-  ponderada das entradas de suprimento com custo (notas) nos últimos 30/60/90 dias
-  (`src/lib/custos/sugestao.ts`, puro; leitura em `src/lib/custos/compras.ts`).
-  Papel = suprimento de categoria "papel" em **metros**: só o custo médio do metro
-  comprado, sem fator de consumo (decisão do dono em 08/10/2026). Tinta = categoria "tinta" em
-  **L ou mL**: R$/L médio; o coeficiente (mL/m) é a **soma** do `consumo_por_metro` de
-  cada tinta (uma por cor), e sem cadastro fica o valor atual. Calandra nunca muda.
-  "Usar estes valores" só preenche o formulário. O modo automático
-  (`configuracoes.custos_automaticos` = `{ativo, janelaDias}`, desligado por padrão) faz
-  `salvarDespesa` chamar `atualizar_custos_producao` quando a nota tem item ligado a
-  suprimento. Custo continua congelado por pedido no romaneio: apuração passada não muda.
-- **Consumo automático**: `pedidos_sincronizar_consumo_suprimentos`, espelho do consumo
-  de tecido — para cada suprimento com `consumo_por_metro`, mantém o consumo do pedido
-  igual a `metragem_impressa × fator`; roda no mesmo UPDATE do romaneio e do ajuste de
-  metragem. Suprimento sem fator é só manual (`registrar_movimento_suprimento`, equipe).
-- **Conferência automática da leitura** (09/10/2026, migration `20261009140000`):
-  - **Chave de acesso manda**: os 44 dígitos trazem CNPJ/CPF do emitente, modelo, série,
-    número e mês/ano (`src/lib/despesas/chave.ts`, puro). Com chave válida, a leitura é
-    corrigida sozinha (aviso verde "Corrigido pela chave"), a tela mostra divergência ao vivo
-    com o botão "usar o que a chave diz", e o servidor e o gatilho `despesas_validar`
-    recusam CNPJ ou número diferentes da chave.
-  - **Releitura automática**: se o rápido erra o que dá para provar (dígito de CNPJ ou chave,
-    soma que não fecha por mais de R$ 0,05, total ausente — `problemasDaLeitura` em
-    `src/lib/despesas/conferir.ts`), `lerEConferir` relê uma vez com o preciso em esforço
-    médio e fica com a leitura de menos problemas. Por isso a tela nova tem
-    `maxDuration = 120`. O botão manual "Reler com o modelo preciso" continua.
-  - **Duplicidade**: o gatilho recusa mesmo fornecedor + número + série (zeros à esquerda
-    ignorados, só não excluídas); `salvarDespesa` avisa (pop-up) quando há nota do mesmo
-    fornecedor, mesma data e mesmo valor — cupom sem número cai aqui.
-  - **Datas**: emissão no futuro bloqueia (tela, servidor e gatilho); mais de 90 dias só avisa.
-  - **Comprador**: a IA lê `destinatario_nome/doc`; quem aparece como comprador em 2+ notas
-    salvas é tratado como a empresa, e comprador diferente gera aviso amarelo (sem cadastro).
-  - **Métrica de acerto**: `despesas.leitura_ia` guarda o que a IA devolveu, o modelo, o
-    motivo da releitura e `alterados` (campos que a conferência mudou); `versao_prompt`
-    guarda `VERSAO_PROMPT` de `ler-documento.ts` — mudou as instruções, suba a versão.
-  - **Esquema sem `nullable`** (12/10/2026): a saída estruturada da API aceita no máximo
-    **16 campos com união de tipos** (`nullable` conta), e o documento chegou a 24 com
-    destinatário e tecido — a primeira foto real falhou com HTTP 400 antes de ser lida.
-    `DocumentoFio`/`ItemFio` (o que a IA devolve) não têm null nenhum: texto ausente é
-    `""`, número ausente é `0`, condição desconhecida é `nao_informado`; `normalizar()`
-    converte para o `DocumentoLido` com null que conferência, chave e XML usam. Campo novo
-    na leitura segue a mesma regra — nada de `.nullable()` no esquema de fio.
-- **Importar XML da NF-e** (10/10/2026, migration `20261010100000`): terceiro botão em
-  Nova nota, com o aviso verde "Prefira o XML da NF-e" para a equipe (12/10/2026). `src/lib/despesas/xml-nfe.ts` (puro, sem biblioteca — o layout 4.00 é fixo)
-  lê `infNFe > emit/dest/det/total/cobr/pag` e devolve o mesmo `DocumentoLido` da IA com
-  confiança 1; `importarXmlNfe` guarda o `.xml` no bucket como comprovante e abre a
-  conferência com `modo = 'xml'` (CHECK e `admin_anexar_arquivo_despesa` aceitam xml).
-  Duplicatas viram parcelas; `tPag` vira a condição de pagamento; IPI+ST+seguro+outras
-  entram em `impostos`. Nada de IA, custo zero. Não há consulta à SEFAZ nem QR code.
-- **Tecido de cliente na nota** (10/10/2026): a leitura (IA e XML) recebe os tecidos
-  cadastrados e os clientes ativos e marca `tecido_de_cliente` por item, `tecido` (nome
-  cadastrado) e `tecido_cliente` no cabeçalho (pelo CNPJ do emitente/destinatário ou nome
-  nas observações — o cliente costuma ser quem emite a remessa). Na conferência, a caixa
-  "Tecido de cliente" troca categoria/suprimento pelo seletor de tecido (com cadastro
-  rápido via `criarTecido`, que passou a devolver o id) e o cabeçalho pede "De qual
-  cliente é o tecido". Ao salvar, `criarEnviosDeTecido` cria um `tecido_envios` por
-  tecido (metros = quantidade somada, nota copiada para `documentos/tecidos/...` como NF
-  de remessa via `anexar_nf_envio_tecido`); o saldo só muda na conferência, como sempre.
-  Nota só de tecido **não** vira despesa nem conta a pagar (vai para Estoque → Tecidos do
-  cliente); nota mista separa item a item. Quem lança é a equipe (decisão do dono).
-- **Conferência com o arquivo à mão** (12/10/2026): na conferência, a prévia da nota (coluna
-  da direita no computador; botão flutuante "Ver a nota" no celular) abre o arquivo em tela
-  cheia — imagem com ampliar/ajustar e PDF em `iframe` —, mais "abrir em outra aba". A prévia
-  é o `object URL` do arquivo comprimido que subiu, para imagem **e** PDF (`preview`,
-  `ehImagem`/`ehPdf` em `captura.tsx`); XML não tem prévia.
-- **"Já pago" saiu da lista "Como foi paga" e entrou "Pix"** (decisão do dono, 12/10/2026,
-  migration `20261012110000`): a tela oferece Pix, débito, crédito, boleto e a pagar
-  (`CONDICOES_NA_TELA`). `pix` se comporta como débito — conta a pagar nasce quitada na
-  emissão (`quitadaNaCompra`, `admin_gerar_contas_despesa` com "Pago por Pix"); a IA lê
-  `pix` separado de `pago` (dinheiro/transferência) e o XML mapeia `tPag` 17 para `pix`. O
-  valor `pago` continua existindo no banco, na IA e no XML — leitura que vem como `pago`
-  chega à tela sem escolha, e a equipe decide; nota só de tecido ainda usa `pago`
-  internamente, porque não gera conta a pagar.
-- **Cartões de crédito da empresa** (decisão do dono, 12/10/2026, migration `20261012120000`):
-  **Configurações → Pagamento → "Cartões de crédito da empresa"** (`configuracoes/cartoes-credito.tsx`,
-  card recolhível abaixo de Formas de pagamento, âncora `#cartoes`; mudou do Financeiro para lá a
-  pedido do dono em 12/10/2026; A pagar só filtra por cartão, sem link; a conferência linka), tabela `cartoes_credito` (nome, final de 4 dígitos, `dia_fechamento`,
-  `dia_vencimento`, ativo; nome único entre ativos; só admin/financeiro; auditoria
-  `cartao_credito`, listada no Histórico de Configurações). **Excluir** só cartão nunca usado (RPC
-  `admin_excluir_cartao`, migration `20261012170000`: recusa com hint `cartao_usado` se há nota, conta a
-  pagar ou qualquer outra referência; a tabela não dá DELETE a `authenticated`); cartão já usado só
-  se desativa. Na conferência, condição **crédito** pede "Qual cartão" (com um só
-  cadastrado, já vem escolhido) e as parcelas recebem o **vencimento da fatura**, não a data
-  da nota: regra pura em `src/lib/contas-pagar/cartoes.ts` — compra até o dia de fechamento
-  cai na fatura do mês, depois dele na do mês seguinte; a fatura vence no `dia_vencimento`
-  (mesmo mês se vence depois do fechamento, senão no seguinte); parcelas seguintes uma fatura
-  por mês, dia maior que o mês segura no último dia. Quem confere pode ajustar à mão.
-  `admin_gerar_contas_despesa` ganhou `p_cartao_id` (a versão de 4 parâmetros foi removida —
-  duas assinaturas deixariam a chamada por nome ambígua no PostgREST): cartão só com crédito,
-  **obrigatório sempre** (migration `20261012150000`, dono em 12/10/2026 — antes só quando havia
-  cartão cadastrado; sem cartão a conta ficava solta com data que não bate com a fatura),
-  gravado em `despesas.cartao_id` e em cada `contas_pagar.cartao_id`. A conferência tem o
-  botão **"+ Cartão"** (cadastro rápido via `criarCartao`, entra na lista e já fica escolhido;
-  vale para as próximas notas). A pagar mostra o cartão sob a forma, filtra por `?cartao=<id>` e
-  exporta a coluna no CSV.
-  **A data da fatura é só previsão do A pagar** (dono, 12/10/2026): para cruzar com o extrato
-  do cartão, cada conta guarda `contas_pagar.data_compra` (emissão da nota, sempre, com
-  backfill) e `vencimento_original` (o vencimento que a nota trazia — duplicata ou padrão —,
-  só quando difere do usado). Na conferência, a parcela mostra "na nota dd/mm" quando o cartão
-  mudou a data; `contas_pagar_validar_parcelas` passou a devolver `vencimento_original`
-  (tipo de retorno mudou: drop + create). A pagar mostra "compra dd/mm" na linha, o detalhe
-  explica nota × fatura, o período filtra por vencimento **ou por data da compra**
-  (`?por=compra`) e o CSV leva as duas colunas.
-- **NF de remessa do cliente lida pela IA na conferência** (pedido do dono, 12/10/2026): em
-  Estoque → Tecidos do cliente, o painel de conferência da equipe tem "Ler a nota com IA e
-  comparar" quando o envio tem NF anexada (`lerNfEnvio` em `actions/envio-tecido.ts`: baixa o
-  arquivo de `documentos`, chama `lerDocumento` com tecidos e clientes, nada de categorias).
-  Mostra nº, emissão, emitente, itens e a soma em metros, e compara com o envio: nº da NF
-  informado × lido, CNPJ/nome do cliente na nota, tecido do envio × da nota, metragem
-  informada × lida (1% ou 0,5 m de tolerância). "Usar X m da nota" só pré-preenche a metragem
-  e a observação; quem grava é a conferência de sempre (`conferir_envio_tecido`). **O cliente
-  não vê nada disso**: a leitura é só do modo equipe.
-  **XML primeiro** (dono, 12/10/2026): o cliente pode anexar o **XML da NF-e** (aceito no
-  cadastro do envio e em "anexar NF"; extensão pelo nome do arquivo, porque o navegador às
-  vezes manda XML sem tipo) e vê o aviso "Prefira o XML da nota: é lido na hora, sem erro de
-  leitura" — sem falar em custo. Na conferência, XML passa por `lerXmlNfe` (exato, sem IA);
-  foto/PDF pela IA. `NfLida.modo` diz qual foi.
-- **Toda entrada é conferida contra repetição** (decisão do dono, 12/10/2026):
-  - Nota de compra: chave repetida bloqueia; fornecedor + número + série bloqueia (gatilho
-    `despesas_validar`); fornecedor + **tipo** + data + valor + **mesmo nº de itens e
-    quantidades** pede confirmação no pop-up.
-  - Envio de tecido (migration `20261012100000`, gatilho `tecido_envios_validar`, vale
-    para cadastro à mão e nota lida): mesmo cliente + mesmo nº de NF em envio não recusado
-    recusa (`hint = 'envio_duplicado'`); sem NF, mesmo cliente + tecido + metragem no mesmo
-    dia recusa. Ao lançar a nota, `criarEnviosDeTecido` procura antes o envio que o cliente
-    já avisou com aquela NF: se aberto e do mesmo tecido, **anexa a nota a ele** em vez de
-    criar outro (a tela avisa); se já conferido, bloqueia.
-
-## Contas a pagar (08/10/2026, migration `20261008190000`)
-
-Financeiro → **A pagar** (`src/app/admin/financeiro/(abas)/a-pagar`), só admin/financeiro.
-
-- **Toda nota exige a condição de pagamento** na conferência (`despesas.condicao_pagamento`):
-  `pago` (dinheiro/transferência; fora da tela desde 12/10/2026), `pix`, `debito`, `credito`, `boleto`, `a_pagar`. Regras puras
-  em `src/lib/contas-pagar/condicoes.ts` (`gerarParcelas` divide o total mês a mês com os
-  centavos na 1ª; `validarParcelas` espelha `contas_pagar_validar_parcelas` no banco).
-- A IA lê `condicao_pagamento` e as **duplicatas** da DANFE ("Fatura/Duplicatas"), que
-  viram as parcelas já preenchidas. Sem duplicatas, 1 parcela com vencimento padrão
-  (crédito: +1 mês; demais: +30 dias).
-- `salvarDespesa`: grava a nota → `admin_gerar_contas_despesa` → itens. As contas vêm
-  **antes dos itens** de propósito: se falharem, a nota é apagada sem ter gerado entrada de
-  estoque. Pago e débito entram já quitados na emissão; os demais, uma linha por parcela,
-  com soma igual ao total (tolerância de 1 centavo).
-- **Conta a pagar só nasce de nota ou recibo** (decisão do dono, 08/10/2026, migration
-  `20261008200000`): `admin_criar_conta_pagar` (conta avulsa) foi removida. A nota **pode**
-  ir sem foto/PDF ("Não tenho a nota agora — lançar sem arquivo"), mas a conferência mostra
-  o aviso com "Anexar agora" (guarda o arquivo sem mexer nos campos) e salvar abre o
-  pop-up "Salvar a nota sem foto ou PDF?". A conta aparece com a etiqueta
-  "sem comprovante" em A pagar (e no CSV). O atalho do dashboard e o botão da aba A pagar
-  levam a Nova nota.
-- **Comprovante depois**: na conta a pagar, "📎 Anexar comprovante" (`anexarComprovanteDespesa`
-  → RPC `admin_anexar_arquivo_despesa`, que só preenche nota **sem** arquivo e não
-  excluída; se a RPC recusa, o arquivo sai do bucket). Nota sem arquivo há mais de
-  `PRAZO_COMPROVANTE_DIAS` (2) desde o lançamento gera **aviso vermelho no dashboard**
-  (admin/financeiro) com quantidade e valor, que abre A pagar filtrada em
-  `?comprovante=pendente`. Só conta notas com `condicao_pagamento` (as anteriores ao
-  contas a pagar ficam de fora). Compressão da foto em `src/lib/despesas/comprimir.ts`.
-- **Avisos do dashboard padronizados** (08/10/2026): `src/app/admin/dashboard/avisos.tsx`
-  recebe uma lista `{nivel: urgente|atencao|info, titulo, detalhe, href}` e mostra todos
-  no mesmo formato — linha compacta, tarja lateral na cor do nível, duas colunas no
-  computador, ordenados por urgência. Urgente: pedido travado por atraso, nota sem
-  comprovante, conta a pagar vencida, solicitação de cancelamento. Atenção: bloqueado por
-  crédito. Info: aguardando confirmação. Aviso novo = mais um `avisos.push` na página. O
-  atalho "Lançar nota" fica na linha do título.
-- **E-mail diário de pendências** (migration `20261008210000`): `/api/cron/avisos-diarios`,
-  chamada às 07:47 (Brasília) por `.github/workflows/avisos-diarios.yml` com os mesmos
-  secrets da baixa de pagamentos. Manda, só quando há pendência, um resumo (notas sem
-  comprovante há mais de 2 dias + contas vencidas) para o tipo `contas_pagar_pendencias`
-  de Configurações → Notificações, que a migration semeia com a lista de `pedido_novo`.
-  Um envio por dia: a data fica em `configuracoes.avisos_diarios` (`?forcar=1` ignora).
-- Tabela `contas_pagar` (uma linha por parcela; `despesa_id` nulo só nas avulsas criadas
-  antes da regra). Escrita só por RPC: `admin_baixar_conta_pagar` (data ≤ hoje, valor pago pode diferir — juros/desconto),
-  `admin_estornar_conta_pagar`, `admin_cancelar_conta_pagar`, `admin_alterar_conta_pagar`
-  (vencimento/valor); as três últimas exigem motivo ≥ 10 e anotam em `observacao`. Tudo
-  também vai para `auditoria` (entidade `conta_pagar`).
-- Excluir a nota (`admin_excluir_despesa`) cancela as parcelas em aberto pelo gatilho
-  `trg_despesas_cancelar_contas`; as pagas ficam.
-- A tela: quadros (vencidas, próximos 7 dias, até o fim do mês, pago no mês), filtro por
-  situação e período, grupos Vencidas / 7 dias / Depois e CSV.
-
-## Ajuste de metragem (13/09/2026, `docs/sql/016`)
-
-Em **Estampando** o botão "Ajustar quantidades" dá lugar a
-**Ajustar metragem**: com o romaneio lançado, peça não muda mais nada — o valor é
-metragem × preço, e o que pode mudar é a metragem (quebra na estamparia). A RPC
-`admin_ajustar_metragem` repete o cálculo de `confirmar_romaneio` (total, custos por
-metro, `regenerar_parcelas_pedido`) e grava em `pedido_metragem_historico`, que aparece
-em Alterações no pedido. Portão `is_admin_producao()`, o mesmo do romaneio: quem sabe da
-quebra é a produção. Antes de Estampando continua sendo quantidade; de Pronto em diante,
-nada.
-
-## "Pedido pronto": o que acontece e o que trava (13/09/2026)
-
-> **Histórico.** Desde 07–08/10/2026 Bling, cobrança e forma de pagamento acontecem no
-> **Faturar**, não no lançamento de "Estampa pronta". As lições abaixo (tempo da função,
-> enum de `bling_sync`) continuam valendo; o fluxo descrito, não.
-
-- **Boleto abaixo do mínimo por documento bloqueia** a etapa — no servidor
-  (`lancarStatus` → `boletoAbaixoDoMinimo`) e no modal, que desativa o botão. Compara a
-  **menor parcela** (parcelado) ou o valor cobrado inteiro (à vista) com
-  `valorMinimoParcela` do boleto. Antes comparava o total do pedido, e por isso o 1006
-  (3 × R$ 127,50, total R$ 375) passou sem aviso. A saída é trocar forma ou parcelas
-  em "Forma de pagamento" e voltar.
-- **Bling e cobrança rodam em `after()`**, depois de a resposta sair, e as duas telas
-  de pedidos têm `maxDuration = 60`. Esperar dentro da requisição estourava o tempo da
-  função: o 1006 ficou `pendente` sem nunca ser enviado e sem e-mail de cobrança. A
-  cobrança mora em `src/lib/cobranca/enviar.ts` (chave de serviço: em `after()` não há
-  cookies) — não em `actions/producao.ts`, porque exportar de um `'use server'` viraria
-  endpoint público.
-- **Primeiro vencimento do boleto = hoje + intervalo configurado.** Estava fixo em 30
-  dias no painel (`dataPadrao(30)`), e a configuração de 15 dias só valia entre o 1º e o
-  2º boleto — o 1006 saiu com 30/15/15. O intervalo entre parcelas continua vindo de
-  `parcelar_pedido` no banco; o painel só sugere o primeiro, e quem confirma pode mudar.
-- **`bling_sync` é `pendente | enviado | erro`** — não existe `ok`. O código gravava
-  `'ok'`, o Postgres recusava (22P02) e, como o erro do update não era lido, o pedido
-  ficava sem vínculo mesmo com a venda criada no Bling. Foi a causa real dos
-  "pendentes" de 13/09, não o tempo da função. Lição de método: testar o enum com um
-  `PATCH` em id inexistente devolve 204 — o cast só acontece quando há linha; ler o
-  `enum` no OpenAPI do PostgREST é o jeito confiável.
-- **"Pendente" depois de pronto é falha**: a tela do pedido mostra o bloco de reenvio
-  sempre que `bling_sync_status !== 'enviado'` a partir de "pronto", em amarelo quando não há
-  erro registrado. "Tentar de novo" reenvia ao Bling **e** a cobrança (`email_log`
-  impede duplicar).
-
-## Faturamento pelo portal: NF-e e cobrança (13/09/2026, `docs/sql/015`)
-
-A partir de "Pedido pronto" (e com o pedido já no Bling), a tela do pedido mostra o
-bloco **Faturamento** com dois botões, cada um repetível:
-
-- **Emitir NF** (`emitirNotaFiscal`): `POST /pedidos/vendas/{id}/gerar-nfe` → guarda
-  `bling_nf_id` na hora → `POST /nfe/{id}/enviar?enviarEmail=false` → consulta
-  `GET /nfe/{id}` até `situacao` 5/6/7 (autorizada) ou 4/9 (rejeitada/denegada) → baixa
-  `linkPDF` e `xml` para o bucket `documentos` (`pedidos/{id}/nfe-{n}.pdf|.xml`) →
-  `admin_registrar_nf` (grava nº, chave, caminhos e lança a etapa `nf_emitida` com
-  origem `bling`) → e-mail `nf_emitida` ao cliente com os dois anexos. Se a SEFAZ ainda
-  não respondeu em ~12 s, devolve "aguarde e clique de novo" — a nota já existe, o
-  segundo clique só consulta.
-- **Gerar cobrança** (`gerarCobranca`): **não existe endpoint para gerar boleto**. O que
-  há é `POST /pedidos/vendas/{id}/lancar-contas`, que vira as parcelas em contas a
-  receber; com forma de pagamento do Bling Conta, o próprio Bling emite boleto/Pix e expõe
-  `linkBoleto` / `linkQRCodePix` em `GET /contas/receber`. O portal lança, relê as
-  contas (casa por `origem.id`, senão vencimento + valor), guarda links e PDF em
-  `pedido_parcelas` (ou em `pedidos` no à vista) e manda o e-mail `cobranca` com
-  anexos. Cartão não tem botão: é cobrado fora.
-- **Hipótese a validar no primeiro teste**: que o Bling Conta emite o boleto sozinho
-  logo após `lancar-contas`. Se exigir ação no painel do Bling, o botão vai lançar as
-  contas e voltar "sem link" — aí a emissão se faz lá e "Completar" relê os links.
-- Ninguém fora de admin/financeiro chama nada disso (`exigirAdmin` nas duas ações).
-
-## O que o portal muda, o Bling acompanha (13/09/2026)
-
-- **Cancelar propaga**: `cancelarPedido` (painel) e `responderSolicitacao` (aceitar pedido
-  do cliente) chamam `cancelarPedidoNoBling`, que muda a situação do pedido de venda para
-  "Cancelado" (id resolvido pelo nome em `/situacoes/modulos`, porque é por conta) — ou
-  apaga, se a conta não tiver essa situação. Falha vira texto em `bling_erro`, mostrado
-  no bloco de cancelado. **NF emitida não tem endpoint de cancelamento**: o portal avisa
-  que ela precisa ser cancelada no Bling.
-- **Depois de "pronto" nada diverge**: quantidade, preço e forma de pagamento congelam
-  (tela e servidor). O pedido de venda nasce ali, com metragem, valor e parcelas; a única
-  mudança possível depois é cancelar — e essa propaga.
-- **"Nova senha" do cliente** deixou de gerar senha provisória: manda um link de
-  redefinição por e-mail (`generateLink` do Supabase + `token_hash` no mesmo
-  `/auth/confirmar` que "esqueci minha senha" usa). Ninguém da equipe vê a senha. A
-  tela mostra para qual e-mail o link foi. Vale igual para a equipe (Configurações).
-  O convite de cadastro continua com senha provisória + primeiro acesso.
-
-## Nota fiscal — com ou sem, por pedido
-
-Decidido em 13/09/2026. Nem toda venda sai com nota, então cada pedido carrega
-`pedidos.emitir_nf` (`docs/sql/008`), que nasce `true`.
-
-- **Quem decide é a equipe, não o cliente.** É decisão fiscal da empresa; o carrinho não
-  tem essa escolha. Aparece na tela do pedido, em "Nota fiscal", ao lado da forma de
-  pagamento — a mesma conversa comercial.
-- **Dispensar a nota exige motivo** (mín. 10 caracteres, guardado em
-  `emitir_nf_motivo`); emitir não exige. Emitir é o caminho normal — cobrar
-  justificativa para o normal seria atrito sem propósito. Quem mudou por último fica em
-  `emitir_nf_definido_por` / `_em`; não há tabela de histórico, porque o que importa é a
-  decisão vigente.
-- **Vale até "Pedido pronto".** É a etapa que cria o pedido de venda no Bling, de onde
-  sai o faturamento. Depois de `nf_emitida` o banco recusa a troca
-  (`admin_definir_emissao_nf`): mudar viraria divergência com o que já foi para a SEFAZ.
-- **O Bling recebe o aviso na observação do pedido** (`*** SEM NOTA FISCAL ***`, antes de
-  tudo), porque não há campo próprio para isso no pedido de venda. É o que quem fatura
-  lê antes de emitir.
-- Na lista de pedidos só a exceção aparece (etiqueta `sem nf`), e o modal de confirmação
-  de "Pedido pronto" repete o aviso — último momento em que dá para desfazer.
-- **Toda troca vira linha em `pedido_nf_historico`** (`docs/sql/009`), como já acontecia
-  com quantidade, preço e forma de pagamento. As colunas `emitir_nf_*` em `pedidos`
-  continuam guardando a decisão vigente, que é o que a tela lê; a tabela guarda o
-  caminho até ela.
-
-## Papéis: `admin` e `financeiro` são o mesmo acesso
-
-Decidido em 13/09/2026: os dois papéis têm exatamente as mesmas permissões. Conferido
-nas duas camadas:
-
-- **Banco**: `is_admin()` testa `role in ('admin', 'financeiro') and ativo`, e é o portão
-  de todas as RPCs e políticas. As funções `admin_lancar_status`, `admin_reimprimir` e
-  `confirmar_pedido` citam `'admin'`, mas como **origem** do registro em
-  `pedido_status_historico` (`sistema` / `admin` / `bling`), não como teste de papel.
-- **App**: toda checagem faz `papel === 'admin' || papel === 'financeiro'`, e
-  `veValores` é verdadeiro para os dois. A única exceção era a trava contra rebaixar a si
-  mesmo em `atualizarMembro`, que exigia `admin` — corrigida para barrar só `funcionario`.
-- `funcionario` (rótulo "Produção") é o único papel restrito: sem valores, sem clientes,
-  sem configurações.
-
-Em 13/09/2026 as três contas ativas da equipe são `financeiro`; nenhuma é `admin`. Não
-faz diferença funcional.
-
-## Primeiro acesso: senha provisória
-
-Decidido em 13/09/2026. Vale para **equipe e cliente**: a senha do convite entra uma vez
-e o portal não abre até a pessoa criar a dela.
-
-- A marca é `app_metadata.senha_provisoria`, **não** `user_metadata`: o usuário escreve
-  no segundo pela API do Supabase e poderia limpar a marca sozinho, ficando com a senha
-  que está na caixa de entrada. Em `app_metadata` só a chave de serviço escreve.
-- **Fica no token, não numa tabela.** O proxy já recebe o usuário a cada requisição;
-  consultar uma coluna ali custaria uma ida ao banco em toda navegação do site.
-- Quem marca: `criarCliente`, `criarMembro` e as duas redefinições de senha do painel —
-  senha que o admin gera e manda por e-mail nasce provisória, sempre. Quem limpa é só
-  `definirPrimeiraSenha`, depois de a senha nova já estar valendo.
-- `/api` fica fora do desvio: redirecionar chamada de dados devolveria HTML onde o
-  cliente espera JSON.
-- Usuários que já existiam **não** têm a marca e seguem entrando direto. Para forçar a
-  troca em alguém, use "redefinir senha" no painel.
-- **Redefinir senha pelo painel também manda e-mail** (mesmo template do convite, com a
-  primeira frase trocada — `redefinida: true`). A tela continua mostrando a senha, e
-  quando o envio falha aparece um aviso amarelo com o motivo: a pessoa que cadastrou é
-  quem precisa saber que o e-mail não saiu, senão o convidado fica esperando.
-- **Em 13/09/2026 o `RESEND_API_KEY` da Vercel estava inválido**: `email_log` mostra
-  `API key is invalid` no convite da conta Best Color (14:16) e num "em produção" de
-  madrugada. O envio local funcionava, então a chave do `.env.local` é outra — a da
-  Vercel foi perdida ou colada errada na troca de variáveis de 12/09. Sem isso, nenhum
-  e-mail do portal sai, e até este dia a tela não avisava.
-
-## Quem fez cada alteração
-
-Todas as tabelas de histórico do pedido já gravavam o autor — `criado_por` em
-`pedido_ajustes`, `pedido_precos`, `pedido_status_historico` e `pedido_nf_historico`,
-`autor_id` em `pedido_forma_pagamento_historico`, `cancelado_por` em `pedidos`. O que
-faltava era mostrar: a tela do pedido resolve os nomes numa consulta só a `profiles` e
-exibe "por Fulano" em **Alterações no pedido**, em cada etapa do **Andamento** e no aviso
-de cancelamento.
-
-- O nome **degrada para nada** se o perfil foi arquivado ou a política não deixa ler.
-  Nome é informação extra; não pode derrubar a tela do pedido.
-- Item adicionado entra em `pedido_ajustes` como `0 → N` e aparece como
-  **Item adicionado**, não como mudança de quantidade.
-- A consulta do pedido tem `const campos: string` de propósito: sem a anotação o
-  TypeScript monta o tipo do retorno a partir do texto do `select`, e com esta
-  quantidade de tabelas embutidas estoura com *union type too complex*.
-### Tabela nova precisa de `GRANT` explícito (aprendido em 13/09/2026)
-
-Este banco **não** usa os grants padrão do Supabase: `anon` não lê nem `pedidos`, e cada
-tabela tem `grant select ... to authenticated` próprio. Tabela criada pelo SQL Editor nasce
-sem isso. O sintoma é traiçoeiro: com a chave de serviço tudo funciona, mas a sessão do
-usuário recebe `permission denied` — e se a tabela está **embutida** num select
-(`pedidos(..., pedido_nf_historico(...))`), o PostgREST recusa a consulta inteira. Foi o que
-transformou a tela do pedido em 404 por algumas horas. Toda migração que cria tabela leva
-o grant junto (`docs/sql/011` corrigiu 009 e 010). A tela do pedido agora lança erro em
-qualquer falha que não seja "nenhuma linha", em vez de traduzir tudo em 404.
-
-### Fora do pedido: tabela `auditoria` (`docs/sql/010`)
-
-Cadastro de cliente, equipe e configurações não tinham rastro nenhum. Agora têm, numa
-tabela genérica — `entidade` + `entidade_id` + `acao` + `campos` (JSON
-`[{campo, de, para}]`) + `motivo` + `criado_por`.
-
-- **Uma tabela só, não uma por entidade.** São mudanças de cadastro, sem cálculo em cima
-  delas; a pergunta é sempre "o que houve com este cliente / este usuário". Um cadastro
-  de cliente tem 15 campos — coluna por campo não se sustentaria.
-- **O autor vem da sessão, não do banco.** Estas ações gravam com chave de serviço, onde
-  `auth.uid()` não existe. `src/lib/auditoria.ts` lê o usuário logado e grava junto.
-- **`registrar()` nunca lança e nunca desfaz nada.** Quando ela roda, a mudança já foi
-  salva — devolver erro seria mentir sobre o que aconteceu. Falha vai para o log do
-  servidor. Edição que não mudou campo nenhum não vira linha.
-- **Limite de crédito grava duas vezes** de propósito: a RPC do banco continua
-  alimentando `cliente_limite_historico` (auditoria de verdade) e a ação repete em
-  `auditoria` para a tela do cliente mostrar uma lista só.
-- Coberto: criar/editar/ativar/desativar/arquivar cliente, preço por metro, limite de
-  crédito, criar/editar/ativar/desativar/arquivar/restaurar membro da equipe, redefinir
-  senha (só o fato, nunca a senha) e as formas de pagamento — estas com diferença
-  legível ("Boleto · máximo de parcelas: 3 → 4").
-- **Não coberto de propósito**: catálogo e produtos. São 412 produtos com importação em
-  lote; registrar cada um afogaria o resto do histórico. Se precisar, é melhor tabela
-  própria com a operação em lote como unidade, não linha por produto.
-- Aparece em `src/components/historico-alteracoes.tsx`, usado na tela do cliente
-  (filtrada por ele) e em Configurações (equipe + pagamento, sem filtro de registro).
-
-## `criar_pedido` (carrinho) — o que ela valida e o que não valida
-
-Reescrita em `supabase/migrations/20261007120000_forma_pagamento_no_faturamento.sql`
-(07/10/2026): só recebe `p_itens` e `p_notas`.
-
-- **Não recebe forma nem parcelas.** O pedido nasce com `forma_pagamento` nulo e
-  **nunca** com `bloqueado_credito = true`. Forma ativa, forma permitida ao cliente, teto
-  e mínimo de parcelas e limite de crédito passaram para
-  `admin_definir_forma_pagamento_faturamento`, chamada pelo Faturar — onde há valor real.
-- **Não checa valor.** O `total` só existe depois da estampa.
-- Continua validando: cliente ativo com preço, itens do próprio catálogo e ativos,
-  anti-duplicidade de 30 s. **Boleto atrasado não barra mais a criação** (08/10/2026):
-  o cliente com boleto vencido há mais de 5 dias úteis envia o pedido, mas o gatilho
-  `status_bloquear_por_atraso` em `pedido_status_historico` recusa qualquer lançamento
-  de etapa com origem `admin` até o pagamento ou a liberação pelo dono
-  (`admin_liberar_atraso_boleto`). Origem `sistema`/`bling` passa. A conta dos dias
-  úteis é de `cliente_boletos_atraso` (`proximo_dia_util`, feriados incluídos); o app
-  não espelha a regra, só lê o resultado (`situacaoAtraso` em `actions/pedidos.ts`).
-- Roda com `search_path = ''`: tudo o que ela chama vem com `public.`. Foi esse contexto
-  que expôs o gatilho `pedidos_congelar_taxa` sem qualificação (`docs/sql/012`).
-- Os gatilhos `pedidos_forma_permitida` e `trg_pedidos_congelar_taxa` só agem com forma
-  não nula e rodam em `insert or update of forma_pagamento`: a taxa congela no UPDATE do
-  Faturar.
-
-## Formas de pagamento — configuráveis
-
-Decidido em 12/09/2026. Em Configurações → Pagamento, o dono define por forma
-(boleto, cartão de crédito, cartão de débito): se está **ativa**, **máximo de parcelas**,
-**valor mínimo por parcela**, **intervalo entre boletos** (15 ou 30 dias), **percentual**
-e **taxa fixa** somados ao pedido.
-
-- Tudo vive numa chave só de `configuracoes` (`formas_pagamento`), em JSON — são cinco
-  ajustes por forma, e em linhas chave/valor cada leitura viraria uma consulta. A
-  gravação usa `upsert`, porque a chave pode não existir ainda.
-- O cálculo está em `src/lib/pagamento/config.ts`, puro de propósito (sem Supabase),
-  para rodar também no navegador. **Taxa fixa do boleto é por documento** (multiplica
-  pelas parcelas); no cartão é por transação (cobra uma vez).
-- Cartão de crédito **não tem gateway**: o portal registra a escolha e o valor, a
-  cobrança sai por fora e alguém marca como pago. Decidido assim para não travar a
-  configuração esperando a definição do gateway.
-- **O carrinho não conhece o valor do pedido** — a cobrança é por metragem impressa, que
-  só existe depois da estampa. Por isso (e por decisão do dono em 07/10/2026) o carrinho
-  não oferece forma nenhuma: forma, parcelas, mínimo e taxa são aplicados no Faturar,
-  quando o valor existe. O espelho em TypeScript do que a RPC valida está em
-  `src/lib/pagamento/faturar.ts` (`avaliarFatura`), usado pelo bloco Faturar e pelo
-  pop-up de confirmação.
-
-As chaves antigas `max_parcelas` e `valor_minimo_boleto` **não têm mais tela própria** —
-quem edita é a de Pagamento, que grava as duas como ponte, porque `parcelar_pedido` no
-Postgres ainda valida por elas. `buscarMaxParcelas()` e `buscarValorMinimoBoleto()`
-continuam existindo, mas agora leem do JSON.
-
-**Onde a taxa entra.** `pedidos.total` continua sendo a **mercadoria** (metragem ×
-preço) — é o que o Faturamento e a Apuração comparam com o custo por metro. A taxa fica
-congelada no pedido (`taxa_pagamento_percentual`, `taxa_pagamento_fixa`, preenchidas por
-gatilho quando a forma é escolhida) e entra só no **valor cobrado**:
-
-- No Postgres: `valor_cobranca_pedido()` e `parcelar_pedido`, que divide o valor com
-  taxa e usa o intervalo configurado (`docs/sql/001` e `002`).
-- No app: `taxaDoPedido()` / `valorCobranca()` em `src/lib/pagamento/config.ts`.
-  **Espelham a função SQL — mexeu em um, mexa no outro.**
-
-O cliente vê valores a partir de **Pedido pronto** (não da NF), que é quando sai o
-e-mail de cobrança — confirmado em 12/09/2026. Nas telas dele, quando há taxa, aparece
-mercadoria + acréscimo + total cobrado.
-
-## Custo estimado
-
-Supabase Pro (~US$25) + Vercel Pro (~US$20) + Resend (grátis até 3.000 e-mails/mês) ≈
-**US$45/mês**, fixo, independente do nº de clientes.
-
-## Variáveis de ambiente — o que é público e o que não é
-
-- `SITE_URL` é lida **só no servidor** (`src/lib/site.ts`, usada pelas Server Actions
-  para montar links dentro dos e-mails). Não leva `NEXT_PUBLIC_`. O código ainda aceita
-  `NEXT_PUBLIC_SITE_URL` como ponte enquanto a variável antiga existir na Vercel.
-- `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` **precisam** do
-  prefixo: `src/lib/supabase/client.ts` é importado pela tela de login e pelo envio de
-  artes, que rodam no navegador. Tirar o prefixo quebra o login. São públicas por
-  natureza — quem protege os dados é o RLS.
-- `SUPABASE_SECRET_KEY`, `RESEND_API_KEY` e `BLING_CLIENT_SECRET` nunca levam prefixo.
-
-## Desempenho — o que se sabe
-
-- Cada navegação no painel faz 3 a 4 idas **sequenciais** ao Supabase antes de
-  renderizar: `getUser()` no proxy, depois `lerPerfil()` (getUser + `profiles`), depois
-  as consultas da página. `lerPerfil()` está em `cache()` do React para layout e página
-  compartilharem a mesma chamada na requisição.
-- A latência entre a região da função na Vercel e a região do projeto Supabase
-  multiplica esse custo. Se o carregamento estiver lento, conferir primeiro em
-  Vercel → Settings → Functions → Region e escolher a região mais próxima do Supabase.
-- `sharp` (binário nativo) é importado sob demanda dentro de `buscarDadosRomaneio`, não
-  no topo de `app/actions/romaneio.ts`: esse módulo é importado pela listagem de
-  pedidos (via `confirmarRomaneio`), e no topo fazia a rota `/admin/pedidos` carregar o
-  binário a cada início frio.
-
-## Datas e números (09/10/2026)
-
-- **"Hoje" é sempre o de Brasília**: `hojeBrasilia()` em `src/lib/datas.ts` no app e
-  `public.hoje_brasilia()` no banco (migration `20261009110000`). Servidor e banco rodam em
-  UTC; `new Date().toISOString().slice(0, 10)` e `current_date` viram o dia às 21h.
-  As validações do Faturar (vencimento) e da baixa de conta a pagar já usam a função.
-- **Número digitado**: `paraNumeroBr()` em `src/lib/numero.ts` ("1.234,56", "10.000",
-  "1,5" e "1.5" saem certos; inválido = NaN). Não usar `Number(x.replace(',', '.'))`.
-
-## Convenções
-
-- Nomes de tabelas/colunas em português, snake_case.
-- Server Actions em `app/actions/*.ts`.
-- Mudança estrutural de schema: sempre confirmar nome real de tabela/coluna via
-  `information_schema` antes de gerar SQL, pois o schema já sofreu renomes ao longo do
-  projeto.
-
----
-
-Este arquivo é a memória de trabalho do Claude Code para este projeto. Decisões e
-histórico completo de debugging/código estão em `docs/decisoes-consolidadas.md` e
-`docs/escopo.md` (cópias dos documentos originais) — consulte-os para detalhes que não
-couberam aqui.
-
-
----
-
-# Portal Best Color Tecidos (Bello Tecido)
-
-Portal B2B de pedidos para estamparia por sublimação. Responda e escreva
-commits, PRs e comentários **em português do Brasil**.
-
-## Stack
-- Next.js 16 (App Router), código em `src/app`
-- Supabase (Postgres, Auth, Storage) — `src/lib/supabase/{server,admin}.ts`
-- Bling API v3 — `src/lib/bling/*` (função base `chamarBling(path, init)`)
-- Resend — templates em `src/lib/resend/templates/*`
-- Deploy: Vercel, automático a cada push na `main`
-- Documentação de decisões: `decisoes-atualizadas.md` (atualize quando
-  implementar algo que mude uma regra)
-
-## Banco de dados — REGRAS OBRIGATÓRIAS
-- Nunca rode SQL direto. Toda mudança de schema ou função vai em
-  `supabase/migrations/<YYYYMMDDHHMMSS>_<nome>.sql` (crie com
-  `supabase migration new <nome>`).
-- Toda migration precisa do par de desfazer em
-  `supabase/rollbacks/<mesmo nome>.sql`, que reverte exatamente o que ela fez.
-- Migrations são aplicadas pela GitHub Action ao chegar na `main`.
-- Status do pedido é **derivado** do último registro em
-  `pedido_status_historico` via `status_atual(uuid)`. Não existe coluna
-  `pedidos.status`.
-- `pedido_itens.metros_total` e `subtotal` são colunas GENERATED — nunca
-  insira valores nelas.
-- Toda regra de negócio é validada no banco (função/trigger/RLS), não só
-  no front-end. Funções administrativas checam `is_admin()` / `is_interno()`.
-- Nunca excluir cliente ou arte: sempre `ativo = false`.
-- Preço: `clientes.preco_metro` é o padrão; `pedido_itens.preco_unitario`
-  fica congelado no valor da época. Cálculo de total sempre em metros, uma
-  vez só, para não divergir da nota fiscal.
-
-## Fluxo de status
-aguardando → recebido → impressao → estampando → pronto → faturado →
-nf_emitida → expedido → entregue → fechado. O estágio Corte/costura foi
-eliminado em 08/10/2026: o banco recusa lançá-lo e o valor `corte_costura` ficou no
-enum só para não quebrar o histórico de pedidos antigos.
-O envio ao Bling, a cobrança e a NF acontecem **só** no botão Faturar
-(`faturarPedido` em `src/app/actions/faturamento.ts`), na transição
-pronto → faturado. Pedidos agrupados: só o agrupador vai ao Bling.
-
-## Papéis
-cliente, funcionario, admin (dono) e financeiro — admin e financeiro têm o mesmo
-acesso.
-Funcionário nunca vê preços nem valores — nem na tela, nem na resposta do
-servidor.
-
-## Padrões de código
-- Server Actions em `src/app/actions/*.ts`, sempre com validação e
-  `revalidatePath`.
-- Ações sensíveis exigem motivo (mínimo 10 caracteres) e registro de
-  auditoria.
-- Mensagens ao usuário em português, sem jargão técnico.
-- Rode `npm run build` antes de abrir o PR; se falhar, corrija antes.
-
-## Ao abrir um PR
-- Título e descrição em português.
-- Liste: arquivos alterados, migration criada (e seu rollback), o que
-  precisa ser testado à mão e qualquer configuração externa necessária
-  (Bling, Resend, Vercel).
-- Um PR por issue. Não misture assuntos.
+| Tecido | tecido + metros por unidade | custo médio do metro (notas) |
+| Estampa | metros a estampar por unidade (capa estampada; lisa não tem) | preço do metro de estampa, cadastrado, com histórico |
+| Insumos | lista com quantidade por unidade | custo médio de cada insumo (notas) |
+| Mão de obra | valor fixo por unidade, por tipo de capa | o valor informado, com histórico |
+
+- **Custo da capa = tecido + estampa + insumos + mão de obra**, mostrado por parcela na
+  tela do produto.
+- **Custo congelado na venda**: cada pedido importado guarda o custo da capa no dia. Tecido
+  que subiu depois não muda a margem do mês passado.
+- A ficha **não baixa estoque de nada**. Serve para custo e para a sugestão de compra.
+
+## Estoque: básico, com lançamentos manuais
+
+Decisão do dono (13/10/2026): sem ordem de produção com etapas, sem prazo, sem custo de
+mão de obra por ordem. Só o saldo e dois lançamentos.
+
+| Lançamento | Efeito |
+|---|---|
+| Nota de compra com item vinculado a tecido/insumo | entra metros/unidades e atualiza o custo médio |
+| **Tecido enviado para produção** (manual: tecido, metros, data, observação) | sai metros |
+| **Produção concluída** (manual: SKU, quantidade, data) | entra capas no galpão. **Não mexe em tecido** |
+| Remessa para fulfillment (SKU, quantidade, destino) | sai do galpão, entra em trânsito, vira saldo no destino quando o marketplace confirma |
+| Venda importada | sai do local de origem (FBA, Full ou galpão), congela custo e taxas |
+| Ajuste manual | com motivo ≥ 10 caracteres e auditoria |
+
+- **A entrada de capas não baixa tecido, de propósito**: quebra na produção e variação de
+  medida tornariam a baixa automática mentirosa. O consumo real por capa é um número
+  **observado** (metros enviados ÷ capas produzidas no período), mostrado como referência,
+  nunca aplicado como regra.
+- Saldo nos marketplaces é acertado pelos relatórios de estoque deles (FBA, Full ML, Full
+  Shopee).
+
+## Pedidos e resultado por canal
+
+- Pedido nasce **importado**, nunca digitado. Guarda canal, logística (próprio/Full/FBA),
+  SKU, quantidade, preço, e as **taxas do canal** (comissão, frete, fulfillment,
+  publicidade quando o relatório traz), mais o custo congelado da capa.
+- **Resultado por canal e por SKU** = preço − taxas − custo. É a primeira entrega
+  pedida pelo dono, junto do estoque por local.
+- **Repasses** dos marketplaces entram na conciliação: o repasse do extrato casa com o
+  lote de pedidos do período.
+
+### Fase 1 — relatórios exportados (sem API)
+Importar os relatórios que os três portais já exportam (vendas e repasses da Amazon,
+vendas e cobranças do ML, receita da Shopee, estoque do FBA e dos Full) pelo mesmo
+caminho do conciliador: arquivo → leitura (CSV/XLSX sem IA quando o layout é fixo; PDF por
+IA) → casamento → conferência → gravação. Entrega resultado por canal e estoque por local
+antes de qualquer aprovação de API.
+
+### Fase 2 — API direta (decisão do dono: não usar o Bling para pedidos)
+Cada canal passa a sincronizar sozinho quando o cadastro de desenvolvedor for aprovado. A
+fase 1 continua valendo: a API só troca a origem dos dados.
+
+| Canal | Pré-requisito do dono | Observação |
+|---|---|---|
+| Amazon SP-API | perfil de desenvolvedor no Seller Central, app, autorizar a própria loja | cobre B2C, B2B e FBA; relatórios de settlement e estoque FBA |
+| Mercado Livre | app no portal de desenvolvedores, autorizar a conta | token curto com renovação; webhooks; Full e próprio na mesma API |
+| Shopee Open Platform | cadastro de desenvolvedor, app aprovado, autorizar a loja | aprovação mais lenta; Full com endpoints próprios |
+
+Confirmar as regras atuais de cada API na hora de implementar; o dono inicia os cadastros
+em paralelo porque o prazo deles é o que manda.
+
+## Sugestão de produção e reposição
+
+**Cálculo determinístico, diário**, por SKU e por local:
+- velocidade de venda (média de 30 dias com peso maior nos últimos 7), dias de cobertura,
+  data prevista de ruptura, quantidade a repor para a **cobertura-alvo** (configurável por
+  local, ex.: 30 dias no FBA);
+- cascata: repor no local − saldo do galpão = **produzir N**; N × consumo estimado −
+  tecido em estoque = **comprar M metros** (idem insumos);
+- prazos configuráveis por etapa (fornecedor, produção, trânsito até cada fulfillment)
+  para dar a data-limite de cada ação;
+- saída: lista de ações com prioridade ("produzir 60 da capa X até 20/10", "comprar 21 m
+  do tecido T", "enviar 120 para o FBA"), ordenada por quem acaba primeiro.
+
+**Análise global por IA** em cima da tabela calculada: escreve o plano da semana em
+linguagem de gente — prioridades e por quê, gargalo (tecido, insumo, capa, trânsito), o que
+está encalhado, compras ou remessas que vale agrupar, anomalias ("vendas da capa Y caíram
+60% no ML, confira o anúncio"). **Os números vêm do cálculo; a IA explica e prioriza; nada
+grava sozinho.** O humano aprova e a ação vira lançamento com um clique.
+
+## Regras obrigatórias (herdadas da Best Color)
+
+- Nunca rodar SQL direto. Toda mudança de schema ou função vai em
+  `supabase/migrations/<YYYYMMDDHHMMSS>_<nome>.sql` com o par de desfazer em
+  `supabase/rollbacks/<mesmo nome>.sql`. Aplicadas pela GitHub Action ao chegar na `main`.
+- Toda regra de negócio validada no banco (função/trigger/RLS). Funções administrativas
+  checam `is_admin()`. Tabela nova leva `GRANT` explícito.
+- Ações sensíveis exigem motivo (mín. 10 caracteres) e registro em `auditoria`.
+- Nada é excluído de verdade: `ativo = false` ou exclusão lógica com motivo.
+- IA nunca grava: devolve rascunho, humano confere e salva. Esquema de saída da IA
+  **sem `nullable`** (limite de 16 uniões da API): texto ausente `""`, número `0`, enum
+  desconhecido `nao_informado`, com `normalizar()` para o tipo com null.
+- "Hoje" é sempre o de Brasília (`hojeBrasilia()` no app, `hoje_brasilia()` no banco).
+- Número digitado passa por `paraNumeroBr()`.
+- `npm run build` antes de abrir PR. Um PR por assunto. PR em português listando arquivos,
+  migration e rollback, testes à mão e configuração externa.
+- Atualizar este arquivo e `decisoes-atualizadas.md` quando uma regra mudar.
+
+## Infra
+
+- Supabase: organização própria (grátis enquanto em desenvolvimento; Pro ao entrar em
+  produção, US$ 10/mês por projeto adicional na organização Pro da empresa).
+- GitHub: `usdecorbrasil/portal-usdecor`, privado. Secrets de Actions:
+  `SUPABASE_ACCESS_TOKEN` (gerar com validade longa; o da Best Color expirou e travou as
+  migrations por um dia), `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`, `SITE_URL`,
+  `CRON_SECRET`.
+- Vercel: projeto próprio; Hobby serve para desenvolver, Pro para produção.
+- `ANTHROPIC_API_KEY` na Vercel para leitura de documentos e análise de estoque. Modelos:
+  rápido `claude-haiku-5-5` (padrão), preciso `claude-opus-5-5` (releitura).
+
+## Primeira sessão: o que fazer
+
+1. Adicionar `usdecorbrasil/portal-bestcolortecidos` à sessão, copiar o código com o
+   histórico para este repositório e enviar a `main`.
+2. PR "Marca e documentação": US Decor no lugar de Best Color, este `CLAUDE.md`,
+   `decisoes-atualizadas.md` zerado com as decisões acima.
+3. PR "Poda": remover o que está em "Sai", deixando login, equipe, financeiro, auditoria e
+   notificações funcionando. Migrations consolidadas numa base limpa para o Supabase novo
+   (não arrastar o histórico de estamparia).
+4. Daí em diante, os módulos novos na ordem listada em "Entra".

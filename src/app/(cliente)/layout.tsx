@@ -48,7 +48,7 @@ export default async function ClienteLayout({
               <Link href="/pedidos" aria-label="Ir para os pedidos">
                 <Image
                   src="/logo-horizontal.png"
-                  alt="Best Color Tecidos"
+                  alt="US Decor"
                   width={483}
                   height={120}
                   priority

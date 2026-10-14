@@ -94,7 +94,7 @@ export async function criarMembro(
   const envio = await enviarEmail({
     tipo: 'convite_acesso',
     destinatario: email,
-    assunto: 'Seu acesso ao portal Best Color Tecidos',
+    assunto: 'Seu acesso ao portal US Decor',
     html: templateConviteAcesso({
       nome,
       email,
@@ -161,7 +161,7 @@ export async function redefinirSenhaMembro(
   const envio = await enviarEmail({
     tipo: 'redefinir_senha',
     destinatario: email,
-    assunto: 'Crie uma nova senha para o portal Best Color Tecidos',
+    assunto: 'Crie uma nova senha para o portal US Decor',
     html: templateRedefinirSenha({ nome: perfil.nome ?? 'usuário', email, urlLink }),
   })
 

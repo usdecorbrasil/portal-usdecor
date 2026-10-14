@@ -196,7 +196,7 @@ const { error: erroPerfil } = await admin.from('profiles').insert({
   const envio = await enviarEmail({
     tipo: 'convite_acesso',
     destinatario: dados.email,
-    assunto: 'Seu acesso ao portal Best Color Tecidos',
+    assunto: 'Seu acesso ao portal US Decor',
     html: templateConviteAcesso({
       nome: dados.contato || dados.razao_social,
       email: dados.email,
@@ -385,7 +385,7 @@ export async function redefinirSenha(
   const envio = await enviarEmail({
     tipo: 'redefinir_senha',
     destinatario: email,
-    assunto: 'Crie uma nova senha para o portal Best Color Tecidos',
+    assunto: 'Crie uma nova senha para o portal US Decor',
     html: templateRedefinirSenha({ nome: perfil.nome ?? 'cliente', email, urlLink }),
   })
 

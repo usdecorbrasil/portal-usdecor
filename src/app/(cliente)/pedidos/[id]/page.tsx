@@ -207,7 +207,7 @@ export default async function DetalhePedidoPage({
 
       {aguardando && !cancelado && (
         <p className="text-xs text-[#6E6E68] mt-2 leading-relaxed">
-          Seu pedido foi recebido e está sendo conferido pela Best Color Tecidos.
+          Seu pedido foi recebido e está sendo conferido pela US Decor.
           Enquanto não confirmado, você ainda pode cancelá-lo.
         </p>
       )}

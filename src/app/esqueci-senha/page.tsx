@@ -13,7 +13,7 @@ export default function EsqueciSenhaPage() {
       <div className="w-full max-w-sm">
         <Image
           src="/logo-horizontal.png"
-          alt="Best Color Tecidos"
+          alt="US Decor"
           width={483}
           height={120}
           priority

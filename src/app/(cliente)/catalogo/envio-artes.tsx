@@ -278,7 +278,7 @@ export default function EnvioArtes({ envios }: { envios: Envio[] }) {
 
             {sucesso && (
               <p className="text-sm text-[#2E7D4F]">
-                Envio recebido. A equipe da Best Color Tecidos foi notificada.
+                Envio recebido. A equipe da US Decor foi notificada.
               </p>
             )}
 
@@ -320,7 +320,7 @@ export default function EnvioArtes({ envios }: { envios: Envio[] }) {
                 )}
                 {e.resposta && (
                   <p className="text-xs mt-2 pt-2 border-t border-[#DDDCD5] leading-relaxed">
-                    <strong>Best Color Tecidos:</strong> {e.resposta}
+                    <strong>US Decor:</strong> {e.resposta}
                   </p>
                 )}
               </div>
